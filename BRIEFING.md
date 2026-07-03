@@ -55,11 +55,11 @@
 [SketchUp Ruby 브릿지] ← nano_banana_renderer/의 로컬 서버
   ├─ 뷰포트 캡처 (고품질 1024~1920, Edge OFF)
   ├─ 씬 목록/전환, 카메라 제어
-  └─ 앱 창 활성화 신호 (CAD 아이콘 클릭 → 앱 포커스)   ← 미구현
+  └─ 앱 열기 ('Vizmaker 앱 열기' 메뉴 → 캡처 + 앱 URL 오픈)
 ```
 
 - Ruby 쪽은 **Thread 금지** (SketchUp에서 조용히 멈춤). `UI.start_timer` 폴링 + 동기 실행.
-- HtmlDialog용 30KB 청크 폴링 규칙은 브릿지에는 해당 없음 (HTTP + 파일 경로 전달).
+- HtmlDialog용 30KB 청크 폴링 규칙은 브릿지에는 해당 없음 (HTTP JSON + base64 일괄 전달).
 
 ## 5. 검증된 기술 노하우 (2026-07-03 실전 확정 — webapp에 반드시 이식)
 
@@ -95,10 +95,10 @@
 | 단계 | 작업 | 상태 |
 |---|---|---|
 | 1 | 문서 정합화 (이 문서 v2) | ✅ 2026-07-03 |
-| 2a | webapp 마무리: 페이지 라우팅(History/Account/Settings), Rearrange, History Use 배선 | 예정 |
-| 2b | webapp에 §5 노하우 이식 (geminiClient 모델/thinking/에러 처리) | 예정 |
-| 2c | VIDEO_ANALYSIS 격차 반영: "View to render" 프리셋, 비디오 엔진 sora/veo, 다색 마킹·Ctrl+V 검증 | 예정 |
-| 3 | 브릿지 확장: 씬 목록/전환/카메라/창 활성화 + 파일 경로 이미지 전달 | 예정 |
+| 2a | webapp 마무리: 페이지 라우팅(History/Account/Settings), Rearrange, History Use 배선 | ✅ 2026-07-03 |
+| 2b | webapp에 §5 노하우 이식 (geminiClient 모델/thinking/에러 처리) | ✅ 2026-07-03 |
+| 2c | VIDEO_ANALYSIS 격차 반영: "View to render" 프리셋, 비디오 엔진 sora/veo, 다색 마킹·Ctrl+V 검증 | ✅ 2026-07-03 |
+| 3 | 브릿지 확장: 씬 목록/전환/카메라 명령/앱 열기 (/api/scenes, /api/command, /api/result) | ✅ 2026-07-03 |
 | 4 | Electron 패키징: 설치본, 자동 업데이트, SketchUp 플러그인 설치 메뉴 | |
 | 5 | 프로덕트 계층: 계정/크레딧/결제, 설정 화면, 프로젝트 파일(.viz), 온보딩 | 상용화 결정 시 |
 | 6 | 타 CAD 브릿지 (Rhino → Revit → 3ds Max) | 장기 |
