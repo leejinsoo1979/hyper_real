@@ -21,9 +21,14 @@ async function renderMainMock(input: RenderInput): Promise<NodeResult> {
 // ── Gemini (production) ────────────────────────────────────────────────────
 
 async function renderMainGemini(input: RenderInput): Promise<NodeResult> {
+  // Gemini에는 네거티브 파라미터가 없으므로 프롬프트에 AVOID 섹션으로 합성
+  const fullPrompt = input.negativePrompt
+    ? `${input.prompt}\n\n[NEGATIVE - MUST AVOID]\n${input.negativePrompt}`
+    : input.prompt
+
   const result = await callGemini({
     image: input.image,
-    prompt: input.prompt,
+    prompt: fullPrompt,
     engine: input.engine,
   })
 

@@ -6,6 +6,7 @@ import { useHistoryStore } from '../state/historyStore'
 import { useCreditStore } from '../state/creditStore'
 import { computeCacheKey } from './cacheManager'
 import { renderMain } from './adapters/mainRenderer'
+import { buildLightingDescription } from './autoPrompt'
 import { modifyDetails } from './adapters/detailsEditor'
 import { upscaleCreative } from './adapters/creativeUpscaler'
 import { generateVideo } from './adapters/imageToVideo'
@@ -172,12 +173,17 @@ async function executeNode(node: NodeData): Promise<void> {
       case 'RENDER': {
         const params = node.params as RenderParams
         const inputImage = getInputImage(node.id)
+        // 시간대/조명 설정을 프롬프트에 합성 (구 플러그인의 build_render_prompt 역할)
+        const lighting = buildLightingDescription(
+          params.timePreset ?? 'day',
+          params.lightsOn ?? true,
+        )
         result = await renderMain({
           engine: params.engine,
           image: inputImage ?? '',
-          prompt: params.prompt,
+          prompt: `${params.prompt}\n\n[LIGHTING]\n${lighting}`,
           systemPrompt: '',
-          negativePrompt: '',
+          negativePrompt: params.negativePrompt ?? '',
           seed: params.seed,
           resolution: params.resolution,
         })

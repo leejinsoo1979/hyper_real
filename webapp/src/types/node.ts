@@ -33,9 +33,12 @@ export interface SourceParams {
 export interface RenderParams {
   engine: 'main' | 'experimental-exterior' | 'experimental-interior'
   prompt: string
+  negativePrompt: string
   presetId: string | null
   seed: number | null
   resolution: string
+  timePreset: 'day' | 'evening' | 'night'
+  lightsOn: boolean
 }
 
 export interface ModifierParams {

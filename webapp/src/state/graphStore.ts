@@ -34,7 +34,7 @@ function getDefaultParams(type: NodeType): NodeParams {
     case 'SOURCE':
       return { origin: 'upload', image: '', cameraLocked: false, sceneMeta: null }
     case 'RENDER':
-      return { engine: 'main', prompt: 'Create photorealistic image', presetId: null, seed: null, resolution: '1200x1200' }
+      return { engine: 'main', prompt: 'Create photorealistic image', negativePrompt: '', presetId: null, seed: null, resolution: '1200x1200', timePreset: 'day' as const, lightsOn: true }
     case 'MODIFIER':
       return { prompt: '', presetId: null, mask: null, maskLayers: [] }
     case 'UPSCALE':

@@ -23,6 +23,47 @@ function getCurrentRenderModeValue(node: NodeData): string {
   return node.type
 }
 
+function SegmentedRow({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: { value: string; label: string }[]
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className="mb-3">
+      <div style={{ color: '#cccccc', fontSize: 13, marginBottom: 4 }}>{label}</div>
+      <div
+        className="flex overflow-hidden"
+        style={{ backgroundColor: '#111118', border: '1px solid #333340', borderRadius: 6 }}
+      >
+        {options.map((opt) => {
+          const active = opt.value === value
+          return (
+            <button
+              key={opt.value}
+              onClick={() => onChange(opt.value)}
+              className="flex-1 py-1.5 transition-colors"
+              style={{
+                fontSize: 12,
+                backgroundColor: active ? '#00c9a7' : 'transparent',
+                color: active ? '#0a0a14' : '#888888',
+                fontWeight: active ? 600 : 400,
+              }}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function SettingsDropdown({
   label,
   value,
@@ -233,12 +274,39 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
         <div className="px-4 pb-3">
           {/* Render Mode dropdown (only for RENDER nodes) */}
           {selectedNode.type === 'RENDER' && (
-            <SettingsDropdown
-              label="Render Mode"
-              value={getCurrentRenderModeValue(selectedNode)}
-              options={RENDER_MODE_OPTIONS}
-              onChange={handleRenderModeChange}
-            />
+            <>
+              <SettingsDropdown
+                label="Render Mode"
+                value={getCurrentRenderModeValue(selectedNode)}
+                options={RENDER_MODE_OPTIONS}
+                onChange={handleRenderModeChange}
+              />
+
+              {/* 시간대 (구 플러그인 Day/Eve/Night 이식) */}
+              <SegmentedRow
+                label="Time"
+                value={(selectedNode.params as RenderParams).timePreset ?? 'day'}
+                options={[
+                  { value: 'day', label: 'Day' },
+                  { value: 'evening', label: 'Eve' },
+                  { value: 'night', label: 'Night' },
+                ]}
+                onChange={(v) =>
+                  updateNodeParams(selectedNode.id, { timePreset: v as RenderParams['timePreset'] })
+                }
+              />
+
+              {/* 조명 (구 플러그인 Lights On/Off 이식) */}
+              <SegmentedRow
+                label="Lights"
+                value={((selectedNode.params as RenderParams).lightsOn ?? true) ? 'on' : 'off'}
+                options={[
+                  { value: 'on', label: 'On' },
+                  { value: 'off', label: 'Off' },
+                ]}
+                onChange={(v) => updateNodeParams(selectedNode.id, { lightsOn: v === 'on' })}
+              />
+            </>
           )}
 
           {/* Static label for non-RENDER nodes */}

@@ -303,12 +303,41 @@ function NodeCanvasInner() {
   }, [])
 
   // Node right-click
+  // 우클릭 위치에 노드 생성 (선택된 노드가 있으면 그 출력에 자동 연결)
+  const addNodeAt = useCallback(
+    (nodeType: NodeType, screenX: number, screenY: number) => {
+      const position = reactFlowInstance.screenToFlowPosition({ x: screenX, y: screenY })
+      const { selectedNodeId: fromId, nodes: curNodes } = useGraphStore.getState()
+      const newNodeId = createNode(nodeType, position)
+      const fromNode = fromId ? curNodes.find((n) => n.id === fromId) : null
+      const fromHasOutput = fromNode && fromNode.type !== 'COMPARE'
+      if (fromId && fromHasOutput) {
+        addEdge({
+          id: uuid(),
+          from: fromId,
+          fromPort: 'image',
+          to: newNodeId,
+          toPort: nodeType === 'COMPARE' ? 'imageA' : 'image',
+        })
+      }
+      selectNode(newNodeId)
+    },
+    [reactFlowInstance, createNode, addEdge, selectNode],
+  )
+
   const onNodeContextMenu = useCallback(
     (event: React.MouseEvent | MouseEvent, node: RFNode) => {
       event.preventDefault()
       selectNode(node.id)
 
       const items: MenuItem[] = [
+        ...RENDER_MODE_OPTIONS.map((opt) => ({
+          label: `+ ${opt.label}`,
+          action: () => {
+            selectNode(node.id)
+            addNodeAt(opt.type, event.clientX + 240, event.clientY)
+          },
+        })),
         {
           label: 'Make',
           action: () => { executePipeline(node.id) },
@@ -339,7 +368,7 @@ function NodeCanvasInner() {
         items,
       })
     },
-    [selectNode, duplicateNode, removeNode, setCompareA, setCompareB],
+    [selectNode, duplicateNode, removeNode, setCompareA, setCompareB, addNodeAt],
   )
 
   // Canvas right-click (empty area)
@@ -347,7 +376,13 @@ function NodeCanvasInner() {
     (event: React.MouseEvent | MouseEvent) => {
       event.preventDefault()
 
+      const cx = event.clientX
+      const cy = event.clientY
       const items: MenuItem[] = [
+        ...RENDER_MODE_OPTIONS.map((opt) => ({
+          label: `+ ${opt.label}`,
+          action: () => { addNodeAt(opt.type, cx, cy) },
+        })),
         {
           label: 'Load image...',
           action: () => { contextFileInputRef.current?.click() },
@@ -380,7 +415,7 @@ function NodeCanvasInner() {
         items,
       })
     },
-    [clearAll, updateNodePosition, reactFlowInstance],
+    [clearAll, updateNodePosition, reactFlowInstance, addNodeAt],
   )
 
   // Node selection
