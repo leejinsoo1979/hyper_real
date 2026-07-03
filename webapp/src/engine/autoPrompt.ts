@@ -64,7 +64,14 @@ Camera: Canon EOS R5 with 24mm f/2.8 lens, professional architectural photograph
 Quality: 8K resolution, sharp focus, professional color grading
 
 [MATERIAL RENDERING - BASED ON SOURCE]
-(Describe each visible surface's material realistically, with natural imperfections)
+(Describe each visible surface's material. For EVERY material, demand photorealistic imperfections:
+- Wood surfaces: visible grain texture, subtle scratches, natural wood imperfections
+- Wall/plaster surfaces: realistic paint texture, subtle shadows, minor surface variations
+- Stone/marble: realistic veining depth, slight surface wear, natural reflections
+- Floor surfaces: realistic texture with wear patterns and reflections
+- Glass surfaces: realistic reflections, subtle smudges, proper transparency
+- Metal surfaces: realistic reflections, subtle fingerprints, appropriate finish
+Never describe a surface as perfectly clean or flawless.)
 
 [LIGHTING SETUP]
 ${lightingDesc}
@@ -72,8 +79,14 @@ ${lightingDesc}
 - Global illumination and realistic light bounce
 - Subtle ambient occlusion in corners and edges
 
+[PHOTO REALISM DETAILS]
+- Natural lens characteristics: subtle vignette, minimal chromatic aberration
+- Realistic depth of field with natural bokeh
+- Film-like quality with subtle grain (ISO 200-400)
+- Professional white balance and color temperature
+
 [NEGATIVE PROMPT - MUST AVOID]
-(List what must be avoided: outlines, CGI look, cartoon, added objects, etc.)
+black outlines, visible edges, sketch lines, wireframe appearance, 3D render look, CGI appearance, computer graphics, clean perfect surfaces, uniform flat lighting, artificial plastic look, cartoon style, illustration, oversaturated, HDR artifacts
 
 ---END OF PROMPT---
 

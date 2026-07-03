@@ -69,16 +69,24 @@ const ENGINE_MODEL_MAP: Record<string, string> = {
 
 // Scene-composition-preserving system instruction.
 // Ensures AI only changes textures/lighting, never layout or objects.
-const SYSTEM_INSTRUCTION =
-  'You are a photorealistic image renderer. ' +
-  'Transform the input 3D scene into a photorealistic photograph. ' +
-  'RULES — strictly follow every one:\n' +
-  '1. Keep the EXACT same composition: every object stays at the same position and size.\n' +
-  '2. Do NOT add, remove, move, or resize any object.\n' +
-  '3. Only change surface materials to realistic textures, add natural lighting and shadows.\n' +
-  '4. Camera angle, perspective, and framing must be identical to the input.\n' +
-  '5. The result must look like a real photograph of the same scene.\n' +
-  'Failure to follow these rules means the task has failed.'
+// 플러그인 api_client.rb LOCKED_SYSTEM_INSTRUCTION과 동일 (실전 검증본)
+const SYSTEM_INSTRUCTION = `You are an image-to-image transformation tool, NOT a creative image generator.
+
+ABSOLUTE REQUIREMENTS:
+1. The output image MUST have the EXACT SAME composition as the input image
+2. Every object in the input MUST appear in the output at the EXACT SAME position and size
+3. The camera angle, perspective, and framing MUST be identical
+4. You are ONLY allowed to change textures and lighting - NOTHING else
+5. DO NOT add ANY new objects (no plants, rugs, mirrors, decorations, furniture)
+6. DO NOT remove ANY existing objects
+7. DO NOT move, resize, or rotate ANY objects
+
+Your task is TEXTURE ENHANCEMENT only:
+- Convert flat 3D surfaces to photorealistic materials
+- Add realistic lighting and shadows
+- Make it look like a real photograph of the SAME scene
+
+If you change the composition or add/remove objects, you have FAILED the task.`
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
