@@ -54,15 +54,17 @@ export class ServerError extends GeminiError {
 // ── Config ─────────────────────────────────────────────────────────────────
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
-const DEFAULT_MODEL = 'gemini-2.0-flash-exp-image-generation'
+// gemini-2.0-* 계열은 2026-07 Google이 폐기함(404) — BRIEFING.md §5 참조
+const DEFAULT_MODEL = 'gemini-2.5-flash-image' // Nanobanana
+const TEXT_MODEL = 'gemini-2.5-flash' // 텍스트 분석/프롬프트 생성 전용
 const MAX_RETRIES = 2
 const REQUEST_TIMEOUT_MS = 120_000
 
 // Maps engine field value → actual Gemini API model identifier
 const ENGINE_MODEL_MAP: Record<string, string> = {
-  main: 'gemini-2.0-flash-exp-image-generation',
-  'experimental-exterior': 'gemini-2.0-flash-exp-image-generation',
-  'experimental-interior': 'gemini-2.0-flash-exp-image-generation',
+  main: 'gemini-2.5-flash-image', // Nanobanana
+  'experimental-exterior': 'gemini-3-pro-image', // Nanobanana Pro
+  'experimental-interior': 'gemini-3-pro-image',
 }
 
 // Scene-composition-preserving system instruction.
@@ -80,20 +82,47 @@ const SYSTEM_INSTRUCTION =
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+// Settings 페이지에서 저장하는 API Key (Electron 배포에서는 .env가 없으므로 이 경로가 기본)
+const API_KEY_STORAGE = 'vizmaker.geminiApiKey'
+
+export function getStoredApiKey(): string | null {
+  try {
+    const v = localStorage.getItem(API_KEY_STORAGE)
+    return v && v.trim().length > 0 ? v.trim() : null
+  } catch {
+    return null
+  }
+}
+
+export function setStoredApiKey(key: string): void {
+  try {
+    if (key.trim().length === 0) localStorage.removeItem(API_KEY_STORAGE)
+    else localStorage.setItem(API_KEY_STORAGE, key.trim())
+  } catch {
+    // storage unavailable — ignore
+  }
+}
+
+function resolveApiKey(): string | null {
+  const stored = getStoredApiKey()
+  if (stored) return stored
+  const env = import.meta.env.VITE_GEMINI_API_KEY
+  return env && env.trim().length > 0 ? env.trim() : null
+}
+
 export function useMock(): boolean {
   const flag = import.meta.env.VITE_USE_MOCK
   if (flag === 'true' || flag === '1') return true
   // No API key → fall back to mock silently
-  const key = import.meta.env.VITE_GEMINI_API_KEY
-  return !key || key.trim().length === 0
+  return resolveApiKey() === null
 }
 
 function getApiKey(): string {
-  const key = import.meta.env.VITE_GEMINI_API_KEY
-  if (!key || key.trim().length === 0) {
-    throw new AuthError('VITE_GEMINI_API_KEY is not set')
+  const key = resolveApiKey()
+  if (!key) {
+    throw new AuthError('API key is not set — Settings에서 입력하세요')
   }
-  return key.trim()
+  return key
 }
 
 function resolveModel(engine?: string): string {
@@ -146,16 +175,27 @@ export interface CallGeminiOptions {
   engine?: string // maps to model
   systemInstruction?: string // override default
   responseModalities?: ('TEXT' | 'IMAGE')[]
+  signal?: AbortSignal // caller-side cancellation (e.g. cancel button)
 }
 
 export async function callGemini(
   opts: CallGeminiOptions,
 ): Promise<GeminiResult> {
   const apiKey = getApiKey()
-  const model = resolveModel(opts.engine)
   const sysText = opts.systemInstruction ?? SYSTEM_INSTRUCTION
   const modalities = opts.responseModalities ?? ['TEXT', 'IMAGE']
+  const textOnly = modalities.length === 1 && modalities[0] === 'TEXT'
+  // 텍스트 분석은 이미지 모델이 아닌 텍스트 모델 사용
+  const model = textOnly ? TEXT_MODEL : resolveModel(opts.engine)
   const { base64, mimeType } = stripDataUri(opts.image)
+
+  const generationConfig: Record<string, unknown> = {
+    responseModalities: modalities,
+  }
+  if (textOnly) {
+    // gemini-2.5-flash는 thinking이 기본 ON — 분석 용도에는 불필요하고 매우 느려짐 (50초+ → 수초)
+    generationConfig['thinkingConfig'] = { thinkingBudget: 0 }
+  }
 
   const body = {
     system_instruction: { parts: [{ text: sysText }] },
@@ -167,10 +207,10 @@ export async function callGemini(
         ],
       },
     ],
-    generationConfig: { responseModalities: modalities },
+    generationConfig,
   }
 
-  return sendWithRetry(model, apiKey, body, 0)
+  return sendWithRetry(model, apiKey, body, 0, opts.signal)
 }
 
 // ── HTTP layer with retry ──────────────────────────────────────────────────
@@ -180,11 +220,15 @@ async function sendWithRetry(
   apiKey: string,
   body: unknown,
   attempt: number,
+  callerSignal?: AbortSignal,
 ): Promise<GeminiResult> {
   const url = `${API_BASE}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const onCallerAbort = () => controller.abort()
+  callerSignal?.addEventListener('abort', onCallerAbort, { once: true })
+  if (callerSignal?.aborted) controller.abort()
 
   let res: Response
   try {
@@ -196,16 +240,21 @@ async function sendWithRetry(
     })
   } catch (err) {
     clearTimeout(timer)
+    // 사용자 취소는 재시도하지 않고 즉시 전파
+    if (callerSignal?.aborted) {
+      throw new GeminiError('Cancelled by user')
+    }
     // Network error or abort (timeout)
     if (attempt < MAX_RETRIES) {
       await sleep(backoffMs(attempt))
-      return sendWithRetry(model, apiKey, body, attempt + 1)
+      return sendWithRetry(model, apiKey, body, attempt + 1, callerSignal)
     }
     throw new GeminiError(
       `Request failed after ${MAX_RETRIES + 1} attempts: ${String(err)}`,
     )
   } finally {
     clearTimeout(timer)
+    callerSignal?.removeEventListener('abort', onCallerAbort)
   }
 
   // ── Status-based error handling ──
@@ -220,7 +269,7 @@ async function sendWithRetry(
     case 429: {
       if (attempt < MAX_RETRIES) {
         await sleep(backoffMs(attempt))
-        return sendWithRetry(model, apiKey, body, attempt + 1)
+        return sendWithRetry(model, apiKey, body, attempt + 1, callerSignal)
       }
       throw new RateLimitError()
     }
@@ -229,7 +278,7 @@ async function sendWithRetry(
       if (res.status >= 500) {
         if (attempt < MAX_RETRIES) {
           await sleep(backoffMs(attempt))
-          return sendWithRetry(model, apiKey, body, attempt + 1)
+          return sendWithRetry(model, apiKey, body, attempt + 1, callerSignal)
         }
         throw new ServerError(res.status)
       }

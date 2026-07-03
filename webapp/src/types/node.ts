@@ -56,7 +56,8 @@ export interface UpscaleParams {
 }
 
 export interface VideoParams {
-  engine: 'kling' | 'seedance'
+  // 실물 VizMaker 엔진 4종 (docs/VIDEO_ANALYSIS.md §6)
+  engine: 'kling' | 'seedance' | 'sora' | 'veo'
   duration: 5 | 10
   prompt: string
   endFrameImage: string | null

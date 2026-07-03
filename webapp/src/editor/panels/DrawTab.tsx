@@ -142,7 +142,7 @@ export function DrawTab({ selectedNode }: DrawTabProps) {
     fc.backgroundImage = undefined
     fc.renderAll()
 
-    const maskData = fc.toDataURL({ format: 'png' })
+    const maskData = fc.toDataURL({ format: 'png', multiplier: 1 })
 
     fc.backgroundImage = bgImage
     fc.renderAll()

@@ -355,6 +355,8 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
                 options={[
                   { value: 'kling', label: 'Kling v2.1' },
                   { value: 'seedance', label: 'Seedance' },
+                  { value: 'sora', label: 'Sora' },
+                  { value: 'veo', label: 'Veo' },
                 ]}
                 onChange={(v) =>
                   updateNodeParams(selectedNode.id, { engine: v as VideoParams['engine'] })

@@ -43,7 +43,7 @@ export function computeCacheKey(
   const inputHash = getInputImageHash(node, allNodes, edges)
   const payload = JSON.stringify({
     type: node.type,
-    params: sortedParams(node.params as Record<string, unknown>),
+    params: sortedParams(node.params as unknown as Record<string, unknown>),
     inputHash,
   })
   return hashString(payload)

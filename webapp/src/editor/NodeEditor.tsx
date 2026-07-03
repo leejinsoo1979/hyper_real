@@ -5,6 +5,8 @@ import { InspectorPanel } from './panels/InspectorPanel'
 import { PromptBar } from './toolbar/PromptBar'
 import { MakeButton } from './toolbar/MakeButton'
 import { HistoryPage } from './pages/HistoryPage'
+import { SettingsPage } from './pages/SettingsPage'
+import { AccountPage, TutorialPage, SupportPage } from './pages/MiscPages'
 import { useGraphStore } from '../state/graphStore'
 import { useExecutionStore } from '../state/executionStore'
 import { useCreditStore } from '../state/creditStore'
@@ -105,7 +107,17 @@ export function NodeEditor() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const showHistory = activeSidebarItem === 'history'
+  // 사이드바 페이지 전환 ('render'만 에디터, 나머지는 전용 페이지)
+  const sidebarPage = (() => {
+    switch (activeSidebarItem) {
+      case 'history': return <HistoryPage />
+      case 'settings': return <SettingsPage />
+      case 'account': return <AccountPage />
+      case 'tutorial': return <TutorialPage />
+      case 'support': return <SupportPage />
+      default: return null
+    }
+  })()
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -137,8 +149,8 @@ export function NodeEditor() {
 
         {/* Center + Right */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {showHistory ? (
-            <HistoryPage />
+          {sidebarPage ? (
+            sidebarPage
           ) : (
             <>
               {/* Canvas + Inspector */}

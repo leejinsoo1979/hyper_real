@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Clock, Download, ArrowDownToLine, X, Info } from 'lucide-react'
 import { useHistoryStore } from '../../state/historyStore'
 import { useGraphStore } from '../../state/graphStore'
+import { useUIStore } from '../../state/uiStore'
 import type { GraphSnapshot } from '../../types/graph'
 
 function formatTimeAgo(timestamp: string): string {
@@ -43,6 +44,8 @@ function HistoryCard({ snapshot }: { snapshot: GraphSnapshot }) {
     if (!snap) return
     const { nodes, edges } = snap.graph
     useGraphStore.setState({ nodes, edges, selectedNodeId: null })
+    // 복원 후 에디터 화면으로 복귀 (실물 VizMaker 동작)
+    useUIStore.getState().setActiveSidebarItem('render')
   }
 
   const handleSave = () => {

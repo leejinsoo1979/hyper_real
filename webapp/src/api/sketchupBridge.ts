@@ -186,7 +186,7 @@ function injectCapture(imageBase64: string) {
 
   // Find existing sketchup source node
   const existing = store.nodes.find(
-    (n) => n.type === 'SOURCE' && n.params.origin === 'sketchup',
+    (n) => n.type === 'SOURCE' && 'origin' in n.params && n.params.origin === 'sketchup',
   )
 
   if (existing) {

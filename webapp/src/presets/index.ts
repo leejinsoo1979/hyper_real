@@ -4,7 +4,7 @@ export const PRESETS: PromptPreset[] = [
   // ─── A. Render Node (Main Renderer) ───
   {
     id: 'screen-to-render',
-    name: 'Screen to render',
+    name: 'View to render', // 실물 VizMaker 표기 (docs/VIDEO_ANALYSIS.md 영상2 §2)
     icon: 'screen-to-render',
     category: 'render',
     applicableNodeTypes: ['RENDER'],

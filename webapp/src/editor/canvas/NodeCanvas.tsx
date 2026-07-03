@@ -304,7 +304,7 @@ function NodeCanvasInner() {
 
   // Node right-click
   const onNodeContextMenu = useCallback(
-    (event: React.MouseEvent, node: RFNode) => {
+    (event: React.MouseEvent | MouseEvent, node: RFNode) => {
       event.preventDefault()
       selectNode(node.id)
 
@@ -344,7 +344,7 @@ function NodeCanvasInner() {
 
   // Canvas right-click (empty area)
   const onPaneContextMenu = useCallback(
-    (event: React.MouseEvent) => {
+    (event: React.MouseEvent | MouseEvent) => {
       event.preventDefault()
 
       const items: MenuItem[] = [

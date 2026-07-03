@@ -96,7 +96,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     saveUndo()
     set((s) => ({
       nodes: s.nodes.map((n) =>
-        n.id === nodeId ? { ...n, params: { ...n.params, ...params } } : n,
+        n.id === nodeId ? { ...n, params: { ...n.params, ...params } as NodeParams } : n,
       ),
     }))
   },
