@@ -32,12 +32,17 @@ async function renderMainGemini(input: RenderInput): Promise<NodeResult> {
     engine: input.engine,
   })
 
-  const outputImage = result.image
-    ? `data:image/png;base64,${result.image}`
-    : input.image
+  if (!result.image) {
+    // 원본을 슬쩍 돌려주면 "렌더링이 안 된다"로 보인다 - 명시적으로 실패시킬 것
+    throw new Error(
+      result.text
+        ? `AI가 이미지를 반환하지 않았습니다: ${result.text.slice(0, 200)}`
+        : 'AI가 이미지를 반환하지 않았습니다',
+    )
+  }
 
   return {
-    image: outputImage,
+    image: `data:image/png;base64,${result.image}`,
     resolution: input.resolution,
     timestamp: new Date().toISOString(),
     cacheKey: '',

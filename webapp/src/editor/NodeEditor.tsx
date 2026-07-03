@@ -14,6 +14,7 @@ import { useUIStore } from '../state/uiStore'
 import type { ConnectionStatus } from '../state/uiStore'
 import { useUndoStore } from '../state/undoStore'
 import { executePipeline, estimatePipelineCost } from '../engine'
+import { useMock } from '../engine/geminiClient'
 import { startBridge, stopBridge } from '../api/sketchupBridge'
 
 function statusColor(s: ConnectionStatus): string {
@@ -140,6 +141,14 @@ export function NodeEditor() {
             {statusLabel(sketchUpStatus)}
           </span>
         </span>
+        {useMock() && (
+          <span
+            className="ml-3 rounded px-2 py-0.5"
+            style={{ backgroundColor: '#ffaa0022', color: '#ffaa00', fontSize: 11 }}
+          >
+            MOCK 모드 — Settings에서 API Key를 입력하면 실제 렌더링됩니다
+          </span>
+        )}
       </div>
 
       {/* Main Area */}
