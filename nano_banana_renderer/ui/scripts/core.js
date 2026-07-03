@@ -145,6 +145,41 @@
       console.log('[NanoBanana] Scene changed to:', sceneName);
     };
 
+    window.onScenePreviewLoaded = function(sceneName, base64) {
+      const savedState = sceneStates.get(sceneName) || {
+        renderImage: null,
+        converted: false,
+        promptSource: '',
+        promptSourceNegative: '',
+        promptResult: '',
+        promptResultNegative: '',
+        resultPanels: [{ id: 1, image: null }],
+        nextResultId: 2
+      };
+
+      savedState.originalImage = base64;
+      savedState.converted = true;
+      sceneStates.set(sceneName, savedState);
+
+      const activeTab = document.querySelector('.scene-tab.active');
+      const isActiveScene = state.currentScene === sceneName ||
+        (activeTab && activeTab.dataset.scene === sceneName);
+
+      if (isActiveScene) {
+        state.currentScene = sceneName;
+        state.originalImage = base64;
+        state.converted = true;
+
+        const originalImage = document.getElementById('original-image');
+        const originalEmpty = document.getElementById('original-empty');
+        if (originalImage) {
+          originalImage.src = 'data:image/jpeg;base64,' + base64;
+          originalImage.style.display = 'block';
+        }
+        if (originalEmpty) originalEmpty.style.display = 'none';
+      }
+    };
+
     var el = {
       originalImage: document.getElementById('original-image'),
       originalEmpty: document.getElementById('original-empty'),
@@ -187,50 +222,67 @@
     });
 
     // SketchUp Ruby 콜백 호출
-    function callRuby(action, ...args) {
-      // skp: 프로토콜만 사용 (가장 안정적)
+    // HtmlDialog injects window.sketchup. Keep that native bridge before the
+    // app-level sketchup wrapper below replaces the global name.
+    var sketchupNativeBridge = window.sketchup;
+
+    function callRubyJson(action, ...args) {
       const param = args.length > 0 ? JSON.stringify(args) : '';
+      if (sketchupNativeBridge && typeof sketchupNativeBridge[action] === 'function') {
+        sketchupNativeBridge[action](param);
+        return;
+      }
       window.location = 'skp:' + action + '@' + encodeURIComponent(param);
     }
 
+    function callRubyRaw(action, ...args) {
+      if (sketchupNativeBridge && typeof sketchupNativeBridge[action] === 'function') {
+        sketchupNativeBridge[action](...args);
+        return;
+      }
+      const suffix = args.length > 0 ? '@' + args.map(arg => encodeURIComponent(arg || '')).join('@') : '';
+      window.location = 'skp:' + action + suffix;
+    }
+
     var sketchup = {
-      captureScene: (size) => callRuby('capture_scene', size),
-      startRender: (time, light, prompt, negativePrompt, renderId) => callRuby('start_render', time, light, prompt, negativePrompt, renderId || ''),
-      generateAutoPrompt: (style, time, light) => callRuby('generate_auto_prompt', style || '', time || 'day', light || 'on'),
-      saveImage: () => callRuby('save_image', ''),
-      openEditor: () => callRuby('open_editor'),
-      checkApiStatus: () => callRuby('check_api_status'),
+      captureScene: (size) => callRubyJson('capture_scene', size),
+      startRender: (time, light, prompt, negativePrompt, renderId, engine) => callRubyJson('start_render', time, light, prompt, negativePrompt, renderId || '', engine || ''),
+      generateAutoPrompt: (style, time, light) => callRubyJson('generate_auto_prompt', style || '', time || 'day', light || 'on'),
+      saveImage: () => callRubyJson('save_image', ''),
+      openEditor: () => callRubyRaw('open_editor'),
+      checkApiStatus: () => callRubyRaw('check_api_status'),
       // Gemini API Key
-      saveApiKey: (key) => callRuby('save_api_key', key),
-      loadApiKey: () => callRuby('load_api_key'),
-      testConnection: () => callRuby('test_connection'),
+      saveApiKey: (key) => callRubyRaw('save_api_key', key),
+      loadApiKey: () => callRubyRaw('load_api_key'),
+      testConnection: () => callRubyRaw('test_connection'),
       // Replicate API
-      saveReplicateToken: (token) => callRuby('save_replicate_token', token),
-      loadReplicateToken: () => callRuby('load_replicate_token'),
+      saveReplicateToken: (token) => callRubyRaw('save_replicate_token', token),
+      loadReplicateToken: () => callRubyRaw('load_replicate_token'),
       // Engine selection
-      setEngine: (engine) => callRuby('set_engine', engine),
-      getEngine: () => callRuby('get_engine'),
+      setEngine: (engine) => callRubyRaw('set_engine', engine),
+      getEngine: () => callRubyRaw('get_engine'),
       // Model selection
-      saveModel: (model) => callRuby('save_model', model),
-      loadModel: () => callRuby('load_model'),
+      saveModel: (model) => callRubyRaw('save_model', model),
+      loadModel: () => callRubyRaw('load_model'),
       // Camera controls
-      camMove: (dir) => callRuby('cam_move', dir),
-      camRotate: (dir) => callRuby('cam_rotate', dir),
-      camHeight: (preset) => callRuby('cam_height', preset),
-      camFov: (preset) => callRuby('cam_fov', preset),
-      startMirror: () => callRuby('start_mirror'),
-      stopMirror: () => callRuby('stop_mirror'),
+      camMove: (dir) => callRubyJson('cam_move', dir),
+      camRotate: (dir) => callRubyJson('cam_rotate', dir),
+      camHeight: (preset) => callRubyJson('cam_height', preset),
+      camFov: (preset) => callRubyJson('cam_fov', preset),
+      startMirror: () => callRubyRaw('start_mirror'),
+      stopMirror: () => callRubyRaw('stop_mirror'),
       // Scene controls
-      getScenes: () => callRuby('get_scenes'),
-      selectScene: (name) => callRuby('select_scene', name),
-      addScene: () => callRuby('add_scene'),
+      getScenes: () => callRubyRaw('get_scenes'),
+      selectScene: (name) => callRubyRaw('select_scene', name),
+      addScene: () => callRubyRaw('add_scene'),
       // 2점 투시
-      apply2Point: () => callRuby('apply_2point'),
+      apply2Point: () => callRubyRaw('apply_2point'),
       // Mix - 선택된 패널의 이미지 전달
-      openMix: (imageBase64) => callRuby('open_mix', imageBase64),
+      openMix: () => callRubyRaw('open_mix'),
       // 2차 생성 (소스 이미지 base64, 프롬프트, 대상 패널 ID)
-      regenerate: (sourceBase64, prompt, panelId) => callRuby('regenerate', sourceBase64, prompt, panelId),
+      regenerate: (sourceBase64, prompt, panelId) => callRubyRaw('regenerate', sourceBase64, prompt, panelId),
       // 히스토리
-      loadHistory: () => callRuby('load_history'),
-      saveHistory: (json) => callRuby('save_history', json)
+      loadHistory: () => callRubyRaw('load_history'),
+      saveHistory: (json) => callRubyRaw('save_history', json),
+      save_history: (json) => callRubyRaw('save_history', json)
     };

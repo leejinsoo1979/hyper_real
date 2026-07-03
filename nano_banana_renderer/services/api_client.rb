@@ -14,7 +14,7 @@ module NanoBanana
     MAX_RETRIES = 1
 
     # 프롬프트 생성용 모델 (Vision - 빠르고 저렴)
-    PROMPT_MODEL = 'gemini-2.0-flash'
+    PROMPT_MODEL = 'gemini-2.5-flash'
 
     # 이미지 생성 전용 모델 매핑 (UI 표시명 => 실제 API 모델명)
     IMAGE_GEN_MODELS = {
@@ -158,7 +158,9 @@ module NanoBanana
           }
         ],
         generationConfig: {
-          responseModalities: ['TEXT']
+          responseModalities: ['TEXT'],
+          # 프롬프트 생성엔 thinking 불필요 - 끄면 응답 속도 대폭 향상
+          thinkingConfig: { thinkingBudget: 0 }
         }
       }
     end

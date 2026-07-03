@@ -278,19 +278,22 @@
   // 실행 결과 적용 (공통 헬퍼)
   function _applyResult(node, result) {
     if (result.success) {
-      node.thumbnail = result.image;
       node.data.image = result.image;
-      nodeEditor.renderNode(node);
-      if (nodeEditor.selectedNode === node.id) {
-        nodeEditor.updateInspector();
-      }
-      requestAnimationFrame(function() { nodeEditor.renderConnections(); });
+      downscaleThumbnail(result.image, function(thumb) {
+        node.thumbnail = thumb;
+        nodeEditor.renderNode(node);
+        if (nodeEditor.selectedNode === node.id) {
+          nodeEditor.updateInspector();
+        }
+        requestAnimationFrame(function() { nodeEditor.renderConnections(); });
+      });
       // History에 자동 저장
       nodeEditor.saveToHistory({
         image: result.image,
         prompt: node.data.customPrompt || node.data.prompt || '',
         negativePrompt: node.data.negativePrompt || '',
-        nodeType: node.type
+        nodeType: node.type,
+        source: 'node'
       });
     }
   }

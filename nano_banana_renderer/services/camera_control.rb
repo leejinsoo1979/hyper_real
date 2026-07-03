@@ -200,16 +200,16 @@ module NanoBanana
       return unless @main_dialog
 
       begin
-        temp_path = "/tmp/nanobanana_mirror.jpg"
+        temp_path = File.join(Dir.tmpdir, 'nanobanana_mirror.jpg')
         view = Sketchup.active_model.active_view
 
-        # 프리뷰 해상도 (960x540) - 빠른 미러링
+        # 프리뷰 해상도 - 초기 로딩과 미러링 반응 속도 우선
         view.write_image({
           filename: temp_path,
-          width: 960,
-          height: 540,
+          width: 640,
+          height: 360,
           antialias: false,
-          compression: 0.6
+          compression: 0.5
         })
 
         image_data = Base64.strict_encode64(File.binread(temp_path))

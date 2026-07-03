@@ -60,6 +60,11 @@
       setStatus('Convert 실패: ' + errorMsg);
     }
 
+    // Capture 에러 (Ruby에서 호출)
+    function onCaptureError(errorMsg) {
+      onConvertError(errorMsg);
+    }
+
     // Convert 완료 (씬 분석 완료 - 프롬프트는 별도)
     function onConvertComplete(promptText) {
       stopConvertProgress(true);
@@ -90,8 +95,12 @@
       setStatus('Convert 완료 - 프롬프트를 입력하거나 Auto 생성하세요');
     }
 
+    // Auto 프롬프트 진행 상태 (취소 후 늦게 도착한 결과 무시용)
+    let autoPromptActive = false;
+
     // Auto 프롬프트 생성 시작
     function onAutoPromptStart() {
+      autoPromptActive = true;
       el.btnAutoPrompt.disabled = true;
       el.btnAutoPrompt.classList.add('loading');
       el.btnAutoPrompt.innerHTML = `
@@ -112,14 +121,64 @@
             <div class="prompt-progress-bar" id="prompt-progress-bar"></div>
           </div>
           <div class="prompt-progress-text" id="prompt-progress-text">0%</div>
+          <button class="btn btn-secondary" id="btn-cancel-auto-prompt" style="margin-top:12px; padding:6px 20px;">취소</button>
         </div>
       `;
       el.loadingSource.classList.remove('hidden');
+
+      // 취소 버튼 연결
+      const cancelBtn = document.getElementById('btn-cancel-auto-prompt');
+      if (cancelBtn) cancelBtn.onclick = cancelAutoPrompt;
+
+      // 안전장치: 150초 안에 응답 없으면 강제로 에러 처리 (무한 로딩 방지)
+      clearAutoPromptWatchdog();
+      autoPromptWatchdog = setTimeout(function() {
+        onAutoPromptError('시간 초과 (150초) - 다시 시도하세요');
+      }, 150000);
 
       // 프로그레스 애니메이션 시작
       startPromptProgress();
 
       setStatus('Auto 프롬프트 생성 중...');
+    }
+
+    // Auto 프롬프트 안전장치 타이머
+    let autoPromptWatchdog = null;
+
+    function clearAutoPromptWatchdog() {
+      if (autoPromptWatchdog) {
+        clearTimeout(autoPromptWatchdog);
+        autoPromptWatchdog = null;
+      }
+    }
+
+    // Auto 프롬프트 취소
+    function cancelAutoPrompt() {
+      // 화면 복구를 먼저 하고, SketchUp 통신은 마지막에 (통신 실패해도 UI는 반드시 복구)
+      autoPromptActive = false;
+      clearAutoPromptWatchdog();
+      if (promptProgressInterval) {
+        clearInterval(promptProgressInterval);
+        promptProgressInterval = null;
+      }
+      el.btnAutoPrompt.disabled = false;
+      el.btnAutoPrompt.classList.remove('loading');
+      el.btnAutoPrompt.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+          <path d="M2 17l10 5 10-5"></path>
+          <path d="M2 12l10 5 10-5"></path>
+        </svg>
+        Auto
+      `;
+      el.loadingSource.innerHTML = '';
+      el.loadingSource.classList.add('hidden');
+      setStatus('Auto 프롬프트 취소됨');
+      try {
+        sketchup.cancel_auto_prompt();
+      } catch (e) {
+        // 브릿지 호출 실패해도 UI는 이미 복구됨
+      }
     }
 
     // 프롬프트 생성 프로그레스 변수
@@ -158,6 +217,9 @@
 
     // Auto 프롬프트 생성 완료
     function onAutoPromptComplete(mainPrompt, negativePrompt) {
+      if (!autoPromptActive) return; // 취소 후 늦게 도착한 결과 무시
+      autoPromptActive = false;
+      clearAutoPromptWatchdog();
       // 노드 에디터 Auto 콜백이 있으면 우선 처리
       if (window._nodeAutoPromptCallback) {
         window._nodeAutoPromptCallback(mainPrompt);
@@ -203,6 +265,9 @@
 
     // Auto 프롬프트 생성 에러
     function onAutoPromptError(errorMsg) {
+      if (!autoPromptActive) return; // 취소 후 늦게 도착한 에러 무시
+      autoPromptActive = false;
+      clearAutoPromptWatchdog();
       // 프로그레스 정지
       if (promptProgressInterval) {
         clearInterval(promptProgressInterval);
@@ -342,6 +407,17 @@
 
       // 갤러리 업데이트
       renderHistoryGallery();
+
+      // 노드 에디터 히스토리에도 추가 (source: 'render'로 구분)
+      if (window.nodeEditor && nodeEditor.saveToHistory) {
+        nodeEditor.saveToHistory({
+          image: image,
+          prompt: historyItem.prompt,
+          negativePrompt: historyItem.negativePrompt,
+          nodeType: 'render',
+          source: 'render'
+        });
+      }
     }
 
     // 히스토리 갤러리 렌더링
@@ -762,6 +838,7 @@
       if (!mirrorActive || !mirrorImageReady) return;
 
       mirrorImageReady = false;
+      state.originalImage = base64;
 
       // 직접 src 교체 (새 Image 객체 없이)
       el.originalImage.src = 'data:image/jpeg;base64,' + base64;
@@ -903,8 +980,8 @@
       scenes.forEach((scene, index) => {
         const tab = document.createElement('div');
         tab.className = 'scene-tab';
-        if (index === 0) {
-          tab.classList.add('active'); // 첫 번째 씬 활성화
+        if (scene.active || (!scenes.some(s => s.active) && index === 0)) {
+          tab.classList.add('active');
           // 첫 씬을 현재 씬으로 설정 (초기화 시)
           if (!state.currentScene) {
             state.currentScene = scene.name;
@@ -929,12 +1006,16 @@
           // 이미 활성 탭이면 무시
           if (tab.classList.contains('active')) return;
 
+          console.log('[NanoBanana] Scene tab clicked:', scene.name);
+
           // 현재 씬 상태 저장 & 새 씬 상태 복원
           window.onSceneChanged(scene.name);
 
           // 활성 탭 변경
           document.querySelectorAll('.scene-tab').forEach(t => t.classList.remove('active'));
           tab.classList.add('active');
+          el.loadingSource.classList.remove('hidden');
+          setStatus('Loading scene: ' + scene.name);
 
           // Ruby에 씬 전환 요청
           sketchup.selectScene(scene.name);
@@ -1292,10 +1373,12 @@
         if (state.originalImage) {
           // Render 모드에서 이미 캡처한 이미지가 있으면 바로 사용
           sourceNode.data.image = state.originalImage;
-          sourceNode.thumbnail = state.originalImage;
           sourceNode.dirty = false;
-          nodeEditor.renderNode(sourceNode);
-          requestAnimationFrame(() => nodeEditor.renderConnections());
+          downscaleThumbnail(state.originalImage, function(thumb) {
+            sourceNode.thumbnail = thumb;
+            nodeEditor.renderNode(sourceNode);
+            requestAnimationFrame(() => nodeEditor.renderConnections());
+          });
         } else {
           // SketchUp 캡처 직접 실행
           setTimeout(function() {
@@ -1319,11 +1402,13 @@
           .then(function(data) {
             if (data && data.source) {
               sourceNode.data.image = data.source;
-              sourceNode.thumbnail = data.source;
               sourceNode.dirty = false;
-              nodeEditor.renderNode(sourceNode);
-              nodeEditor.updateInspector();
-              requestAnimationFrame(function() { nodeEditor.renderConnections(); });
+              downscaleThumbnail(data.source, function(thumb) {
+                sourceNode.thumbnail = thumb;
+                nodeEditor.renderNode(sourceNode);
+                nodeEditor.updateInspector();
+                requestAnimationFrame(function() { nodeEditor.renderConnections(); });
+              });
             } else if (attempts < maxAttempts) {
               // 아직 캡처 안 됐으면 1초 후 재시도
               setTimeout(tryFetch, 1000);
@@ -1482,7 +1567,7 @@
     }
 
     // 커스텀 드롭다운 - 모델 선택
-    let currentModelValue = 'gemini-2.0-flash-exp';
+    let currentModelValue = 'gemini-2.5-flash-image';
     const modelDropdown = document.getElementById('model-dropdown');
     const modelDropdownSelected = document.getElementById('model-dropdown-selected');
     const modelDropdownMenu = document.getElementById('model-dropdown-menu');
@@ -1516,6 +1601,15 @@
 
         // Ruby에 저장
         sketchup.saveModel(value);
+
+        // 모델이 속한 엔진으로 자동 전환 (모델-엔진 불일치로 렌더 막히는 문제 방지)
+        const modelEngine = this.dataset.engine;
+        if (modelEngine) {
+          sketchup.setEngine(modelEngine);
+          document.querySelectorAll('#engine-group .seg-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.engine === modelEngine);
+          });
+        }
       });
     });
 
@@ -1557,7 +1651,6 @@
     sketchup.checkApiStatus();
     sketchup.getScenes();
     sketchup.loadModel();
-    sketchup.loadHistory();  // 히스토리 로드
 
     // 로딩 화면 숨기기
     setTimeout(function() {

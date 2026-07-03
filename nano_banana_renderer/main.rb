@@ -11,10 +11,11 @@ require 'json'
 require 'base64'
 require 'socket'
 require 'webrick'
+require 'tmpdir'
 
 module NanoBanana
   PLUGIN_NAME = 'NanoBanana Renderer'
-  PLUGIN_VERSION = '1.0.0'
+  PLUGIN_VERSION = '1.0.3'
   PLUGIN_AUTHOR = 'NanoBanana Team'
   PLUGIN_DESCRIPTION = 'SketchUp AI 실사 렌더링 플러그인 (Google Gemini 기반)'
 
@@ -63,12 +64,29 @@ module NanoBanana
   WEB_SYNC_URL = 'https://sketchup-show.vercel.app/api/sync'
 
   # 히스토리 저장 경로
-  HISTORY_DIR = File.join(ENV['HOME'], '.sketchupshow')
+  HISTORY_DIR = File.join(Dir.home, '.sketchupshow')
   HISTORY_FILE = File.join(HISTORY_DIR, 'history.json')
   MAX_HISTORY_ITEMS = 500
 
+  # 진단 로그 파일 (모든 [NanoBanana] 로그가 여기에도 기록됨)
+  DEBUG_LOG_FILE = File.join(HISTORY_DIR, 'debug.log')
+
   class << self
     attr_accessor :current_image, :current_hotspots
+
+    # NanoBanana 내부의 모든 puts를 루비 콘솔 + 파일에 동시 기록 (원격 진단용)
+    def puts(*args)
+      Kernel.puts(*args)
+      begin
+        Dir.mkdir(HISTORY_DIR) unless File.directory?(HISTORY_DIR)
+        stamp = Time.now.strftime('%m-%d %H:%M:%S')
+        File.open(DEBUG_LOG_FILE, 'a') do |f|
+          args.each { |a| f.puts("[#{stamp}] #{a}") }
+        end
+      rescue StandardError
+        # 로그 기록 실패는 무시 (본 기능에 영향 없음)
+      end
+    end
 
     # JSON 인자 파싱 헬퍼
     def parse_json_args(json_str)
@@ -88,7 +106,13 @@ module NanoBanana
       # Gemini API
       api_key = @config_store.load_api_key
       puts "[NanoBanana] Gemini API Key: #{api_key ? '있음' : '없음'}"
-      @gemini_model = @config_store.load_setting('gemini_model') || 'gemini-2.0-flash-exp'
+      saved_model = @config_store.load_setting('gemini_model')
+      # 폐기된 구모델(gemini-2.0-*)이 저장돼 있으면 현행 모델로 자동 교체
+      if saved_model && saved_model.start_with?('gemini-2.0')
+        puts "[NanoBanana] 폐기된 모델 설정 감지(#{saved_model}) -> gemini-2.5-flash-image로 교체"
+        saved_model = nil
+      end
+      @gemini_model = saved_model || 'gemini-2.5-flash-image'
       if api_key && !api_key.empty?
         @api_client = ApiClient.new(api_key, @gemini_model)
       end
@@ -115,7 +139,7 @@ module NanoBanana
       # 로컬 웹 서버 자동 시작
       start_local_server
 
-      puts "[NanoBanana] 플러그인 초기화 완료 (v#{PLUGIN_VERSION})"
+      puts "[NanoBanana] 플러그인 초기화 완료 (v#{PLUGIN_VERSION}) / SketchUp #{Sketchup.version} / 경로: #{PLUGIN_ROOT}"
     end
 
     # 메뉴 등록
@@ -168,6 +192,10 @@ module NanoBanana
       @main_dialog = UI::HtmlDialog.new(options)
       @main_dialog.set_file(File.join(PLUGIN_ROOT, 'ui/main_dialog.html'))
 
+      # 새 다이얼로그 세션이므로 씬 프리뷰 캐시 초기화
+      # (유지하면 창을 다시 열었을 때 프리뷰가 전송되지 않음)
+      @scene_preview_loaded = {}
+
       # 콜백 등록
       register_main_callbacks(@main_dialog)
 
@@ -177,6 +205,7 @@ module NanoBanana
     def register_main_callbacks(dialog)
       # 씬 캡처
       dialog.add_action_callback('capture_scene') do |_ctx, json_args|
+        puts "[NanoBanana] capture_scene 콜백 수신: #{json_args.inspect}"
         args = parse_json_args(json_args)
         size = args[0] || '1024'  # ★ 기본값 1024로 변경 (속도 우선)
         capture_scene(size)
@@ -190,13 +219,16 @@ module NanoBanana
         prompt = args[2] || ''
         negative_prompt = args[3] || ''
         render_id = args[4] || ''  # 노드 에디터 병렬 렌더용 ID
+        engine = args[5] || ''     # 노드에서 선택한 모델
 
         puts "[NanoBanana] ========== START_RENDER 콜백 =========="
+        puts "[NanoBanana] args 개수: #{args.length}, 전체: #{args.map { |a| a.is_a?(String) ? a[0..30] : a.inspect }.inspect}"
         puts "[NanoBanana] time_preset: #{time_preset}"
         puts "[NanoBanana] light_switch: #{light_switch}"
         puts "[NanoBanana] prompt 길이: #{prompt ? prompt.length : 0}"
         puts "[NanoBanana] negative_prompt 길이: #{negative_prompt ? negative_prompt.length : 0}"
-        puts "[NanoBanana] render_id: #{render_id}" unless render_id.empty?
+        puts "[NanoBanana] render_id: '#{render_id}'"
+        puts "[NanoBanana] engine: '#{engine}' (args[5]=#{args[5].inspect})"
 
         # UI에서 직접 입력한 프롬프트가 있으면 사용
         if prompt && !prompt.empty?
@@ -208,8 +240,8 @@ module NanoBanana
         @negative_prompt = negative_prompt if negative_prompt && !negative_prompt.empty?
 
         if render_id && !render_id.empty?
-          # 노드 에디터 병렬 렌더 - Thread로 실행 (프롬프트 직접 전달)
-          start_render_parallel(time_preset, light_switch, render_id, prompt, negative_prompt)
+          # 노드 에디터 병렬 렌더 — 엔진도 전달
+          start_render_parallel(time_preset, light_switch, render_id, prompt, negative_prompt, engine)
         else
           start_render_with_preset(time_preset, light_switch)
         end
@@ -222,6 +254,11 @@ module NanoBanana
         time_preset = args[1] || 'day'
         light_switch = args[2] || 'on'
         generate_auto_prompt(style, time_preset, light_switch)
+      end
+
+      # Auto 프롬프트 취소
+      dialog.add_action_callback('cancel_auto_prompt') do |_ctx|
+        cancel_auto_prompt
       end
 
       # 이미지 저장
@@ -340,12 +377,15 @@ module NanoBanana
 
       # 씬 목록 가져오기 (첫 로드 시 첫 번째 씬으로 자동 전환)
       dialog.add_action_callback('get_scenes') do |_ctx|
-        get_scenes(true)
+        get_scenes(false)
       end
 
       # 씬 선택/전환
       dialog.add_action_callback('select_scene') do |_ctx, scene_name|
-        select_scene(scene_name)
+        args = parse_json_args(scene_name)
+        selected_scene = args.is_a?(Array) ? args[0] : args
+        puts "[NanoBanana] select_scene 콜백 수신: #{selected_scene.inspect}"
+        select_scene(selected_scene.to_s)
       end
 
       # 씬 추가
@@ -369,8 +409,9 @@ module NanoBanana
       end
 
       # 2차 생성 (이전 결과를 소스로 사용)
+      # panel_id: 숫자(렌더모드) 또는 문자열(노드에디터 inpaint_X)
       dialog.add_action_callback('regenerate') do |_ctx, source_base64, prompt, panel_id|
-        regenerate_image(source_base64, prompt, panel_id.to_i)
+        regenerate_image(source_base64, prompt, panel_id.to_s)
       end
 
       # 웹 동기화 시작

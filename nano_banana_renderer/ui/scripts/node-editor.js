@@ -1,5 +1,28 @@
 // NanoBanana Renderer - Node Editor
     // ========================================
+    // 썸네일 다운스케일 유틸 — 풀사이즈 base64를 320px 너비로 축소
+    // 노드 카드에 풀 해상도 이미지를 넣으면 compositing 시 비치볼 발생
+    // ========================================
+    var _thumbCanvas = null;
+    var _thumbCtx = null;
+    function downscaleThumbnail(base64, callback, targetWidth) {
+      targetWidth = targetWidth || 320;
+      var img = new Image();
+      img.onload = function() {
+        if (img.width <= targetWidth) { callback(base64); return; }
+        if (!_thumbCanvas) { _thumbCanvas = document.createElement('canvas'); _thumbCtx = _thumbCanvas.getContext('2d'); }
+        var ratio = targetWidth / img.width;
+        _thumbCanvas.width = targetWidth;
+        _thumbCanvas.height = Math.round(img.height * ratio);
+        _thumbCtx.drawImage(img, 0, 0, _thumbCanvas.width, _thumbCanvas.height);
+        var small = _thumbCanvas.toDataURL('image/png').split(',')[1];
+        callback(small);
+      };
+      img.onerror = function() { callback(base64); };
+      img.src = 'data:image/png;base64,' + base64;
+    }
+
+    // ========================================
     // Node Editor System
     // ========================================
     var nodeEditor = {
@@ -20,8 +43,8 @@
 
       // 캔버스 줌/팬
       _zoom: 1,
-      _zoomMin: 0.3,
-      _zoomMax: 2,
+      _zoomMin: 0.1,
+      _zoomMax: 3,
       _panX: 0,
       _panY: 0,
       _isPanning: false,
@@ -120,7 +143,7 @@
           };
         } else if (type === 'renderer') {
           return {
-            engine: 'gemini-2.0-flash-exp',
+            engine: 'gemini-2.5-flash-image',
             resolution: '2048',
             aspect: 'original',
             presets: [],
@@ -161,7 +184,7 @@
         }
 
         // transform으로 위치 지정 (left/top 대신 GPU 가속)
-        el.style.transform = `translate(${node.x}px, ${node.y}px)`;
+        el.style.transform = `translate3d(${node.x}px, ${node.y}px, 0)`;
         el.classList.toggle('dirty', node.dirty);
         el.classList.toggle('selected', this.selectedNode === node.id);
 
@@ -200,7 +223,7 @@
           title = 'Source';
           sublabel = '';
         } else if (node.type === 'renderer') {
-          var eng = node.data.engine || 'gemini-2.0-flash-exp';
+          var eng = node.data.engine || 'gemini-2.5-flash-image';
           var modelNames = {
             'gemini-2.0-flash-exp': 'Flash 2.0',
             'gemini-2.5-flash-image': 'Flash 2.5',
@@ -291,6 +314,9 @@
           `;
         }
 
+        // 높이 캐시 갱신 (renderConnections에서 reflow 방지)
+        requestAnimationFrame(function() { el._cachedHeight = el.offsetHeight; });
+
         // 포트 이벤트
         el.querySelectorAll('.node-port').forEach(port => {
           port.addEventListener('mousedown', (e) => {
@@ -320,6 +346,8 @@
       // 노드 선택 (CSS 클래스만 토글, innerHTML 재생성 안함)
       selectNode: function(nodeId) {
         const prevId = this.selectedNode;
+        // 같은 노드 재선택이면 스킵 (불필요한 updateInspector 방지)
+        if (prevId === nodeId) return;
         this.selectedNode = nodeId;
         // 이전 선택 해제
         if (prevId) {
@@ -371,20 +399,19 @@
           return;
         }
 
-        // Preview 이미지 업데이트
-        if (node.data.image) {
-          previewEl.innerHTML = '<img src="data:image/png;base64,' + node.data.image + '" alt="Preview">';
-        } else {
-          previewEl.innerHTML = '<span class="node-inspector-preview-empty">No preview</span>';
-        }
-        // Enlarge 모드 활성 시 enlarged 이미지도 동기화
-        var enlargedPreview = document.getElementById('node-enlarged-preview');
-        if (enlargedPreview && enlargedPreview.classList.contains('active')) {
-          var enlargedImage = document.getElementById('node-enlarged-image');
+        // Preview 이미지 업데이트 — 같은 이미지면 DOM 재생성 스킵 (수 MB base64 파싱 방지)
+        var _prevKey = node.id + ':' + (node.data.image ? node.data.image.length : 0);
+        if (previewEl._imgKey !== _prevKey) {
+          previewEl._imgKey = _prevKey;
           if (node.data.image) {
-            enlargedImage.innerHTML = '<img src="data:image/png;base64,' + node.data.image + '" alt="Enlarged Preview">';
+            previewEl.innerHTML = '<img src="data:image/png;base64,' + node.data.image + '" alt="Preview">';
           } else {
-            enlargedImage.innerHTML = '<span class="node-inspector-preview-empty">No preview</span>';
+            previewEl.innerHTML = '<span class="node-inspector-preview-empty">No preview</span>';
+          }
+          // Enlarge 모드 활성 시 enlarged 이미지도 동기화
+          var enlargedPreview = document.getElementById('node-enlarged-preview');
+          if (enlargedPreview && enlargedPreview.classList.contains('active')) {
+            _setEnlargedImage(node.data.image ? 'data:image/png;base64,' + node.data.image : null);
           }
         }
 
@@ -410,7 +437,7 @@
           var modelMenu = document.getElementById('node-model-menu');
           var modelSelectedText = document.getElementById('node-model-selected-text');
           if (modelMenu) {
-            var currentModel = node.data.engine || 'gemini-2.0-flash-exp';
+            var currentModel = node.data.engine || 'gemini-2.5-flash-image';
             modelMenu.querySelectorAll('.dropdown-item').forEach(function(item) {
               var isSelected = item.dataset.value === currentModel;
               item.classList.toggle('selected', isSelected);
@@ -540,64 +567,69 @@
         this._connCanvas = document.getElementById('node-connections');
         this._connCtx = this._connCanvas.getContext('2d');
       },
-      _resizeCanvas: function() {
-        var c = this._connCanvas;
-        // Canvas는 node-canvas 안에 있지만, 크기는 node-canvas-area 기준
+      // 캐시된 area 크기 (reflow 방지)
+      _areaW: 0,
+      _areaH: 0,
+      _areaDirty: true,
+      _refreshAreaSize: function() {
         var area = document.getElementById('node-canvas-area');
-        var aw = area.clientWidth;
-        var ah = area.clientHeight;
-        // 줌 역보정: CSS scale이 적용되므로 실제 필요 크기는 area/zoom
-        var needW = Math.ceil(aw / this._zoom) + 2000;
-        var needH = Math.ceil(ah / this._zoom) + 2000;
-        if (c.width !== needW || c.height !== needH) {
-          c.width = needW;
-          c.height = needH;
-          // CSS 크기도 동기화 (canvas attribute와 CSS가 다르면 스케일링 발생)
-          c.style.width = needW + 'px';
-          c.style.height = needH + 'px';
+        this._areaW = area.clientWidth;
+        this._areaH = area.clientHeight;
+        this._areaDirty = false;
+      },
+
+      _resizeCanvas: function() {
+        // canvas는 node-canvas 안에 있으므로 노드 범위에 맞게 크기 설정
+        var c = this._connCanvas;
+        var maxX = 1200, maxY = 800;
+        for (var i = 0; i < this.nodes.length; i++) {
+          var n = this.nodes[i];
+          if (n.x + 400 > maxX) maxX = n.x + 400;
+          if (n.y + 300 > maxY) maxY = n.y + 300;
+        }
+        var tw = Math.ceil(maxX);
+        var th = Math.ceil(maxY);
+        if (c.width !== tw || c.height !== th) {
+          c.width = tw;
+          c.height = th;
         }
       },
 
       // 캔버스 줌/팬 적용
+      // DOM 참조 캐시 (매 프레임 getElementById 방지)
+      _canvasEl: null,
+      _gridEl: null,
+      _zoomLabelEl: null,
       _zoomRafId: null,
+      _lastCanvasSize: '',
       _applyZoom: function() {
-        var canvas = document.getElementById('node-canvas');
-        var grid = document.querySelector('.node-canvas-grid');
-        var t = 'scale(' + this._zoom + ') translate(' + this._panX + 'px,' + this._panY + 'px)';
-        canvas.style.transform = t;
-        canvas.style.transformOrigin = '0 0';
-        grid.style.transform = t;
-        grid.style.transformOrigin = '0 0';
-        // node-canvas 크기를 줌 역수로 확대하여 area를 항상 덮도록
-        var area = document.getElementById('node-canvas-area');
-        var invZoom = 1 / this._zoom;
-        canvas.style.width = (area.clientWidth * invZoom + 2000) + 'px';
-        canvas.style.height = (area.clientHeight * invZoom + 2000) + 'px';
-        // throttle renderConnections to next animation frame
-        if (!this._zoomRafId) {
-          var self = this;
-          this._zoomRafId = requestAnimationFrame(function() {
-            self._zoomRafId = null;
-            self.renderConnections();
-          });
+        if (!this._canvasEl) {
+          this._canvasEl = document.getElementById('node-canvas');
+          this._gridEl = document.querySelector('.node-canvas-grid');
+          this._zoomLabelEl = document.getElementById('node-zoom-label');
         }
-        // 줌 레벨 표시 업데이트
-        var label = document.getElementById('node-zoom-label');
-        if (label) label.textContent = Math.round(this._zoom * 100) + '%';
+        var t = 'translate3d(' + (this._panX * this._zoom) + 'px,' + (this._panY * this._zoom) + 'px,0) scale(' + this._zoom + ')';
+        this._canvasEl.style.transform = t;
+        this._gridEl.style.transform = t;
+        if (this._zoomLabelEl) this._zoomLabelEl.textContent = Math.round(this._zoom * 100) + '%';
       },
 
       setZoom: function(newZoom, pivotX, pivotY) {
         var oldZoom = this._zoom;
         newZoom = Math.max(this._zoomMin, Math.min(this._zoomMax, newZoom));
         if (newZoom === oldZoom) return;
-        // 피벗 포인트 기준 줌 (마우스 위치 유지)
         if (pivotX !== undefined && pivotY !== undefined) {
-          // 현재 월드 좌표
-          var wx = (pivotX / oldZoom) - this._panX;
-          var wy = (pivotY / oldZoom) - this._panY;
-          // 새 줌에서의 팬 오프셋
-          this._panX = (pivotX / newZoom) - wx;
-          this._panY = (pivotY / newZoom) - wy;
+          // CSS: transform: scale(z) translate(px, py)
+          // transform-origin: 0 0
+          // 화면좌표 = (월드좌표 + pan) * zoom
+          // 월드좌표 = 화면좌표 / zoom - pan
+          // 줌 변경 후 같은 월드좌표가 같은 화면좌표에 있으려면:
+          // 화면좌표 = (월드좌표 + newPan) * newZoom
+          // newPan = 화면좌표 / newZoom - 월드좌표
+          var worldX = pivotX / oldZoom - this._panX;
+          var worldY = pivotY / oldZoom - this._panY;
+          this._panX = pivotX / newZoom - worldX;
+          this._panY = pivotY / newZoom - worldY;
         }
         this._zoom = newZoom;
         this._applyZoom();
@@ -618,6 +650,20 @@
         var y = (sy - rect.top) / this._zoom - this._panY;
         return { x: x, y: y };
       },
+      // 인터랙션 모드 (줌/팬/드래그 중 경량 렌더링)
+      _interacting: false,
+      _interactTimer: null,
+      _setInteracting: function() {
+        this._interacting = true;
+        if (this._interactTimer) clearTimeout(this._interactTimer);
+        var self = this;
+        this._interactTimer = setTimeout(function() {
+          self._interacting = false;
+          self._interactTimer = null;
+          self.renderConnections(); // 풀 퀄리티 재렌더
+        }, 200);
+      },
+
       // 데이터 흐름 파티클 애니메이션 상태
       _flowAnimFrame: null,
       _flowPhase: 0,
@@ -632,6 +678,8 @@
 
         var nw = 320;
         var isRunning = this.isRunning;
+        var fast = this._interacting;
+        // canvas가 node-canvas 안에 있으므로 zoom/pan은 CSS transform이 처리
 
         for (var i = 0; i < this.connections.length; i++) {
           var conn = this.connections[i];
@@ -645,11 +693,10 @@
           var fe = document.getElementById('node-' + fn.id);
           var te = document.getElementById('node-' + tn.id);
           if (!fe || !te) continue;
-          var fh = fe.offsetHeight || 200;
-          var th = te.offsetHeight || 200;
-          fe._cachedHeight = fh;
-          te._cachedHeight = th;
+          var fh = fe._cachedHeight || (fe._cachedHeight = fe.offsetHeight || 200);
+          var th = te._cachedHeight || (te._cachedHeight = te.offsetHeight || 200);
 
+          // 노드 월드 좌표 그대로 사용 (CSS transform이 zoom/pan 처리)
           var x1 = fn.x + nw, y1 = fn.y + fh * 0.5;
           var x2 = tn.x, y2 = tn.y + th * 0.5;
 
@@ -660,58 +707,51 @@
           }
 
           // 이 연결이 활성(데이터 흐르는 중)인지 확인
-          var isActive = isRunning && (
+          var isActive = !fast && isRunning && (
             fn.status === 'done' && (tn.status === 'running' || tn.status === 'queued') ||
             fn.status === 'running' || tn.status === 'running'
           );
 
-          // 선 그리기
-          ctx.save();
-          // glow layer
-          ctx.strokeStyle = isActive ? 'rgba(0, 212, 170, 0.3)' : 'rgba(0, 212, 170, 0.15)';
-          ctx.lineWidth = isActive ? 10 : 8;
+          // 인터랙션 중: 얇은 선만 (glow 생략 → Canvas 2D 드로 콜 절반)
+          if (!fast) {
+            ctx.strokeStyle = isActive ? 'rgba(0, 212, 170, 0.3)' : 'rgba(0, 212, 170, 0.15)';
+            ctx.lineWidth = isActive ? 10 : 8;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.bezierCurveTo(x1 + dx, y1, x2 - dx, y2, x2, y2);
+            ctx.stroke();
+          }
+          ctx.strokeStyle = isActive ? '#00e6b8' : '#00d4aa';
+          ctx.lineWidth = isActive ? 3 : 2;
           ctx.lineCap = 'round';
           ctx.beginPath();
           ctx.moveTo(x1, y1);
           ctx.bezierCurveTo(x1 + dx, y1, x2 - dx, y2, x2, y2);
           ctx.stroke();
-          // main line
-          ctx.strokeStyle = isActive ? '#00e6b8' : '#00d4aa';
-          ctx.lineWidth = isActive ? 3 : 2;
-          ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.bezierCurveTo(x1 + dx, y1, x2 - dx, y2, x2, y2);
-          ctx.stroke();
 
-          // 파티클 애니메이션 — 실행 중인 연결에만
           if (isActive) {
             var phase = this._flowPhase;
             var particleCount = 8;
             for (var p = 0; p < particleCount; p++) {
               var t = ((phase + p / particleCount) % 1);
-              // 베지어 곡선 위의 점 계산
               var u = 1 - t;
               var cx1 = x1 + dx, cy1 = y1;
               var cx2 = x2 - dx, cy2 = y2;
-              var px = u*u*u*x1 + 3*u*u*t*cx1 + 3*u*t*t*cx2 + t*t*t*x2;
-              var py = u*u*u*y1 + 3*u*u*t*cy1 + 3*u*t*t*cy2 + t*t*t*y2;
-              // 파티클 크기 (중앙에서 크고 끝에서 작게)
+              var ptx = u*u*u*x1 + 3*u*u*t*cx1 + 3*u*t*t*cx2 + t*t*t*x2;
+              var pty = u*u*u*y1 + 3*u*u*t*cy1 + 3*u*t*t*cy2 + t*t*t*y2;
               var size = 4 + 3 * Math.sin(t * Math.PI);
               var alpha = 0.6 + 0.4 * Math.sin(t * Math.PI);
-              // glow
               ctx.shadowColor = 'rgba(0, 230, 184, 0.8)';
               ctx.shadowBlur = 8;
               ctx.fillStyle = 'rgba(0, 255, 200, ' + alpha + ')';
               ctx.beginPath();
-              ctx.arc(px, py, size, 0, Math.PI * 2);
+              ctx.arc(ptx, pty, size, 0, Math.PI * 2);
               ctx.fill();
               ctx.shadowBlur = 0;
             }
           }
 
-          ctx.restore();
-
-          // 화살표
           var arrowSize = 7;
           var ax = -1, ay = 0;
           ctx.fillStyle = isActive ? '#00e6b8' : '#00d4aa';
@@ -827,12 +867,13 @@
           window._nodeSourceCallback = (imageBase64) => {
             console.log('[NodeEditor] Source callback received, image length:', imageBase64 ? imageBase64.length : 0);
             node.data.image = imageBase64;
-            node.thumbnail = imageBase64;
             node.dirty = false;
-            self.renderNode(node);
-            self.updateInspector();
-            // 높이 변경 후 연결선 재계산
-            requestAnimationFrame(() => self.renderConnections());
+            downscaleThumbnail(imageBase64, function(thumb) {
+              node.thumbnail = thumb;
+              self.renderNode(node);
+              self.updateInspector();
+              requestAnimationFrame(() => self.renderConnections());
+            });
             resolve();
           };
           console.log('[NodeEditor] Calling sketchup.captureScene...');
@@ -954,18 +995,21 @@
               self._hideRenderingOverlay(node);
 
               if (result.success) {
-                node.thumbnail = result.image;
                 node.data.image = result.image;
-                self.renderNode(node);
-                if (self.selectedNode === node.id) {
-                  self.updateInspector();
-                }
-                requestAnimationFrame(() => self.renderConnections());
+                downscaleThumbnail(result.image, function(thumb) {
+                  node.thumbnail = thumb;
+                  self.renderNode(node);
+                  if (self.selectedNode === node.id) {
+                    self.updateInspector();
+                  }
+                  requestAnimationFrame(() => self.renderConnections());
+                });
                 self.saveToHistory({
                   image: result.image,
                   prompt: node.data.customPrompt || '',
                   negativePrompt: node.data.negativePrompt || '',
-                  nodeType: 'renderer'
+                  nodeType: 'renderer',
+                  source: 'node'
                 });
                 resolve();
               } else {
@@ -1303,10 +1347,17 @@
         var nodesData = [];
         for (var i = 0; i < this.nodes.length; i++) {
           var n = this.nodes[i];
-          var dataCopy = JSON.parse(JSON.stringify(n.data));
-          // 이미지 데이터 제외 (메모리 절약)
-          delete dataCopy.image;
-          delete dataCopy.mask;
+          // 이미지/마스크를 제외하고 data를 얕은 복사 (JSON.stringify 수 MB 방지)
+          var dataCopy = {};
+          for (var key in n.data) {
+            if (key !== 'image' && key !== 'mask' && n.data.hasOwnProperty(key)) {
+              dataCopy[key] = n.data[key];
+            }
+          }
+          // presets 배열만 깊은 복사
+          if (Array.isArray(dataCopy.presets)) {
+            dataCopy.presets = dataCopy.presets.slice();
+          }
           nodesData.push({
             id: n.id,
             type: n.type,
@@ -1373,6 +1424,41 @@
         if (this._history.length > this._maxHistory) {
           this._history.pop();
         }
+        this._persistHistory();
+      },
+
+      _persistHistory: function() {
+        try {
+          // 이미지는 용량이 크므로 최근 50개만, 각 이미지 앞 200자만 저장하지 않고 전체 저장
+          var data = this._history.map(function(h) {
+            return { image: h.image, prompt: h.prompt || '', negativePrompt: h.negativePrompt || '', nodeType: h.nodeType || '', source: h.source || 'node', timestamp: h.timestamp, id: h.id };
+          });
+          localStorage.setItem('nb_node_history', JSON.stringify(data));
+        } catch (e) {
+          console.warn('[NodeEditor] History persist failed:', e.message);
+          // localStorage 용량 초과 시 오래된 항목 제거 후 재시도
+          if (this._history.length > 10) {
+            this._history.length = 10;
+            try {
+              var data2 = this._history.map(function(h) {
+                return { image: h.image, prompt: h.prompt || '', negativePrompt: h.negativePrompt || '', nodeType: h.nodeType || '', source: h.source || 'node', timestamp: h.timestamp, id: h.id };
+              });
+              localStorage.setItem('nb_node_history', JSON.stringify(data2));
+            } catch (e2) { /* give up */ }
+          }
+        }
+      },
+
+      _loadHistory: function() {
+        try {
+          var raw = localStorage.getItem('nb_node_history');
+          if (raw) {
+            this._history = JSON.parse(raw);
+            console.log('[NodeEditor] History loaded:', this._history.length, 'items');
+          }
+        } catch (e) {
+          console.warn('[NodeEditor] History load failed:', e.message);
+        }
       },
 
       renderHistoryPage: function() {
@@ -1390,10 +1476,12 @@
           var imgSrc = item.image.startsWith('data:') ? item.image : 'data:image/png;base64,' + item.image;
           var date = new Date(item.timestamp);
           var timeStr = date.getHours() + ':' + String(date.getMinutes()).padStart(2, '0');
-          html += '<div class="node-history-card" data-hist-idx="' + i + '">' +
+          var sourceLabel = item.source === 'render' ? 'Render' : 'Node';
+          var sourceClass = item.source === 'render' ? 'source-render' : 'source-node';
+          html += '<div class="node-history-card" data-hist-idx="' + i + '" data-source="' + (item.source || 'node') + '">' +
             '<div class="node-history-card-img"><img src="' + imgSrc + '" alt="History"></div>' +
             '<div class="node-history-card-info">' +
-              '<span class="node-history-card-type">' + (item.nodeType || 'render') + '</span>' +
+              '<span class="node-history-card-type ' + sourceClass + '">' + sourceLabel + '</span>' +
               '<span class="node-history-card-time">' + timeStr + '</span>' +
             '</div>' +
             '<div class="node-history-card-overlay">' +
@@ -1419,7 +1507,27 @@
       loadHistoryItem: function(index) {
         var item = this._history[index];
         if (!item) return;
-        // 선택된 노드가 있으면 결과 이미지 적용
+
+        // History 페이지 닫기
+        var page = document.getElementById('node-history-page');
+        if (page) page.classList.add('hidden');
+
+        // 기본 렌더 모드에서 만든 이미지 → 기본 렌더 메뉴로 이동
+        if (item.source === 'render') {
+          var renderBtn = document.getElementById('menu-render');
+          if (renderBtn) renderBtn.click();
+          // 기본 렌더 모드의 결과 이미지에 표시
+          if (window.switchToRenderMode) switchToRenderMode();
+          var resultImg = document.getElementById('result-image');
+          if (resultImg) {
+            var imgSrc = item.image.startsWith('data:') ? item.image : 'data:image/png;base64,' + item.image;
+            resultImg.src = imgSrc;
+            resultImg.style.display = 'block';
+          }
+          return;
+        }
+
+        // 노드에서 만든 이미지 → 선택된 노드에 적용
         if (this.selectedNode) {
           var node = this.nodes.find(function(n) { return n.id === nodeEditor.selectedNode; });
           if (node) {
@@ -1429,9 +1537,6 @@
             this.updateInspector();
           }
         }
-        // History 페이지 닫기
-        var page = document.getElementById('node-history-page');
-        if (page) page.classList.add('hidden');
       },
 
       // ============= Cache Key =============
@@ -1483,50 +1588,142 @@
         return false;
       },
 
-      // ============= Minimap =============
+      // ============= Minimap (Inspector 우측 상단) =============
+      // 선택된 노드 1개를 미니 카드로 표시 + 좌우 연결 포트
 
       renderMinimap: function() {
-        var enlargedImage = document.getElementById('node-enlarged-image');
-        var enlargedPreview = document.getElementById('node-enlarged-preview');
-        if (!enlargedPreview || !enlargedPreview.classList.contains('active')) return;
+        var container = document.getElementById('node-inspector-minimap');
+        if (!container) return;
 
-        // 미니맵: 전체 노드를 축소 렌더링
-        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (var i = 0; i < this.nodes.length; i++) {
-          var n = this.nodes[i];
-          if (n.x < minX) minX = n.x;
-          if (n.y < minY) minY = n.y;
-          if (n.x + 320 > maxX) maxX = n.x + 320;
-          if (n.y + 200 > maxY) maxY = n.y + 200;
+        // Enlarge 모드가 아니면 숨김
+        var inspectorPreview = document.querySelector('.node-inspector-preview');
+        if (!inspectorPreview || !inspectorPreview.classList.contains('minimap-mode')) {
+          container.innerHTML = '';
+          return;
         }
-        if (this.nodes.length === 0) return;
 
-        var padding = 40;
-        var graphW = (maxX - minX) + padding * 2;
-        var graphH = (maxY - minY) + padding * 2;
+        // 선택된 노드 찾기
+        var node = this.selectedNode ? this.nodes.find(function(n) { return n.id === nodeEditor.selectedNode; }) : null;
+        if (!node) {
+          // 선택 없으면 이미지가 있는 마지막 노드
+          for (var i = this.nodes.length - 1; i >= 0; i--) {
+            if (this.nodes[i].thumbnail) { node = this.nodes[i]; break; }
+          }
+        }
+        if (!node) {
+          container.innerHTML = '';
+          return;
+        }
 
-        var containerW = enlargedImage.clientWidth || 400;
-        var containerH = enlargedImage.clientHeight || 300;
-        var scale = Math.min(containerW / graphW, containerH / graphH, 1);
+        // 연결된 이전/다음 노드 찾기
+        var prevConn = this.connections.find(function(c) { return c.to === node.id; });
+        var nextConns = this.connections.filter(function(c) { return c.from === node.id; });
+        var hasPrev = !!prevConn;
+        var hasNext = nextConns.length > 0;
 
-        var html = '<div class="minimap-container" style="position:relative;width:' + (graphW * scale) + 'px;height:' + (graphH * scale) + 'px;margin:auto;">';
-        for (var i = 0; i < this.nodes.length; i++) {
-          var n = this.nodes[i];
-          var nx = (n.x - minX + padding) * scale;
-          var ny = (n.y - minY + padding) * scale;
-          var nw = 320 * scale;
-          var nh = 180 * scale;
-          var icon = this._icons[n.type] || '?';
-          var title = this._titles[n.type] || n.type;
-          var statusClass = n.status ? ' status-' + n.status : '';
-          html += '<div class="minimap-node' + statusClass + '" style="position:absolute;left:' + nx + 'px;top:' + ny + 'px;width:' + nw + 'px;height:' + nh + 'px;" title="' + title + ' #' + n.id + '">';
-          html += '<span style="font-size:' + Math.max(10, 12 * scale) + 'px;">' + icon + ' ' + title + '</span>';
-          html += '</div>';
+        // 노드 타이틀 계산 (renderNode와 동일 로직)
+        var title = node.type;
+        var sublabel = '';
+        var depthNode = node, orderNum = 1, depthLimit = 20;
+        while (depthLimit-- > 0) {
+          var pc = this.connections.find(function(c) { return c.to === depthNode.id; });
+          if (!pc) break;
+          var pn = this.nodes.find(function(n) { return n.id === pc.from; });
+          if (!pn) break;
+          orderNum++;
+          depthNode = pn;
+        }
+        if (node.type === 'source') {
+          title = 'Source';
+        } else if (node.type === 'renderer') {
+          var eng = node.data.engine || 'gemini-2.5-flash-image';
+          var modelNames = { 'gemini-2.0-flash-exp': 'Flash 2.0', 'gemini-2.5-flash-image': 'Flash 2.5' };
+          title = orderNum + '. Renderer (' + (modelNames[eng] || eng) + ')';
+          sublabel = node.data.customPrompt ? node.data.customPrompt.substring(0, 50) : 'Create photorealistic image';
+        } else if (node.type === 'modifier') {
+          title = orderNum + '. Details editor';
+          sublabel = 'Refine and edit details';
+        } else if (node.type === 'upscale') {
+          title = orderNum + '. Upscaler ' + (node.data.scale || 2) + 'x';
+        } else if (node.type === 'video') {
+          title = orderNum + '. Video';
+        }
+
+        var self = this;
+        var html = '<div class="minimap-card-wrapper">';
+
+        // 왼쪽 포트 (입력)
+        html += '<div class="minimap-port minimap-port-left' + (hasPrev ? ' connected' : '') + '">';
+        html += '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M10 17l5-5-5-5v10z"/></svg>';
+        html += '</div>';
+
+        // 카드 본체
+        html += '<div class="minimap-card minimap-selected">';
+        if (node.thumbnail) {
+          html += '<div class="minimap-card-img"><img src="data:image/png;base64,' + node.thumbnail + '"></div>';
+        } else {
+          var icon = this._icons[node.type] || '?';
+          html += '<div class="minimap-card-img minimap-card-empty">' + icon + '</div>';
         }
         html += '</div>';
-        enlargedImage.innerHTML = html;
+
+        // 오른쪽 포트 (출력)
+        if (!this._noOutputTypes[node.type]) {
+          html += '<div class="minimap-port minimap-port-right' + (hasNext ? ' connected' : '') + '">';
+          html += '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M10 17l5-5-5-5v10z"/></svg>';
+          html += '</div>';
+        }
+
+        html += '</div>'; // wrapper
+
+        // 타이틀 + 서브라벨
+        html += '<div class="minimap-card-label">';
+        html += '<div class="minimap-card-title">' + title + '</div>';
+        if (sublabel) html += '<div class="minimap-card-sublabel">' + sublabel + '</div>';
+        html += '</div>';
+
+        container.innerHTML = html;
+
+        // 좌우 포트 클릭 시 이전/다음 노드로 이동
+        var leftPort = container.querySelector('.minimap-port-left');
+        var rightPort = container.querySelector('.minimap-port-right');
+        if (leftPort && hasPrev) {
+          leftPort.style.cursor = 'pointer';
+          leftPort.addEventListener('click', function() {
+            var prevNode = self.nodes.find(function(n) { return n.id === prevConn.from; });
+            if (prevNode) {
+              self.selectNode(prevNode.id);
+              if (prevNode.thumbnail) {
+                _setEnlargedImage('data:image/png;base64,' + prevNode.thumbnail);
+              }
+              self.renderMinimap();
+            }
+          });
+        }
+        if (rightPort && hasNext) {
+          rightPort.style.cursor = 'pointer';
+          rightPort.addEventListener('click', function() {
+            var nextNode = self.nodes.find(function(n) { return n.id === nextConns[0].to; });
+            if (nextNode) {
+              self.selectNode(nextNode.id);
+              if (nextNode.thumbnail) {
+                _setEnlargedImage('data:image/png;base64,' + nextNode.thumbnail);
+              }
+              self.renderMinimap();
+            }
+          });
+        }
       }
     };
+
+    // 히스토리 로드
+    nodeEditor._loadHistory();
+
+    // 윈도우 리사이즈 시 캐시 무효화
+    window.addEventListener('resize', function() {
+      nodeEditor._areaDirty = true;
+      nodeEditor._canvasEl = null;
+    });
 
     // Node Editor 이벤트
     document.getElementById('node-canvas-area').addEventListener('click', (e) => {
@@ -1539,8 +1736,11 @@
     var _dragRAF = 0;
     var _dragMX = 0, _dragMY = 0;
     document.addEventListener('mousemove', (e) => {
+      // 프롬프트 리사이즈 중이면 무시
+      if (nodeEditor._isPromptResizing) return;
       // 캔버스 팬 모드
       if (nodeEditor._isPanning) {
+        nodeEditor._setInteracting();
         var dx = e.clientX - nodeEditor._panStart.x;
         var dy = e.clientY - nodeEditor._panStart.y;
         nodeEditor._panX = nodeEditor._panStartPanX + dx / nodeEditor._zoom;
@@ -1549,6 +1749,7 @@
         return;
       }
       if (!nodeEditor.draggingNode) return;
+      nodeEditor._setInteracting();
       _dragMX = e.clientX;
       _dragMY = e.clientY;
       if (_dragRAF) return;
@@ -1563,7 +1764,7 @@
         dn.x = nx;
         dn.y = ny;
         var del = nodeEditor._dragEl;
-        if (del) del.style.transform = 'translate(' + nx + 'px,' + ny + 'px)';
+        if (del) del.style.transform = 'translate3d(' + nx + 'px,' + ny + 'px,0)';
         nodeEditor.renderConnections();
       });
     });
@@ -1571,13 +1772,17 @@
     document.addEventListener('mouseup', () => {
       if (nodeEditor._isPanning) {
         nodeEditor._isPanning = false;
-        return;
       }
-      if (nodeEditor.draggingNode) {
-        nodeEditor.pushUndo();
-        if (nodeEditor._dragEl) nodeEditor._dragEl.classList.remove('dragging');
-        nodeEditor.renderConnections();
+      try {
+        if (nodeEditor.draggingNode) {
+          nodeEditor.pushUndo();
+          if (nodeEditor._dragEl) nodeEditor._dragEl.classList.remove('dragging');
+          nodeEditor.renderConnections();
+        }
+      } catch (err) {
+        console.error('[NodeEditor] mouseup error:', err);
       }
+      // 반드시 정리 (에러 발생해도 실행)
       nodeEditor.draggingNode = null;
       nodeEditor._dragEl = null;
       nodeEditor._dragConns = null;
@@ -1772,15 +1977,7 @@
       if (isActive) {
         // 현재 Inspector 프리뷰 이미지를 enlarged로 복사
         const previewImg = document.querySelector('#node-preview-image img');
-        const enlargedImage = document.getElementById('node-enlarged-image');
-        if (previewImg) {
-          enlargedImage.innerHTML = '<img src="' + previewImg.src + '" alt="Enlarged Preview">';
-        } else if (!nodeEditor.selectedNode && nodeEditor.nodes.length > 0) {
-          // 노드 미선택 시 미니맵 표시
-          nodeEditor.renderMinimap();
-        } else {
-          enlargedImage.innerHTML = '<span class="node-inspector-preview-empty">No preview</span>';
-        }
+        _setEnlargedImage(previewImg ? previewImg.src : null);
         // 현재 Inspector 탭 상태를 enlarged 탭에 동기화
         const activeTab = document.querySelector('.node-inspector-tab.active');
         if (activeTab) {
@@ -1788,8 +1985,51 @@
           const matchTab = document.querySelector('.node-enlarged-tab[data-tab="' + activeTab.dataset.tab + '"]');
           if (matchTab) matchTab.classList.add('active');
         }
+        // 우측 Inspector 상단에 미니맵 표시
+        nodeEditor.renderMinimap();
+      } else {
+        // Enlarge 해제 시 draw overlay 숨기기
+        _hideDrawOverlay();
+        // 미니맵 제거
+        nodeEditor.renderMinimap();
       }
     });
+
+    // Draw overlay — enlarged image 안에 처음부터 고정 배치, show/hide만 전환
+    function _showDrawOverlay() {
+      var overlay = document.getElementById('node-draw-overlay');
+      if (overlay) overlay.classList.remove('hidden');
+    }
+    function _hideDrawOverlay() {
+      var overlay = document.getElementById('node-draw-overlay');
+      if (overlay) overlay.classList.add('hidden');
+    }
+    // Enlarged image 내용 변경 — draw overlay 보존 (innerHTML 사용 금지)
+    function _setEnlargedImage(src) {
+      var ei = document.getElementById('node-enlarged-image');
+      if (!ei) return;
+      var existingImg = ei.querySelector(':scope > img');
+      var existingEmpty = ei.querySelector(':scope > .node-inspector-preview-empty');
+      if (src) {
+        if (existingImg) {
+          existingImg.src = src;
+        } else {
+          if (existingEmpty) existingEmpty.remove();
+          var img = document.createElement('img');
+          img.src = src;
+          img.alt = 'Enlarged Preview';
+          ei.insertBefore(img, ei.firstChild);
+        }
+      } else {
+        if (existingImg) existingImg.remove();
+        if (!existingEmpty) {
+          var span = document.createElement('span');
+          span.className = 'node-inspector-preview-empty';
+          span.textContent = 'No preview';
+          ei.insertBefore(span, ei.firstChild);
+        }
+      }
+    }
 
     // Enlarged 뷰 탭 이벤트
     document.querySelectorAll('.node-enlarged-tab').forEach(tab => {
@@ -1806,6 +2046,26 @@
         document.querySelectorAll('.node-preview-tab-content').forEach(c => c.classList.remove('active'));
         const content = document.querySelector('.node-preview-tab-content[data-content="' + tabName + '"]');
         if (content) content.classList.add('active');
+
+        // Draw 탭: overlay 표시 + 이미지 로드
+        console.log('[NodeEditor] Enlarged tab clicked: ' + tabName + ', hasDrawTab=' + !!window.drawTab + ', selectedNode=' + nodeEditor.selectedNode);
+        if (tabName === 'draw') {
+          _showDrawOverlay();
+          var _overlay = document.getElementById('node-draw-overlay');
+          var _canvas = document.getElementById('draw-canvas');
+          console.log('[NodeEditor] Draw tab: overlay=' + (_overlay ? 'found, hidden=' + _overlay.classList.contains('hidden') : 'NULL') + ', canvas=' + (_canvas ? _canvas.width + 'x' + _canvas.height : 'NULL'));
+          if (window.drawTab && nodeEditor.selectedNode) {
+            drawTab.loadFromSelectedNode();
+          } else {
+            console.warn('[NodeEditor] Draw tab: SKIP loadFromSelectedNode - drawTab=' + !!window.drawTab + ' selectedNode=' + nodeEditor.selectedNode);
+          }
+        } else {
+          _hideDrawOverlay();
+          if (tabName === 'preview') {
+            var previewImg = document.querySelector('#node-preview-image img');
+            _setEnlargedImage(previewImg ? previewImg.src : null);
+          }
+        }
       });
     });
 
@@ -1850,7 +2110,6 @@
       const node = nodeEditor.nodes.find(n => n.id === nodeEditor.selectedNode);
       if (!node || !_promptNodeTypes[node.type]) return;
 
-      // Source 노드 찾기
       const inputConn = nodeEditor.connections.find(c => c.to === node.id);
       if (!inputConn) return;
       const sourceNode = nodeEditor.nodes.find(n => n.id === inputConn.from);
@@ -1861,10 +2120,22 @@
       const time = sourceNode.data.time || 'day';
       const light = sourceNode.data.light || 'on';
 
-      // Auto 프롬프트 콜백 등록
+      // 로딩 표시
+      const promptInput = document.getElementById('node-prompt-input');
+      const autoBtn = document.getElementById('node-prompt-auto-btn');
+      promptInput.value = '';
+      promptInput.placeholder = 'Generating prompt...';
+      promptInput.disabled = true;
+      autoBtn.disabled = true;
+      autoBtn.classList.add('loading');
+
       window._nodeAutoPromptCallback = (prompt) => {
         node.data.customPrompt = prompt;
-        document.getElementById('node-prompt-input').value = prompt;
+        promptInput.value = prompt;
+        promptInput.placeholder = 'Create photorealistic image';
+        promptInput.disabled = false;
+        autoBtn.disabled = false;
+        autoBtn.classList.remove('loading');
         const inspectorPrompt = document.getElementById('node-custom-prompt');
         if (inspectorPrompt) inspectorPrompt.value = prompt;
         node.dirty = true;
@@ -1986,35 +2257,60 @@
     // ==========================================
     var canvasArea = document.getElementById('node-canvas-area');
 
-    // 마우스 휠 줌 (multiplicative for natural feel)
+    // 마우스 휠 줌 (마우스 포인터 기준 피벗, 부드러운 보간)
+    var _zoomTarget = nodeEditor._zoom;
+    var _zoomPivotX = 0, _zoomPivotY = 0;
+    var _zoomAnimId = 0;
+
+    function _animateZoom() {
+      var curr = nodeEditor._zoom;
+      var diff = _zoomTarget - curr;
+      // 충분히 가까우면 정확히 맞추고 종료
+      if (Math.abs(diff) < 0.001) {
+        nodeEditor.setZoom(_zoomTarget, _zoomPivotX, _zoomPivotY);
+        _zoomAnimId = 0;
+        // 인터랙션 종료 → 풀 퀄리티 리렌더
+        nodeEditor._interacting = false;
+        return;
+      }
+      var next = curr + diff * 0.3;
+      nodeEditor.setZoom(next, _zoomPivotX, _zoomPivotY);
+      _zoomAnimId = requestAnimationFrame(_animateZoom);
+    }
+
     canvasArea.addEventListener('wheel', function(e) {
       e.preventDefault();
+      nodeEditor._setInteracting();
       var rect = canvasArea.getBoundingClientRect();
-      var mx = e.clientX - rect.left;
-      var my = e.clientY - rect.top;
-      var factor = e.deltaY > 0 ? 0.92 : 1.08;
-      var newZoom = nodeEditor._zoom * factor;
-      nodeEditor.setZoom(newZoom, mx, my);
+      _zoomPivotX = e.clientX - rect.left;
+      _zoomPivotY = e.clientY - rect.top;
+      // 방향만 판단, 고정 5% 스텝
+      var step = e.deltaY > 0 ? 0.95 : (1 / 0.95);
+      _zoomTarget = Math.max(nodeEditor._zoomMin, Math.min(nodeEditor._zoomMax, _zoomTarget * step));
+      // 애니메이션 시작 (이미 실행 중이면 타겟만 갱신)
+      if (!_zoomAnimId) {
+        _zoomAnimId = requestAnimationFrame(_animateZoom);
+      }
     }, { passive: false });
 
-    // 캔버스 빈 영역 드래그로 팬 (스페이스바 누른 상태 또는 중간 버튼)
-    var _spaceDown = false;
+    // 캔버스 빈 영역 드래그로 팬 (Shift 누른 상태 또는 중간 버튼)
+    var _panKeyDown = false;
     document.addEventListener('keydown', function(e) {
-      if (e.code === 'Space' && !e.target.matches('input,textarea')) {
-        _spaceDown = true;
+      if (e.key === 'Shift' && !_panKeyDown) {
+        _panKeyDown = true;
         canvasArea.style.cursor = 'grab';
       }
     });
     document.addEventListener('keyup', function(e) {
-      if (e.code === 'Space') {
-        _spaceDown = false;
-        canvasArea.style.cursor = '';
+      if (e.key === 'Shift') {
+        _panKeyDown = false;
+        if (!nodeEditor._isPanning) canvasArea.style.cursor = '';
       }
     });
 
     canvasArea.addEventListener('mousedown', function(e) {
-      // 스페이스+클릭 또는 중간 버튼으로 팬
-      if (_spaceDown || e.button === 1) {
+      // Shift+클릭 또는 중간 버튼으로 팬
+      if (_panKeyDown || e.button === 1) {
         e.preventDefault();
         nodeEditor._isPanning = true;
         nodeEditor._panStart = { x: e.clientX, y: e.clientY };
@@ -2026,7 +2322,7 @@
 
     canvasArea.addEventListener('mouseup', function() {
       if (nodeEditor._isPanning) {
-        canvasArea.style.cursor = _spaceDown ? 'grab' : '';
+        canvasArea.style.cursor = _panKeyDown ? 'grab' : '';
       }
     });
 
@@ -2037,38 +2333,35 @@
       }
     });
 
-    // 프롬프트 바 리사이즈 드래그 핸들
-    var promptBar = document.querySelector('.node-bottom-bar');
+    // 프롬프트 바 리사이즈 — 단순하게 textarea 높이만 변경
     var promptHandle = document.getElementById('node-prompt-resize-handle');
     if (promptHandle) {
-      var _resizing = false;
-      var _resizeStartY = 0;
-      var _resizeStartH = 0;
+      var _pr = { active: false, startY: 0, startH: 0, ta: null };
 
       promptHandle.addEventListener('mousedown', function(e) {
-        _resizing = true;
-        _resizeStartY = e.clientY;
-        _resizeStartH = promptBar.offsetHeight;
+        var ta = document.getElementById('node-prompt-input');
+        if (!ta) return;
+        _pr.ta = ta;
+        _pr.active = true;
+        _pr.startY = e.clientY;
+        _pr.startH = ta.offsetHeight;
+        nodeEditor._isPromptResizing = true;
         document.body.style.cursor = 'ns-resize';
         document.body.style.userSelect = 'none';
         e.preventDefault();
       });
 
       document.addEventListener('mousemove', function(e) {
-        if (!_resizing) return;
-        var dy = _resizeStartY - e.clientY;
-        var newH = Math.max(60, Math.min(400, _resizeStartH + dy));
-        promptBar.style.height = newH + 'px';
-        // textarea도 함께 늘어남
-        var ta = document.getElementById('node-prompt-input');
-        if (ta) ta.style.height = Math.max(24, newH - 50) + 'px';
+        if (!_pr.active) return;
+        _pr.ta.style.height = Math.max(80, Math.min(300, _pr.startH + _pr.startY - e.clientY)) + 'px';
       });
 
       document.addEventListener('mouseup', function() {
-        if (_resizing) {
-          _resizing = false;
-          document.body.style.cursor = '';
-          document.body.style.userSelect = '';
-        }
+        if (!_pr.active) return;
+        _pr.active = false;
+        _pr.ta = null;
+        nodeEditor._isPromptResizing = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
       });
     }

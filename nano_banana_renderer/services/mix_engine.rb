@@ -139,7 +139,7 @@ module NanoBanana
             end
           rescue StandardError => e
             puts "[NanoBanana] Mix Error: #{e.message}"
-            @mix_dialog&.execute_script("onMixError('#{e.message.gsub("'", "\\'").gsub("\n", ' ')}')")
+            @mix_dialog&.execute_script("onMixError(#{e.message.to_json})")
           end
         end
       rescue StandardError => e

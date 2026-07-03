@@ -155,19 +155,25 @@ module NanoBanana
 
     # ========================================
     # 2차 생성 (이전 결과를 소스로 재생성)
+    # panel_id: 숫자 문자열(렌더모드) 또는 'inpaint_X'/'node_X'(노드에디터)
     # ========================================
     def regenerate_image(source_base64, prompt, panel_id)
       unless @api_client
-        @main_dialog&.execute_script("onRegenerateError('API Key가 설정되지 않았습니다.', #{panel_id})")
+        _regen_callback(panel_id, false, 'API Key가 설정되지 않았습니다.')
         return
       end
 
+      # 노드에디터 콜백인지 판별
+      is_node_callback = panel_id.to_s.match?(/^(inpaint_|node_)/)
+
       Thread.new do
         begin
-          puts "[NanoBanana] 2차 생성 시작 (패널 #{panel_id})"
+          puts "[NanoBanana] 2차 생성 시작 (#{panel_id})"
 
-          # 프롬프트가 비어있으면 기본 프롬프트 사용
-          render_prompt = if prompt && !prompt.empty?
+          # 인페인팅은 프롬프트를 그대로 사용 (JS에서 이미 조합됨)
+          render_prompt = if is_node_callback
+            prompt
+          elsif prompt && !prompt.empty?
             <<~PROMPT
 ★★★ IMAGE REFINEMENT REQUEST ★★★
 Based on the attached rendered image, apply the following modifications while preserving the overall composition.
@@ -203,18 +209,40 @@ CRITICAL RULES:
 
           puts "[NanoBanana] 2차 생성 프롬프트: #{render_prompt[0..200]}..."
 
-          # API 호출 (이전 결과 이미지를 소스로)
           result = @api_client.generate(source_base64, render_prompt)
 
           if result && result[:image]
-            @main_dialog&.execute_script("onRegenerateComplete('#{result[:image]}', #{panel_id})")
-            puts "[NanoBanana] 2차 생성 완료 (패널 #{panel_id})"
+            _regen_callback(panel_id, true, result[:image])
+            puts "[NanoBanana] 2차 생성 완료 (#{panel_id})"
           else
-            @main_dialog&.execute_script("onRegenerateError('결과를 받지 못했습니다.', #{panel_id})")
+            _regen_callback(panel_id, false, '결과를 받지 못했습니다.')
           end
         rescue StandardError => e
           puts "[NanoBanana] 2차 생성 에러: #{e.message}"
-          @main_dialog&.execute_script("onRegenerateError('#{e.message.gsub("'", "\\'").gsub("\n", ' ')}', #{panel_id})")
+          _regen_callback(panel_id, false, e.message.tr("'", '"').gsub("\n", ' '))
+        end
+      end
+    end
+
+    private
+
+    # regenerate 결과 콜백 라우팅
+    def _regen_callback(panel_id, success, data)
+      pid = panel_id.to_s
+      if pid.match?(/^(inpaint_|node_)/)
+        # 노드에디터 콜백
+        if success
+          js = "if(window._nodeRendererCallbacks&&window._nodeRendererCallbacks['#{pid}']){window._nodeRendererCallbacks['#{pid}']({success:true,image:'#{data}'})}"
+        else
+          js = "if(window._nodeRendererCallbacks&&window._nodeRendererCallbacks['#{pid}']){window._nodeRendererCallbacks['#{pid}']({success:false,error:'#{data}'})}"
+        end
+        UI.start_timer(0) { @main_dialog&.execute_script(js) }
+      else
+        # 렌더모드 콜백
+        if success
+          UI.start_timer(0) { @main_dialog&.execute_script("onRegenerateComplete('#{data}', #{pid})") }
+        else
+          UI.start_timer(0) { @main_dialog&.execute_script("onRegenerateError('#{data}', #{pid})") }
         end
       end
     end

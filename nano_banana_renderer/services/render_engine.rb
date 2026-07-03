@@ -12,7 +12,7 @@ module NanoBanana
     # 씬 캡처 + AI 프롬프트 생성 (Convert)
     def capture_scene(size = '1024')
       begin
-        temp_path = "/tmp/nanobanana_capture.jpg"
+        temp_path = File.join(Dir.tmpdir, 'nanobanana_capture.jpg')
         model = Sketchup.active_model
         view = model.active_view
         rendering_options = model.rendering_options
@@ -31,11 +31,11 @@ module NanoBanana
 
         puts "[NanoBanana] Edge OFF 설정 완료 (원본: #{original_edges})"
 
-        # 해상도 설정 (선명할수록 AI가 더 잘 인식)
+        # 해상도 설정. SketchUp write_image가 병목이라 기본값은 빠른 프리뷰 우선.
         sizes = {
-          '1024' => { width: 1920, height: 1080 },   # 속도 (FHD)
-          '1536' => { width: 2560, height: 1440 },   # 밸런스 (2K)
-          '1920' => { width: 3840, height: 2160 }    # 고품질 (4K)
+          '1024' => { width: 1024, height: 576 },    # 속도
+          '1536' => { width: 1536, height: 864 },    # 밸런스
+          '1920' => { width: 1920, height: 1080 }    # 고품질
         }
         resolution = sizes[size] || sizes['1024']
 
@@ -64,6 +64,7 @@ module NanoBanana
         end
 
         @current_image = Base64.strict_encode64(File.binread(temp_path))
+        @current_image_is_preview = false
         file_size_kb = File.size(temp_path) / 1024
         File.delete(temp_path) rescue nil
 
@@ -158,7 +159,7 @@ Do NOT generate any rendering prompt. Output ONLY valid JSON.
         rescue StandardError => e
           puts "[NanoBanana] 씬 분석 에러: #{e.message}"
           @scene_analysis = nil
-          @main_dialog&.execute_script("onConvertError('#{e.message.gsub("'", "\\'")}')")
+          @main_dialog&.execute_script("onConvertError(#{e.message.to_json})")
         end
       end
     end
@@ -188,6 +189,12 @@ Do NOT generate any rendering prompt. Output ONLY valid JSON.
       unless @current_image
         UI.messagebox('먼저 씬을 캡처하세요.', MB_OK)
         return
+      end
+
+      # 소스가 씬 탭용 저해상 프리뷰면 고품질로 재캡처 (자글자글 렌더 방지)
+      if @current_image_is_preview
+        puts "[NanoBanana] 소스가 저해상 프리뷰 - 고품질 재캡처 실행"
+        capture_scene('1024')
       end
 
       # 현재 씬 이름 가져오기
@@ -244,12 +251,12 @@ Do NOT generate any rendering prompt. Output ONLY valid JSON.
       rescue StandardError => e
         puts "[NanoBanana] Render Error: #{e.message}"
         puts e.backtrace.first(5).join("\n")
-        @main_dialog&.execute_script("onRenderError('#{e.message.gsub("'", "\\'").gsub("\n", ' ')}', '#{current_scene}')")
+        @main_dialog&.execute_script("onRenderError(#{e.message.to_json}, #{current_scene.to_s.to_json})")
       end
     end
 
     # 노드 에디터 렌더링 (동기 모드 — SketchUp Ruby Thread 문제 회피)
-    def start_render_parallel(time_preset, light_switch, render_id, user_prompt = '', user_negative = '')
+    def start_render_parallel(time_preset, light_switch, render_id, user_prompt = '', user_negative = '', engine = '')
       puts "[NanoBanana] ========== 노드 렌더링 시작 (#{render_id}) =========="
 
       unless @api_client
@@ -260,6 +267,14 @@ Do NOT generate any rendering prompt. Output ONLY valid JSON.
       unless @current_image
         @main_dialog&.execute_script("onNodeRenderError('#{render_id}', '먼저 씬을 캡처하세요.')")
         return
+      end
+
+      # 노드에서 선택한 모델로 임시 변경
+      saved_model = @api_client.model
+      if engine && !engine.empty? && engine != 'main'
+        mapped = ApiClient::IMAGE_GEN_MODELS[engine] || engine
+        @api_client.model = mapped
+        puts "[NanoBanana] [#{render_id}] 모델 변경: #{saved_model} → #{mapped} (요청: #{engine})"
       end
 
       render_source_image = @current_image.dup
@@ -276,6 +291,7 @@ Do NOT generate any rendering prompt. Output ONLY valid JSON.
 
       puts "[NanoBanana] [#{render_id}] Prompt: #{prompt[0..150]}..."
       puts "[NanoBanana] [#{render_id}] 이미지 크기: #{render_source_image.length} bytes"
+      puts "[NanoBanana] [#{render_id}] 사용 모델: #{@api_client.model}"
       puts "[NanoBanana] [#{render_id}] 동기 모드 렌더링 시작..."
 
       # Thread 없이 직접 실행 (SketchUp Ruby Thread 문제 회피 — start_render_with_preset과 동일 방식)
@@ -307,8 +323,10 @@ Do NOT generate any rendering prompt. Output ONLY valid JSON.
       rescue StandardError => e
         puts "[NanoBanana] [#{render_id}] Render Error: #{e.message}"
         puts e.backtrace.first(5).join("\n")
-        err_msg = e.message.gsub("'", "\\'").gsub("\n", ' ')
-        @main_dialog&.execute_script("onNodeRenderError('#{render_id}', '#{err_msg}')")
+        @main_dialog&.execute_script("onNodeRenderError('#{render_id}', #{e.message.to_json})")
+      ensure
+        # 모델 원래대로 복원
+        @api_client.model = saved_model if saved_model && @api_client
       end
     end
   end

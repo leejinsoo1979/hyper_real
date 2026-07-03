@@ -4,6 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NanoBanana Renderer</title>
+  <script>
+    // 원격 진단: JS 에러 발생 시 로딩 화면에 에러 내용을 표시
+    window.onerror = function(msg, src, line) {
+      try {
+        var t = document.querySelector('.app-loader-text');
+        if (t) {
+          var file = (src || '').split('/').pop();
+          t.textContent = 'ERROR: ' + msg + ' (' + file + ':' + line + ')';
+          t.style.color = '#ff5555';
+        }
+      } catch (e) { /* 표시 실패는 무시 */ }
+    };
+  </script>
   <link rel="stylesheet" href="styles/main-base.css">
   <link rel="stylesheet" href="styles/main-render.css">
   <link rel="stylesheet" href="styles/main-mix.css">
@@ -147,18 +160,14 @@
         <span class="section-label">Model</span>
         <div class="custom-dropdown" id="model-dropdown">
           <div class="dropdown-selected" id="model-dropdown-selected">
-            <span id="model-selected-text">Flash 2.0 (추천)</span>
+            <span id="model-selected-text">Flash 2.5 (추천)</span>
             <span class="dropdown-arrow"></span>
           </div>
           <div class="dropdown-menu" id="model-dropdown-menu">
             <div class="dropdown-group-label">Gemini</div>
-            <div class="dropdown-item selected" data-value="gemini-2.0-flash-exp" data-engine="gemini">
-              Flash 2.0 (추천)
-              <div class="dropdown-item-desc">20~40초, 고속</div>
-            </div>
-            <div class="dropdown-item" data-value="gemini-2.5-flash-image" data-engine="gemini">
-              Flash 2.5
-              <div class="dropdown-item-desc">30~60초</div>
+            <div class="dropdown-item selected" data-value="gemini-2.5-flash-image" data-engine="gemini">
+              Flash 2.5 (추천)
+              <div class="dropdown-item-desc">30~60초, 고속</div>
             </div>
             <div class="dropdown-item" data-value="gemini-3-pro-image" data-engine="gemini">
               Gemini 3 Pro
@@ -796,6 +805,45 @@
         </div>
         <div class="node-enlarged-image" id="node-enlarged-image">
           <span class="node-inspector-preview-empty">No preview</span>
+          <!-- Draw 오버레이: 처음부터 여기에 고정 배치 (DOM 이동 없음) -->
+          <div class="node-draw-overlay hidden" id="node-draw-overlay">
+            <div class="draw-toolbar" id="draw-toolbar">
+              <button class="draw-tool-btn active" data-tool="pen" title="Pen (Marker)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+              </button>
+              <button class="draw-tool-btn" data-tool="arrow" title="Arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 19L19 5"/><path d="M19 5v6"/><path d="M19 5h-6"/></svg>
+              </button>
+              <button class="draw-tool-btn" data-tool="eraser" title="Eraser">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16c-.8-.8-.8-2 0-2.8L14.8 1.4c.8-.8 2-.8 2.8 0l5 5c.8.8.8 2 0 2.8L12 20"/><path d="M6 12l5.4-5.4"/></svg>
+              </button>
+              <div class="draw-toolbar-divider"></div>
+              <button class="draw-color-btn active" data-color="#ff0000" title="Red" style="background:#ff0000;"></button>
+              <button class="draw-color-btn" data-color="#00ff00" title="Green" style="background:#00ff00;"></button>
+              <button class="draw-color-btn" data-color="#0088ff" title="Blue" style="background:#0088ff;"></button>
+              <button class="draw-color-btn" data-color="#ffff00" title="Yellow" style="background:#ffff00;"></button>
+              <div class="draw-toolbar-divider"></div>
+              <input type="range" class="draw-size-slider" id="draw-brush-size" min="1" max="50" value="10" title="Brush Size">
+              <span class="draw-size-label" id="draw-size-label">10</span>
+              <div class="draw-toolbar-divider"></div>
+              <button class="draw-tool-btn" data-tool="undo" title="Undo (Ctrl+Z)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H11"/><path d="M3 10l4-4"/><path d="M3 10l4 4"/></svg>
+              </button>
+              <button class="draw-tool-btn" data-tool="delete-overlay" title="Delete Selected Image">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9l6 6"/><path d="M15 9l-6 6"/></svg>
+              </button>
+              <button class="draw-tool-btn" data-tool="clear" title="Clear All">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+              </button>
+            </div>
+            <div class="draw-canvas-wrapper" id="draw-canvas-wrapper">
+              <canvas id="draw-canvas" width="400" height="300"></canvas>
+            </div>
+            <div class="draw-bottom-bar">
+              <input type="text" class="draw-prompt-input" id="draw-prompt-input" placeholder="Describe what to add/change... (Ctrl+V to paste reference image)">
+              <button class="draw-apply-btn" id="draw-apply-btn">Apply</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -855,10 +903,10 @@
             </button>
           </div>
           <div class="node-prompt-content active" data-prompt-content="main">
-            <textarea class="node-prompt-input" id="node-prompt-input" rows="1" placeholder="Create photorealistic image"></textarea>
+            <textarea class="node-prompt-input" id="node-prompt-input" rows="3" placeholder="Create photorealistic image"></textarea>
           </div>
           <div class="node-prompt-content" data-prompt-content="negative">
-            <textarea class="node-prompt-input node-prompt-negative" id="node-prompt-negative-input" rows="1" placeholder="Negative prompt (optional)"></textarea>
+            <textarea class="node-prompt-input node-prompt-negative" id="node-prompt-negative-input" rows="3" placeholder="Negative prompt (optional)"></textarea>
           </div>
         </div>
         <div class="node-make-area">
@@ -884,6 +932,8 @@
             </svg>
             Enlarge
           </button>
+          <!-- 미니맵 (Enlarge 모드에서 표시) -->
+          <div class="node-inspector-minimap" id="node-inspector-minimap"></div>
           <!-- 탭 -->
           <div class="node-inspector-tabs">
             <button class="node-inspector-tab active" data-tab="preview">Preview</button>
@@ -902,34 +952,8 @@
               <span class="node-inspector-preview-empty">No images to compare</span>
             </div>
           </div>
-          <!-- Draw 탭 컨텐츠 -->
-          <div class="node-preview-tab-content" data-content="draw">
-            <div class="node-draw-container" id="node-draw-container">
-              <div class="draw-toolbar" id="draw-toolbar">
-                <button class="draw-tool-btn active" data-tool="pen" title="Pen">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-                </button>
-                <button class="draw-tool-btn" data-tool="eraser" title="Eraser">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16c-.8-.8-.8-2 0-2.8L14.8 1.4c.8-.8 2-.8 2.8 0l5 5c.8.8.8 2 0 2.8L12 20"/><path d="M6 12l5.4-5.4"/></svg>
-                </button>
-                <div class="draw-toolbar-divider"></div>
-                <button class="draw-color-btn active" data-color="#ff0000" title="Red" style="background:#ff0000;"></button>
-                <button class="draw-color-btn" data-color="#00ff00" title="Green" style="background:#00ff00;"></button>
-                <button class="draw-color-btn" data-color="#0088ff" title="Blue" style="background:#0088ff;"></button>
-                <button class="draw-color-btn" data-color="#ffff00" title="Yellow" style="background:#ffff00;"></button>
-                <div class="draw-toolbar-divider"></div>
-                <input type="range" class="draw-size-slider" id="draw-brush-size" min="1" max="50" value="10" title="Brush Size">
-                <span class="draw-size-label" id="draw-size-label">10</span>
-                <div class="draw-toolbar-divider"></div>
-                <button class="draw-tool-btn" data-tool="clear" title="Clear">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                </button>
-              </div>
-              <div class="draw-canvas-wrapper" id="draw-canvas-wrapper">
-                <canvas id="draw-canvas" width="400" height="300"></canvas>
-              </div>
-            </div>
-          </div>
+          <!-- Draw 탭 컨텐츠 (Enlarge 모드에서만 사용) -->
+          <div class="node-preview-tab-content" data-content="draw"></div>
           <div class="node-inspector-preview-progress">
             <div class="node-inspector-preview-progress-bar" id="node-preview-progress"></div>
           </div>
@@ -1045,18 +1069,14 @@
                   <span class="section-label">AI Model</span>
                   <div class="custom-dropdown node-model-dropdown" id="node-model-dropdown">
                     <div class="dropdown-selected" id="node-model-selected">
-                      <span id="node-model-selected-text">Flash 2.0 (추천)</span>
+                      <span id="node-model-selected-text">Flash 2.5 (추천)</span>
                       <span class="dropdown-arrow"></span>
                     </div>
                     <div class="dropdown-menu" id="node-model-menu">
                       <div class="dropdown-group-label">Gemini</div>
-                      <div class="dropdown-item selected" data-value="gemini-2.0-flash-exp">
-                        Flash 2.0 (추천)
-                        <div class="dropdown-item-desc">20~40초, 고속</div>
-                      </div>
-                      <div class="dropdown-item" data-value="gemini-2.5-flash-image">
-                        Flash 2.5
-                        <div class="dropdown-item-desc">30~60초</div>
+                      <div class="dropdown-item selected" data-value="gemini-2.5-flash-image">
+                        Flash 2.5 (추천)
+                        <div class="dropdown-item-desc">30~60초, 고속</div>
                       </div>
                       <div class="dropdown-item" data-value="gemini-3-pro-image">
                         Gemini 3 Pro
@@ -1230,10 +1250,10 @@
     </div>
   </div>
 
-  <script src="scripts/core.js"></script>
+  <script src="scripts/core.js?v=20260703d"></script>
   <script src="scripts/node-presets.js"></script>
   <script src="scripts/node-editor.js"></script>
-  <script src="scripts/render-mode.js"></script>
+  <script src="scripts/render-mode.js?v=20260703f"></script>
   <script src="scripts/mix-mode.js"></script>
   <script src="scripts/node-types-ext.js"></script>
   <script src="scripts/node-inspector-ext.js"></script>

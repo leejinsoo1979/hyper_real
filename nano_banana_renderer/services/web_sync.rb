@@ -98,7 +98,7 @@ module NanoBanana
 
       begin
         view = Sketchup.active_model.active_view
-        temp_path = File.join(ENV['TMPDIR'] || '/tmp', "nanobanana_live.png")
+        temp_path = File.join(Dir.tmpdir, 'nanobanana_live.png')
         view.write_image(temp_path, 1280, 720, true)
 
         if File.exist?(temp_path)

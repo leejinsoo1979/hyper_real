@@ -199,7 +199,7 @@ CRITICAL RULES:
 
           rescue StandardError => e
             puts "[NanoBanana] Editor AI Error: #{e.message}"
-            @editor_dialog&.execute_script("onAIGenerateError('#{e.message.gsub("'", "\\'").gsub("\n", ' ')}')")
+            @editor_dialog&.execute_script("onAIGenerateError(#{e.message.to_json})")
           end
         end
 

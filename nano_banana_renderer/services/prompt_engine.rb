@@ -193,9 +193,22 @@ module NanoBanana
 
       puts "[NanoBanana] 이미지 있음: #{@current_image.length} bytes"
 
-      Thread.new do
+      # 소스가 저해상 프리뷰면 고품질로 재캡처 (분석 정확도 확보)
+      if @current_image_is_preview
+        puts "[NanoBanana] 소스가 저해상 프리뷰 - 고품질 재캡처 실행"
+        capture_scene('1024')
+      end
+
+      # 취소 지원: 요청마다 토큰 발급, 취소 시 토큰 무효화로 늦게 온 결과 폐기
+      @auto_prompt_token = (@auto_prompt_token || 0) + 1
+      token = @auto_prompt_token
+
+      @main_dialog&.execute_script("onAutoPromptStart()")
+
+      # Thread 사용 금지 (SketchUp Ruby에서 조용히 멈춤) - 타이머로 UI 갱신 후 동기 실행
+      UI.start_timer(0.1, false) do
         begin
-          @main_dialog&.execute_script("onAutoPromptStart()")
+          next if token != @auto_prompt_token # 취소됨
 
           # ★★★ SketchUp 모델에서 재질 정보 추출 ★★★
           materials_info = extract_materials_info
@@ -206,6 +219,8 @@ module NanoBanana
           prompt_request = get_ai_instruction_template(materials_info, user_style, time_preset, light_switch)
 
           result = @api_client.analyze_scene(@current_image, prompt_request)
+
+          next if token != @auto_prompt_token # 취소됨 - 결과 폐기
 
           if result && result[:text]
             raw_prompt = result[:text]
@@ -221,9 +236,10 @@ module NanoBanana
             main_prompt = clean_prompt
             negative_prompt = ""
 
-            if clean_prompt =~ /\[NEGATIVE\](.+)/mi
-              negative_prompt = $1.strip
-              main_prompt = clean_prompt.sub(/\[NEGATIVE\].+/mi, '').strip
+            if clean_prompt =~ /\[NEGATIVE[^\]]*\]\s*(.+)/mi
+              # AI가 출력하는 섹션 제목은 [NEGATIVE PROMPT - MUST AVOID] 형태 - 제목 변형 허용
+              negative_prompt = $1.sub(/---.*\z/m, '').strip
+              main_prompt = clean_prompt.sub(/\[NEGATIVE[^\]]*\].*\z/m, '').strip
             elsif clean_prompt =~ /Negative[:\s]*(.+)/mi
               negative_prompt = $1.strip.sub(/\n.*$/m, '')  # 첫 줄만
               main_prompt = clean_prompt.sub(/Negative[:\s]*.+/mi, '').strip
@@ -255,10 +271,17 @@ module NanoBanana
           end
 
         rescue StandardError => e
+          next if token != @auto_prompt_token # 취소됨
           puts "[NanoBanana] Auto 프롬프트 에러: #{e.message}"
-          @main_dialog&.execute_script("onAutoPromptError('#{e.message.gsub("'", "\\'")}')")
+          @main_dialog&.execute_script("onAutoPromptError(#{e.message.to_json})")
         end
       end
+    end
+
+    # Auto 프롬프트 취소 (진행 중인 요청의 결과를 폐기)
+    def cancel_auto_prompt
+      @auto_prompt_token = (@auto_prompt_token || 0) + 1
+      puts "[NanoBanana] Auto 프롬프트 취소됨"
     end
 
     # ========================================

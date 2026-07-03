@@ -93,17 +93,27 @@ module NanoBanana
             @main_dialog&.execute_script("onConnectionTestResult(false, 'API 연결 실패')")
           end
         rescue StandardError => e
-          @main_dialog&.execute_script("onConnectionTestResult(false, '#{e.message.gsub("'", "\\'")}')")
+          @main_dialog&.execute_script("onConnectionTestResult(false, #{e.message.to_json})")
         end
       end
     end
 
     # 모델 저장
     def save_model(model)
-      @config_store.save_setting('gemini_model', model)
-      @gemini_model = model
-      @api_client.model = model if @api_client
-      puts "[NanoBanana] Gemini 모델 설정: #{model}"
+      # 모델 이름으로 소속 엔진을 판별해 엔진까지 자동 전환 (모델-엔진 불일치 방지)
+      if model.to_s.start_with?('gemini', 'imagen')
+        @config_store.save_setting('gemini_model', model)
+        @gemini_model = model
+        @api_client.model = model if @api_client
+        puts "[NanoBanana] Gemini 모델 설정: #{model}"
+        set_current_engine('gemini') if @current_api != 'gemini'
+      else
+        @config_store.save_setting('replicate_model', model)
+        @replicate_model = model
+        @replicate_client.model = model if @replicate_client && @replicate_client.respond_to?(:model=)
+        puts "[NanoBanana] Replicate 모델 설정: #{model}"
+        set_current_engine('replicate') if @current_api != 'replicate'
+      end
     end
 
     # 모델 로드
@@ -136,7 +146,7 @@ module NanoBanana
             @settings_dialog&.execute_script("onConnectionTestResult(false, '연결 실패')")
           end
         rescue StandardError => e
-          @settings_dialog&.execute_script("onConnectionTestResult(false, '#{e.message.gsub("'", "\\'")}')")
+          @settings_dialog&.execute_script("onConnectionTestResult(false, #{e.message.to_json})")
         end
       end
     end

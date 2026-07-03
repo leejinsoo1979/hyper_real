@@ -166,21 +166,24 @@
       sourceEl.classList.add('hidden');
       rendererEl.classList.add('hidden');
 
-      // Preview 업데이트 (Video 노드는 비디오 플레이어 표시)
+      // Preview 업데이트 — 같은 이미지면 DOM 재생성 스킵
       var previewEl = document.getElementById('node-preview-image');
-      if (node.type === 'video' && node.data.videoUrl) {
-        previewEl.innerHTML = '<div class="video-player-container">' +
-          '<video class="video-player" controls autoplay loop muted><source src="' + node.data.videoUrl + '" type="video/mp4"></video>' +
-          '</div>';
-      } else if (node.data.image) {
-        var imgSrc = node.data.image.startsWith('data:') ? node.data.image : 'data:image/png;base64,' + node.data.image;
-        previewEl.innerHTML = '<img src="' + imgSrc + '" alt="Preview">';
-        // Video 노드에 이미지만 있으면 재생 아이콘 오버레이
-        if (node.type === 'video') {
-          previewEl.innerHTML += '<div class="node-video-overlay"><svg viewBox="0 0 24 24" fill="white" style="width:32px;height:32px;"><polygon points="5,3 19,12 5,21"/></svg></div>';
+      var _prevKey = node.id + ':' + node.type + ':' + (node.data.image ? node.data.image.length : 0) + ':' + (node.data.videoUrl || '');
+      if (previewEl._imgKey !== _prevKey) {
+        previewEl._imgKey = _prevKey;
+        if (node.type === 'video' && node.data.videoUrl) {
+          previewEl.innerHTML = '<div class="video-player-container">' +
+            '<video class="video-player" controls autoplay loop muted><source src="' + node.data.videoUrl + '" type="video/mp4"></video>' +
+            '</div>';
+        } else if (node.data.image) {
+          var imgSrc = node.data.image.startsWith('data:') ? node.data.image : 'data:image/png;base64,' + node.data.image;
+          previewEl.innerHTML = '<img src="' + imgSrc + '" alt="Preview">';
+          if (node.type === 'video') {
+            previewEl.innerHTML += '<div class="node-video-overlay"><svg viewBox="0 0 24 24" fill="white" style="width:32px;height:32px;"><polygon points="5,3 19,12 5,21"/></svg></div>';
+          }
+        } else {
+          previewEl.innerHTML = '<span class="node-inspector-preview-empty">No preview</span>';
         }
-      } else {
-        previewEl.innerHTML = '<span class="node-inspector-preview-empty">No preview</span>';
       }
 
       // 해당 inspector 표시
@@ -323,10 +326,7 @@
   document.querySelectorAll('.node-inspector-tab').forEach(function(tab) {
     tab.addEventListener('click', function() {
       if (tab.dataset.tab === 'draw' && window.drawTab && nodeEditor.selectedNode) {
-        var node = nodeEditor.nodes.find(function(n) { return n.id === nodeEditor.selectedNode; });
-        if (node && node.type === 'modifier') {
-          drawTab.loadFromNode(node.id);
-        }
+        drawTab.loadFromSelectedNode();
       }
       if (tab.dataset.tab === 'compare' && nodeEditor.selectedNode) {
         _renderCompareView();
