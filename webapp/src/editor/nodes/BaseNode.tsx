@@ -88,12 +88,12 @@ export const BaseNode = memo(function BaseNode({
         />
       )}
 
-      {/* Thumbnail Area */}
+      {/* Thumbnail Area — 캡처(16:9)와 동일 비율로 잘림 없이 표시 */}
       <div
         className="relative flex items-center justify-center"
         style={{
           width: '100%',
-          height: 120,
+          aspectRatio: '16 / 9',
           backgroundColor: thumbnail ? '#ffffff' : '#1a1a24',
         }}
       >
@@ -101,7 +101,7 @@ export const BaseNode = memo(function BaseNode({
           <img
             src={thumbnail}
             alt=""
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
             draggable={false}
           />
         ) : (
