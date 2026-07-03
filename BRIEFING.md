@@ -99,7 +99,7 @@
 | 2b | webapp에 §5 노하우 이식 (geminiClient 모델/thinking/에러 처리) | ✅ 2026-07-03 |
 | 2c | VIDEO_ANALYSIS 격차 반영: "View to render" 프리셋, 비디오 엔진 sora/veo, 다색 마킹·Ctrl+V 검증 | ✅ 2026-07-03 |
 | 3 | 브릿지 확장: 씬 목록/전환/카메라 명령/앱 열기 (/api/scenes, /api/command, /api/result) | ✅ 2026-07-03 |
-| 4 | Electron 패키징: 설치본, 자동 업데이트, SketchUp 플러그인 설치 메뉴 | |
+| 4 | Electron 패키징: 설치본, 자동 업데이트, SketchUp 플러그인 설치 메뉴 | 🔶 셸+dmg 패키징 완료 (2026-07-03). 자동업데이트/코드서명/플러그인 설치 메뉴 남음 |
 | 5 | 프로덕트 계층: 계정/크레딧/결제, 설정 화면, 프로젝트 파일(.viz), 온보딩 | 상용화 결정 시 |
 | 6 | 타 CAD 브릿지 (Rhino → Revit → 3ds Max) | 장기 |
 
