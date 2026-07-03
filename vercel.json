@@ -1,7 +1,16 @@
 {
+  "installCommand": "cd webapp && npm install",
+  "buildCommand": "cd webapp && npm run build",
+  "outputDirectory": "webapp/dist",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/:path*" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ],
   "functions": {
     "api/*.js": {
