@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react'
 import { useCreditStore } from '../../state/creditStore'
+import { saasMode, apiMe } from '../../api/lumanovaApi'
+import { getFirebaseAuth } from '../../auth/firebase'
 
 /** 공용 심플 페이지 레이아웃 */
 function PageShell({ title, children }: { title: string; children: React.ReactNode }) {
@@ -13,18 +16,56 @@ function PageShell({ title, children }: { title: string; children: React.ReactNo
 }
 
 export function AccountPage() {
-  const balance = useCreditStore((s) => s.balance)
+  const localBalance = useCreditStore((s) => s.balance)
+  const [me, setMe] = useState<{ email: string | null; balance: number } | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const saas = saasMode()
+
+  useEffect(() => {
+    if (!saas) return
+    apiMe().then(setMe).catch((e) => setErr(String(e.message ?? e)))
+  }, [saas])
+
   return (
     <PageShell title="Account">
       <div
         className="rounded p-4"
         style={{ backgroundColor: '#1a1a24', border: '1px solid #222233' }}
       >
-        <div style={{ color: '#cccccc', fontSize: 13 }}>Credits</div>
-        <div style={{ color: '#00c9a7', fontSize: 28, fontWeight: 700 }}>{balance}</div>
-        <div className="mt-1" style={{ fontSize: 11, color: '#666666' }}>
-          계정/충전 시스템은 준비 중입니다. 현재는 로컬 크레딧으로 동작합니다.
-        </div>
+        {saas ? (
+          <>
+            <div style={{ color: '#cccccc', fontSize: 13 }}>로그인 계정</div>
+            <div style={{ color: '#ffffff', fontSize: 15, fontWeight: 600 }}>
+              {me?.email ?? (err ? '조회 실패' : '불러오는 중...')}
+            </div>
+            <div className="mt-3" style={{ color: '#cccccc', fontSize: 13 }}>Credits</div>
+            <div style={{ color: '#00c9a7', fontSize: 28, fontWeight: 700 }}>
+              {me ? me.balance : '—'}
+            </div>
+            {err && <div style={{ color: '#ff6666', fontSize: 11 }}>{err}</div>}
+            <div className="mt-1" style={{ fontSize: 11, color: '#666666' }}>
+              렌더 1크레딧 / Pro 렌더 4크레딧 / Auto 프롬프트 1크레딧. 충전은 운영자에게 문의하세요.
+            </div>
+            <button
+              className="mt-4"
+              onClick={() => getFirebaseAuth()?.signOut()}
+              style={{
+                height: 34, padding: '0 18px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                background: '#2a1a1a', color: '#ff8888', border: '1px solid #442222',
+              }}
+            >
+              로그아웃
+            </button>
+          </>
+        ) : (
+          <>
+            <div style={{ color: '#cccccc', fontSize: 13 }}>Credits (개발자 모드)</div>
+            <div style={{ color: '#00c9a7', fontSize: 28, fontWeight: 700 }}>{localBalance}</div>
+            <div className="mt-1" style={{ fontSize: 11, color: '#666666' }}>
+              개발자 모드: 로그인 없이 로컬 키로 직접 호출합니다.
+            </div>
+          </>
+        )}
       </div>
     </PageShell>
   )
