@@ -38,25 +38,32 @@ function SidebarIcon({ button }: { button: SidebarButton }) {
   return (
     <button
       onClick={() => setActiveSidebarItem(button.id)}
-      className="relative flex w-full flex-col items-center justify-center py-2"
-      style={{ height: 56 }}
+      className="relative mx-1.5 my-0.5 flex flex-col items-center justify-center"
+      style={{
+        height: 62,
+        width: 'calc(100% - 12px)',
+        borderRadius: 10,
+        background: isActive ? 'rgba(0,201,167,0.10)' : 'transparent',
+        transition: 'background 150ms',
+      }}
     >
       {isActive && (
-        <div
-          className="absolute left-0 top-1/2 -translate-y-1/2 rounded-r-sm"
-          style={{ width: 3, height: 40, backgroundColor: '#00c9a7' }}
+        <span
+          className="absolute left-0 top-1/2 -translate-y-1/2 rounded-r"
+          style={{ width: 3, height: 34, backgroundColor: '#00c9a7' }}
         />
       )}
       <Icon
-        size={20}
-        color={isActive ? '#ffffff' : '#666666'}
+        size={22}
+        color={isActive ? '#2fe6c8' : '#8a8a96'}
         className="transition-colors duration-150"
       />
       <span
-        className="mt-1 text-center leading-none transition-colors duration-150"
+        className="mt-1.5 text-center leading-none transition-colors duration-150"
         style={{
-          fontSize: 10,
-          color: isActive ? '#ffffff' : '#666666',
+          fontSize: 11,
+          fontWeight: isActive ? 600 : 400,
+          color: isActive ? '#eafffb' : '#8a8a96',
         }}
       >
         {button.label}
@@ -70,10 +77,12 @@ export function LeftSidebar() {
     <aside
       className="flex h-full flex-col"
       style={{
-        width: 56,
-        minWidth: 56,
-        backgroundColor: '#0f0f1a',
-        borderRight: '1px solid #222233',
+        width: 76,
+        minWidth: 76,
+        backgroundColor: '#0d0d13',
+        borderRight: '1px solid #1e1e28',
+        paddingTop: 6,
+        paddingBottom: 6,
       }}
     >
       <div className="flex flex-col">
