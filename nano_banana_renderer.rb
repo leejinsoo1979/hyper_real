@@ -11,7 +11,7 @@ module NanoBanana
     # Extension 정보 설정
     extension = SketchupExtension.new('NanoBanana Renderer', 'nano_banana_renderer/main')
     extension.description = 'SketchUp AI 실사 렌더링 플러그인 (Google Gemini API 기반). 인테리어 씬을 실사 이미지로 변환하고, 조명/시간대 변경, 오브젝트 배치 등의 기능을 제공합니다.'
-    extension.version = '1.0.4'
+    extension.version = '1.0.5'
     extension.creator = 'NanoBanana Team'
     extension.copyright = '2024, NanoBanana Team'
 
