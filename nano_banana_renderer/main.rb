@@ -160,9 +160,17 @@ module NanoBanana
     def register_toolbar
       toolbar = UI::Toolbar.new(PLUGIN_NAME)
 
-      # 렌더링 버튼 (바나나 아이콘)
-      cmd_render = UI::Command.new('렌더링') { show_main_dialog }
-      cmd_render.tooltip = 'NanoBanana 렌더링 시작'
+      # VizMaker 앱 실행 (메인 버튼 - 엔스케이프식 원클릭)
+      cmd_app = UI::Command.new('VizMaker') { open_vizmaker_app }
+      cmd_app.tooltip = 'VizMaker 열기'
+      cmd_app.status_bar_text = '현재 뷰를 VizMaker 앱으로 보냅니다'
+      cmd_app.small_icon = File.join(PLUGIN_ROOT, 'assets/icons/vizmaker_small.png')
+      cmd_app.large_icon = File.join(PLUGIN_ROOT, 'assets/icons/vizmaker_large.png')
+      toolbar.add_item(cmd_app)
+
+      # 레거시 렌더 창 (기존 바나나 아이콘)
+      cmd_render = UI::Command.new('렌더링(레거시)') { show_main_dialog }
+      cmd_render.tooltip = 'NanoBanana 렌더링 (레거시 창)'
       cmd_render.status_bar_text = 'AI 실사 렌더링을 시작합니다'
       cmd_render.small_icon = File.join(PLUGIN_ROOT, 'assets/icons/render_small.png')
       cmd_render.large_icon = File.join(PLUGIN_ROOT, 'assets/icons/render_large.png')
