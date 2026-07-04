@@ -1,5 +1,6 @@
 import {
   Monitor,
+  Camera,
   RotateCcw,
   Users,
   PlaySquare,
@@ -17,6 +18,7 @@ interface SidebarButton {
 
 const topButtons: SidebarButton[] = [
   { id: 'render', icon: Monitor, label: 'Render' },
+  { id: 'camera', icon: Camera, label: 'Camera' },
   { id: 'history', icon: RotateCcw, label: 'History' },
   { id: 'account', icon: Users, label: 'Account' },
   { id: 'tutorial', icon: PlaySquare, label: 'Tutorial' },

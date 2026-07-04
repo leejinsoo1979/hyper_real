@@ -7,6 +7,7 @@ import { MakeButton } from './toolbar/MakeButton'
 import { HistoryPage } from './pages/HistoryPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { AccountPage, TutorialPage, SupportPage } from './pages/MiscPages'
+import { CameraPage } from './pages/CameraPage'
 import { useGraphStore } from '../state/graphStore'
 import { useExecutionStore } from '../state/executionStore'
 import { useCreditStore } from '../state/creditStore'
@@ -111,6 +112,7 @@ export function NodeEditor() {
   // 사이드바 페이지 전환 ('render'만 에디터, 나머지는 전용 페이지)
   const sidebarPage = (() => {
     switch (activeSidebarItem) {
+      case 'camera': return <CameraPage />
       case 'history': return <HistoryPage />
       case 'settings': return <SettingsPage />
       case 'account': return <AccountPage />

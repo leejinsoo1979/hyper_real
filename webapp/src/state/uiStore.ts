@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type SidebarItem = 'render' | 'history' | 'account' | 'tutorial' | 'support' | 'settings'
+export type SidebarItem = 'render' | 'camera' | 'history' | 'account' | 'tutorial' | 'support' | 'settings'
 export type InspectorTab = 'preview' | 'compare' | 'draw'
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected'
 
