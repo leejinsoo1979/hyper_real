@@ -151,6 +151,26 @@ function PresetCard({
 
 export function PromptPresets({ selectedNode }: PromptPresetsProps) {
   const [collapsed, setCollapsed] = useState(false)
+  const [tab, setTab] = useState<'Prompt Presets' | 'My Presets'>('Prompt Presets')
+  const [myPresets, setMyPresets] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('vizmaker.myPresets') ?? '[]') } catch { return [] }
+  })
+
+  const persistMyPresets = (list: string[]) => {
+    setMyPresets(list)
+    localStorage.setItem('vizmaker.myPresets', JSON.stringify(list))
+  }
+  const saveMyPreset = () => {
+    const cur = useUIStore.getState().promptText.trim()
+    if (!cur) return
+    if (!myPresets.includes(cur)) persistMyPresets([cur, ...myPresets].slice(0, 30))
+  }
+  const applyMyPreset = (text: string) => {
+    useUIStore.getState().setPromptText(text)
+  }
+  const removeMyPreset = (i: number) => {
+    persistMyPresets(myPresets.filter((_, idx) => idx !== i))
+  }
   const setPromptText = useUIStore((s) => s.setPromptText)
   const updateNodeParams = useGraphStore((s) => s.updateNodeParams)
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
@@ -196,19 +216,31 @@ export function PromptPresets({ selectedNode }: PromptPresetsProps) {
 
   return (
     <div>
-      <button
-        className="flex w-full items-center gap-2 px-4"
-        style={{ height: 40 }}
-        onClick={() => setCollapsed(!collapsed)}
-      >
+      <div className="flex w-full items-center gap-2 px-4" style={{ height: 40 }}>
         <ClipboardList size={16} style={{ color: '#888888' }} />
-        <span className="flex-1 text-left text-sm" style={{ color: '#ffffff', fontWeight: 500 }}>
-          Prompt Presets
-        </span>
-        <CollapseIcon size={16} style={{ color: '#888888' }} />
-      </button>
+        {/* 실물 VizMaker: Prompt Presets | My Presets 탭 */}
+        {(['Prompt Presets', 'My Presets'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className="text-sm"
+            style={{
+              color: tab === t ? '#ffffff' : '#666677',
+              fontWeight: tab === t ? 600 : 400,
+              borderBottom: tab === t ? '2px solid #00c9a7' : '2px solid transparent',
+              paddingBottom: 2,
+            }}
+          >
+            {t}
+          </button>
+        ))}
+        <span className="flex-1" />
+        <button onClick={() => setCollapsed(!collapsed)}>
+          <CollapseIcon size={16} style={{ color: '#888888' }} />
+        </button>
+      </div>
 
-      {!collapsed && (
+      {!collapsed && tab === 'Prompt Presets' && (
         <div className="grid grid-cols-3 gap-2 px-4 pb-4">
           {presets.map((preset) => (
             <PresetCard
@@ -217,6 +249,42 @@ export function PromptPresets({ selectedNode }: PromptPresetsProps) {
               isSelected={selectedPresetId === preset.id}
               onClick={() => handlePresetClick(preset)}
             />
+          ))}
+        </div>
+      )}
+
+      {!collapsed && tab === 'My Presets' && (
+        <div className="px-4 pb-4">
+          <button
+            onClick={saveMyPreset}
+            className="mb-2 w-full"
+            style={{
+              height: 30, borderRadius: 6, fontSize: 11, fontWeight: 600,
+              border: '1px dashed #333344', color: '#00c9a7', background: 'transparent',
+            }}
+          >
+            + 현재 프롬프트를 프리셋으로 저장
+          </button>
+          {myPresets.length === 0 && (
+            <div style={{ color: '#555566', fontSize: 11 }}>저장된 프리셋이 없습니다</div>
+          )}
+          {myPresets.map((mp, i) => (
+            <div key={i} className="mb-1.5 flex items-center gap-2">
+              <button
+                onClick={() => applyMyPreset(mp)}
+                className="flex-1 truncate text-left"
+                title={mp}
+                style={{
+                  padding: '7px 10px', borderRadius: 6, fontSize: 11,
+                  background: '#1a1a24', color: '#ccccdd', border: '1px solid #2a2a36',
+                }}
+              >
+                {mp.slice(0, 60)}
+              </button>
+              <button onClick={() => removeMyPreset(i)} title="삭제" style={{ color: '#663333', fontSize: 13 }}>
+                ✕
+              </button>
+            </div>
           ))}
         </div>
       )}

@@ -276,11 +276,32 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
           {selectedNode.type === 'RENDER' && (
             <>
               <SettingsDropdown
-                label="Render Mode"
+                label="Engine"
                 value={getCurrentRenderModeValue(selectedNode)}
                 options={RENDER_MODE_OPTIONS}
                 onChange={handleRenderModeChange}
               />
+
+              {/* 실물 VizMaker: Precise/Quality/Fast 칩 - 캡처/출력 해상도에 연결 */}
+              <div className="mb-3 flex gap-1.5">
+                {([['Precise', '1920'], ['Quality', '1536'], ['Fast', '1024']] as const).map(([label, res]) => {
+                  const cur = ((selectedNode.params as RenderParams).resolution ?? '1024') === res
+                  return (
+                    <button
+                      key={res}
+                      onClick={() => updateNodeParams(selectedNode.id, { resolution: res })}
+                      style={{
+                        padding: '3px 12px', borderRadius: 999, fontSize: 11,
+                        border: `1px solid ${cur ? '#00c9a7' : '#333344'}`,
+                        background: cur ? 'rgba(0,201,167,0.12)' : 'transparent',
+                        color: cur ? '#00c9a7' : '#888899',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
 
               {/* 시간대 (구 플러그인 Day/Eve/Night 이식) */}
               <SegmentedRow
