@@ -217,6 +217,19 @@ export async function selectScene(name: string): Promise<boolean> {
   return ok
 }
 
+/** 카메라 제어 (이동/회전/높이/FOV/2점투시) — 실행 후 새 캡처가 자동 반영된다. */
+export async function sendCamera(
+  action: 'move' | 'rotate' | 'height' | 'fov' | 'two_point',
+  value?: string,
+): Promise<boolean> {
+  const ok = await sendCommand({ type: 'camera', action, value })
+  if (ok) {
+    lastSourceHash = null
+    setTimeout(pollOnce, 600)
+  }
+  return ok
+}
+
 /** 현재 뷰 즉시 재캡처 요청. */
 export async function requestCapture(): Promise<boolean> {
   const ok = await sendCommand({ type: 'capture' })
