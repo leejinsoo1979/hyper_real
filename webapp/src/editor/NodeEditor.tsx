@@ -3,6 +3,7 @@ import { LeftSidebar } from './sidebar/LeftSidebar'
 import { NodeCanvas } from './canvas/NodeCanvas'
 import { InspectorPanel } from './panels/InspectorPanel'
 import { PromptBar } from './toolbar/PromptBar'
+import { saasMode } from '../api/lumanovaApi'
 import { MakeButton } from './toolbar/MakeButton'
 import { HistoryPage } from './pages/HistoryPage'
 import { SettingsPage } from './pages/SettingsPage'
@@ -143,7 +144,8 @@ export function NodeEditor() {
             {statusLabel(sketchUpStatus)}
           </span>
         </span>
-        {useMock() && (
+        {/* MOCK 배너는 개발자 모드 전용. SaaS 모드는 서버 키로 렌더하므로 해당 없음 */}
+        {!saasMode() && useMock() && (
           <span
             className="ml-3 rounded px-2 py-0.5"
             style={{ backgroundColor: '#ffaa0022', color: '#ffaa00', fontSize: 11 }}
