@@ -61,12 +61,27 @@ function createWindow() {
   })
 }
 
-// SketchUp 창을 실시간 미러링 소스로 제공
+// SketchUp 창 매칭: 모델 창 제목(브릿지 제공)을 우선 사용.
+// 주의: 제목에 'sketchup'이 들어간 다른 앱 창(IDE 등)을 잡으면 안 된다.
+let sketchupTitleHint = null
+ipcMain.on('sketchup-title-hint', (_e, title) => {
+  sketchupTitleHint = typeof title === 'string' && title.trim() ? title.trim() : null
+})
+
+function pickSketchUpSource(sources) {
+  const notSelf = sources.filter((s) => !/vizmaker/i.test(s.name))
+  if (sketchupTitleHint) {
+    const byTitle = notSelf.find((s) => s.name.includes(sketchupTitleHint))
+    if (byTitle) return byTitle
+  }
+  // 폴백: 'SketchUp'으로 시작하거나 .skp 문서 창 (IDE류 제목 'xxx — yyy.md' 배제)
+  return notSelf.find((s) => /^sketchup/i.test(s.name) || /\.skp/i.test(s.name)) ?? null
+}
+
 ipcMain.handle('sketchup-window-source', async () => {
   try {
     const sources = await desktopCapturer.getSources({ types: ['window'] })
-    const su = sources.find((s) => /sketchup/i.test(s.name))
-    return su ? su.id : null
+    return pickSketchUpSource(sources)?.id ?? null
   } catch {
     return null
   }
@@ -77,7 +92,7 @@ app.whenReady().then(() => {
   session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
     try {
       const sources = await desktopCapturer.getSources({ types: ['window'] })
-      const su = sources.find((s) => /sketchup/i.test(s.name))
+      const su = pickSketchUpSource(sources)
       if (su) callback({ video: su })
       else callback({})
     } catch {

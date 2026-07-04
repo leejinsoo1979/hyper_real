@@ -84,7 +84,8 @@ module NanoBanana
                 v = Sketchup.active_model&.active_view
                 sf = UI.respond_to?(:scale_factor) ? UI.scale_factor : 1.0
                 # vpwidth/vpheight는 Mac에서 이미 물리 픽셀 - 배율을 다시 곱하지 않는다
-                v ? { w: v.vpwidth, h: v.vpheight, sf: sf } : nil
+                t = Sketchup.active_model&.title.to_s
+                v ? { w: v.vpwidth, h: v.vpheight, sf: sf, title: (t.empty? ? nil : t) } : nil
               rescue StandardError
                 nil
               end

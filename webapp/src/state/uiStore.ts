@@ -19,7 +19,7 @@ interface UIState {
   compareBNodeId: string | null
   sketchUpStatus: ConnectionStatus
   sketchUpScenes: SketchUpSceneInfo[]
-  sketchUpViewport: { w: number; h: number; sf: number } | null
+  sketchUpViewport: { w: number; h: number; sf: number; title?: string | null } | null
 
   setActiveSidebarItem: (item: SidebarItem) => void
   setActiveTab: (tab: InspectorTab) => void
@@ -30,7 +30,7 @@ interface UIState {
   setCompareB: (nodeId: string | null) => void
   setSketchUpStatus: (status: ConnectionStatus) => void
   setSketchUpScenes: (scenes: SketchUpSceneInfo[]) => void
-  setSketchUpViewport: (vp: { w: number; h: number; sf: number } | null) => void
+  setSketchUpViewport: (vp: { w: number; h: number; sf: number; title?: string | null } | null) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
