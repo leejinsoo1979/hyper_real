@@ -125,16 +125,8 @@ export function RenderClassicPage() {
     if (videoRef.current && liveStream) videoRef.current.srcObject = liveStream
   }, [liveStream])
 
-  // 스트림에서 정지 프레임 추출 (Convert 전 Auto 실행 시 사용)
-  const grabStreamFrame = useCallback((): string | null => {
-    const v = videoRef.current
-    if (!v || !liveStream || v.videoWidth === 0) return null
-    const c = document.createElement('canvas')
-    c.width = v.videoWidth
-    c.height = v.videoHeight
-    c.getContext('2d')!.drawImage(v, 0, 0)
-    return c.toDataURL('image/jpeg', 0.85)
-  }, [liveStream])
+  // 주의: 스트림 프레임(SketchUp 창 캡처)에는 툴바/패널 UI가 포함되므로
+  // AI 입력으로는 절대 쓰지 않는다. 생성 입력은 항상 브릿지의 클린 뷰포트 캡처.
 
   // 새 소스 이미지 도착: 씬 프리뷰 캐시에 저장하고 즉시표시 상태 해제
   useEffect(() => {
@@ -192,8 +184,8 @@ export function RenderClassicPage() {
 
   const doAuto = useCallback(async () => {
     if (s.autoLoading) { abortRef.current?.abort(); return }
-    const streamFrame = grabStreamFrame()
-    const autoInput = streamFrame ?? sourceImage
+    // 생성 입력은 클린 뷰포트 캡처만 (스트림 화면엔 SketchUp UI가 섞임)
+    const autoInput = s.frozenSource ?? liveImage
     if (!autoInput) { s.set({ statusText: '먼저 Convert 하거나 이미지를 불러오세요' }); return }
     const controller = new AbortController()
     abortRef.current = controller
@@ -220,12 +212,12 @@ export function RenderClassicPage() {
       clearTimeout(watchdog)
       useClassicStore.getState().set({ autoLoading: false })
     }
-  }, [s, sourceImage, grabStreamFrame])
+  }, [s, sourceImage, liveImage])
 
   const doRender = useCallback(async (which: 'src' | 'res') => {
     const st = useClassicStore.getState()
-    const streamNow = which === 'src' ? grabStreamFrame() : null
-    const input = which === 'src' ? (st.frozenSource ?? streamNow ?? sourceImage) : (st.resultImage ?? sourceImage)
+    // 생성 입력은 항상 클린 뷰포트 캡처 (Convert 고정본 > 브릿지 미러 최신본)
+    const input = which === 'src' ? (st.frozenSource ?? liveImage) : (st.resultImage ?? sourceImage)
     const prompt = which === 'src' ? st.sourcePrompt : st.resultPrompt
     const negative = which === 'src' ? st.sourceNegative : st.resultNegative
     if (!input) { st.set({ statusText: '소스 이미지가 없습니다' }); return }
@@ -250,7 +242,7 @@ export function RenderClassicPage() {
         statusText: `렌더링 실패: ${err instanceof Error ? err.message : err}`,
       })
     }
-  }, [sourceImage, grabStreamFrame])
+  }, [sourceImage, liveImage])
 
   const doExport = useCallback(() => {
     const img = useClassicStore.getState().resultImage
