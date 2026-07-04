@@ -25,6 +25,7 @@ interface ClassicState {
 
   statusText: string
   rendering: boolean
+  sourceLoading: boolean
   autoLoading: boolean
 
   set: (partial: Partial<ClassicState>) => void
@@ -47,6 +48,7 @@ export const useClassicStore = create<ClassicState>((set) => ({
 
   statusText: 'Ready',
   rendering: false,
+  sourceLoading: false,
   autoLoading: false,
 
   set: (partial) => set(partial),

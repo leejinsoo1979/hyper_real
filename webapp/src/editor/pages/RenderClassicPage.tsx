@@ -93,6 +93,21 @@ export function RenderClassicPage() {
   const liveImage = liveNode?.result?.image ?? (liveNode && 'image' in liveNode.params ? (liveNode.params as { image: string }).image : null)
   const sourceImage = s.mirror ? (liveImage ?? s.frozenSource) : (s.frozenSource ?? liveImage)
 
+  // 새 소스 이미지가 도착하면 로딩 해제
+  useEffect(() => {
+    if (s.sourceLoading && liveImage) {
+      useClassicStore.getState().set({ sourceLoading: false })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveImage])
+
+  // 로딩 5초 안전장치 (이미지가 안 와도 오버레이가 영원히 남지 않게)
+  useEffect(() => {
+    if (!s.sourceLoading) return
+    const t = setTimeout(() => useClassicStore.getState().set({ sourceLoading: false }), 5000)
+    return () => clearTimeout(t)
+  }, [s.sourceLoading])
+
   // ── 키보드 단축키 (레거시: WASD 이동 | QE 높이 | ZX 회전) ──
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -270,7 +285,7 @@ export function RenderClassicPage() {
               </button>
               <button
                 title="2점 투시 자동 보정"
-                onClick={() => sendCamera('two_point')}
+                onClick={() => { s.set({ sourceLoading: true }); sendCamera('two_point') }}
                 style={{ width: 32, height: 32, borderRadius: 6, background: '#1e1e1e', border: `1px solid ${C.border}`, color: '#999', fontSize: 12 }}
               >
                 ⊞
@@ -306,7 +321,7 @@ export function RenderClassicPage() {
             <Segmented
               options={[{ v: 'standing', l: '서기' }, { v: 'seated', l: '앉기' }, { v: 'low_angle', l: '낮음' }]}
               value=""
-              onChange={(v) => sendCamera('height', v)}
+              onChange={(v) => { s.set({ sourceLoading: true }); sendCamera('height', v) }}
             />
           </div>
 
@@ -315,7 +330,7 @@ export function RenderClassicPage() {
             <Segmented
               options={[{ v: 'wide', l: '광각' }, { v: 'standard', l: '표준' }, { v: 'telephoto', l: '망원' }]}
               value=""
-              onChange={(v) => sendCamera('fov', v)}
+              onChange={(v) => { s.set({ sourceLoading: true }); sendCamera('fov', v) }}
             />
           </div>
         </div>
@@ -368,7 +383,10 @@ export function RenderClassicPage() {
           {scenes.map((sc) => (
             <button
               key={sc.name}
-              onClick={() => selectScene(sc.name)}
+              onClick={() => {
+                s.set({ sourceLoading: true })
+                selectScene(sc.name)
+              }}
               style={{
                 padding: '7px 16px', fontSize: 11, whiteSpace: 'nowrap',
                 borderRadius: '6px 6px 0 0',
@@ -400,6 +418,8 @@ export function RenderClassicPage() {
             active
             image={sourceImage}
             emptyText="SketchUp 연결 대기 중... (또는 이미지 버튼으로 불러오기)"
+            loading={s.sourceLoading}
+            loadingText="SketchUp 화면 불러오는 중..."
             tab={tab.src}
             onTab={(t) => setTab((p) => ({ ...p, src: t }))}
             prompt={s.sourcePrompt}
@@ -485,12 +505,13 @@ function PanelAction({ children, title, onClick, disabled }: {
   )
 }
 
-function Panel({ label, active, image, emptyText, loading, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions }: {
+function Panel({ label, active, image, emptyText, loading, loadingText, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions }: {
   label: string
   active?: boolean
   image: string | null
   emptyText: string
   loading?: boolean
+  loadingText?: string
   tab: 'prompt' | 'negative'
   onTab: (t: 'prompt' | 'negative') => void
   prompt: string
@@ -525,7 +546,7 @@ function Panel({ label, active, image, emptyText, loading, tab, onTab, prompt, n
         {loading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2" style={{ background: 'rgba(10,10,10,0.75)' }}>
             <Loader2 size={28} className="animate-spin" style={{ color: C.accent }} />
-            <span style={{ fontSize: 11, color: '#aaa' }}>렌더링 중... (20~60초)</span>
+            <span style={{ fontSize: 11, color: '#aaa' }}>{loadingText ?? '렌더링 중... (20~60초)'}</span>
           </div>
         )}
       </div>
