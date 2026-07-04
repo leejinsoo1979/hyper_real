@@ -35,11 +35,13 @@ function frameBorder(status: NodeStatus, selected: boolean): string {
   return '1px solid #2a2a32'
 }
 
+// 실물 VizMaker: 연결점은 작은 라운드-사각 칩
 const portStyle: React.CSSProperties = {
-  width: 7,
-  height: 7,
-  background: '#666670',
-  border: '1px solid #1a1a20',
+  width: 13,
+  height: 13,
+  borderRadius: 4,
+  background: '#23232c',
+  border: '1px solid #3f3f4a',
 }
 
 export const BaseNode = memo(function BaseNode({

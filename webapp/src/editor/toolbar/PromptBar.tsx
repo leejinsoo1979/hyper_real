@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
-import { X, Sparkles, Square } from 'lucide-react'
+import { X, Sparkles, Square, RotateCw } from 'lucide-react'
 import { useUIStore } from '../../state/uiStore'
 import { useGraphStore } from '../../state/graphStore'
 import { useExecutionStore } from '../../state/executionStore'
@@ -170,7 +170,7 @@ export function PromptBar() {
       {promptText && (
         <button
           onClick={handleClear}
-          className="absolute right-5 flex items-center justify-center transition-colors duration-150"
+          className="absolute right-12 flex items-center justify-center transition-colors duration-150"
           style={{ color: '#666666' }}
           onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
           onMouseLeave={(e) => (e.currentTarget.style.color = '#666666')}
@@ -178,6 +178,15 @@ export function PromptBar() {
           <X size={14} />
         </button>
       )}
+      {/* 실물 VizMaker: 입력 우측 재생성 아이콘 (프롬프트 다시 실행) */}
+      <button
+        title="다시 생성 (Make)"
+        onClick={() => document.querySelector<HTMLButtonElement>('[data-make-button]')?.click()}
+        className="absolute right-4 flex items-center justify-center"
+        style={{ color: '#8a8a94' }}
+      >
+        <RotateCw size={14} />
+      </button>
     </div>
   )
 }
