@@ -207,22 +207,27 @@ module NanoBanana
             if page
               name = cmd['name'].to_s
               run_on_view do
-                pages.selected_page = page
-                # selected_page=가 무시되는 환경 대비: 씬 카메라를 직접 적용
-                if page.use_camera? && page.camera
-                  view = Sketchup.active_model.active_view
-                  view.camera.set(page.camera.eye, page.camera.target, page.camera.up)
-                  view.camera.perspective = page.camera.perspective?
-                  view.camera.fov = page.camera.fov if page.camera.perspective?
+                # 전환 애니메이션(수 초) 없이 즉시 점프
+                opts = Sketchup.active_model.options['PageOptions']
+                prev_show = opts ? opts['ShowTransition'] : nil
+                opts['ShowTransition'] = false if opts
+                begin
+                  pages.selected_page = page
+                  # selected_page=가 무시되는 환경 대비: 씬 카메라를 직접 적용
+                  if page.use_camera? && page.camera
+                    view = Sketchup.active_model.active_view
+                    view.camera.set(page.camera.eye, page.camera.target, page.camera.up)
+                    view.camera.perspective = page.camera.perspective?
+                    view.camera.fov = page.camera.fov if page.camera.perspective?
+                  end
+                ensure
+                  opts['ShowTransition'] = prev_show if opts && !prev_show.nil?
                 end
                 Sketchup.active_model.active_view.invalidate
               end
               @bridge_scene_override = name
               puts "[NanoBanana] 브릿지: 씬 전환 -> #{name}"
-              UI.start_timer(0.35, false) do
-                capture_current_view
-                update_bridge_scenes
-              end
+              UI.start_timer(0.3, false) { update_bridge_scenes }
             end
           when 'camera'
             action = cmd['action']
@@ -236,7 +241,7 @@ module NanoBanana
               when 'two_point' then apply_two_point_perspective
               end
             end
-            UI.start_timer(0.35, false) { capture_current_view }
+            # 캡처는 카메라 정지 감지(capture_if_view_changed)가 1회 수행
           when 'capture'
             capture_current_view(cmd['size'])
           when 'add_scene'
@@ -292,14 +297,21 @@ module NanoBanana
       puts "[NanoBanana] 로컬 서버 중지"
     end
 
-    # 카메라 시그니처가 바뀐 경우에만 캡처 (미러링용)
+    # 카메라가 '멈춘 직후' 1회만 캡처 (움직이는 동안 무거운 캡처 중첩 방지)
     def capture_if_view_changed
       cam = Sketchup.active_model.active_view.camera
       sig = [cam.eye.to_a, cam.target.to_a, cam.up.to_a, cam.perspective? ? cam.fov : 0]
-      return if sig == @bridge_cam_sig
 
-      @bridge_cam_sig = sig
-      capture_current_view
+      if sig != @bridge_cam_sig
+        @bridge_cam_sig = sig
+        @bridge_view_moved = true # 움직이는 중 - 캡처 보류
+        return
+      end
+
+      if @bridge_view_moved
+        @bridge_view_moved = false
+        capture_current_view
+      end
     rescue StandardError => e
       puts "[NanoBanana] 뷰 변경 감지 에러: #{e.message}"
     end
@@ -310,7 +322,7 @@ module NanoBanana
       begin
         # size 지정 시 고품질 캡처 (Convert), 미지정 시 미러링용 기본 해상도
         dims = { '1024' => [1024, 576], '1536' => [1536, 864], '1920' => [1920, 1080] }[size.to_s]
-        w, h = dims || [1280, 720]
+        w, h = dims || [960, 540]
         view = Sketchup.active_model.active_view
         temp_path = File.join(Dir.tmpdir, 'nanobanana_live.png')
         view.write_image(temp_path, w, h, true)
