@@ -28,6 +28,11 @@ interface ClassicState {
   sourceLoading: boolean
   autoLoading: boolean
 
+  // 씬별 미리보기 캐시 (탭 클릭 즉시 표시용 - 레거시 방식)
+  scenePreviews: Record<string, string>
+  previewOverride: string | null
+  lastSceneClicked: string | null
+
   set: (partial: Partial<ClassicState>) => void
 }
 
@@ -50,6 +55,10 @@ export const useClassicStore = create<ClassicState>((set) => ({
   rendering: false,
   sourceLoading: false,
   autoLoading: false,
+
+  scenePreviews: {},
+  previewOverride: null,
+  lastSceneClicked: null,
 
   set: (partial) => set(partial),
 }))

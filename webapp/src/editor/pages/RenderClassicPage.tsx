@@ -91,13 +91,20 @@ export function RenderClassicPage() {
   // SketchUp 미러 이미지 (브릿지가 그래프의 sketchup 소스 노드에 주입)
   const liveNode = nodes.find((n) => n.type === 'SOURCE' && 'origin' in n.params && n.params.origin === 'sketchup')
   const liveImage = liveNode?.result?.image ?? (liveNode && 'image' in liveNode.params ? (liveNode.params as { image: string }).image : null)
-  const sourceImage = s.mirror ? (liveImage ?? s.frozenSource) : (s.frozenSource ?? liveImage)
+  const sourceImage = s.previewOverride ?? (s.mirror ? (liveImage ?? s.frozenSource) : (s.frozenSource ?? liveImage))
 
-  // 새 소스 이미지가 도착하면 로딩 해제
+  // 새 소스 이미지 도착: 씬 프리뷰 캐시에 저장하고 즉시표시 상태 해제
   useEffect(() => {
-    if (s.sourceLoading && liveImage) {
-      useClassicStore.getState().set({ sourceLoading: false })
-    }
+    if (!liveImage) return
+    const st = useClassicStore.getState()
+    const activeScene = useUIStore.getState().sketchUpScenes.find((sc) => sc.active)?.name
+    const key = st.lastSceneClicked ?? activeScene
+    st.set({
+      sourceLoading: false,
+      previewOverride: null,
+      lastSceneClicked: null,
+      ...(key ? { scenePreviews: { ...st.scenePreviews, [key]: liveImage } } : {}),
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveImage])
 
@@ -384,7 +391,12 @@ export function RenderClassicPage() {
             <button
               key={sc.name}
               onClick={() => {
-                s.set({ sourceLoading: true })
+                const cached = s.scenePreviews[sc.name] ?? null
+                s.set({
+                  previewOverride: cached,      // 캐시가 있으면 즉시 그 씬 이미지 표시
+                  sourceLoading: !cached,       // 캐시 없을 때만 스피너
+                  lastSceneClicked: sc.name,
+                })
                 selectScene(sc.name)
               }}
               style={{
