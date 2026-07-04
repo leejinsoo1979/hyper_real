@@ -174,9 +174,11 @@ export function NodeEditor() {
               <div
                 className="relative flex shrink-0 items-center"
                 style={{
-                  height: 52,
-                  backgroundColor: '#1a1a24',
-                  borderTop: '1px solid #222233',
+                  height: 64,
+                  background: 'transparent',
+                  padding: '0 24px 12px',
+                  gap: 12,
+                  justifyContent: 'center',
                 }}
               >
                 <PromptBar />

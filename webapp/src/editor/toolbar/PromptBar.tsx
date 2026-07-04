@@ -121,7 +121,7 @@ export function PromptBar() {
   }
 
   return (
-    <div className="relative flex flex-1 items-center gap-2 px-3">
+    <div style={{ maxWidth: 860 }} className="relative flex flex-1 items-center gap-2 px-3">
       {/* Auto 프롬프트 생성 (생성 중 클릭 = 취소) */}
       <button
         onClick={handleAuto}
@@ -159,10 +159,12 @@ export function PromptBar() {
         value={promptText}
         onChange={(e) => handleChange(e.target.value)}
         placeholder="Enter your image prompt here..."
-        className="h-9 w-full rounded-md px-3 pr-8 text-sm outline-none"
+        className="h-11 w-full rounded-lg px-4 pr-16 text-sm outline-none"
         style={{
-          backgroundColor: '#111118',
-          border: '1px solid #333340',
+          backgroundColor: '#15151d',
+          border: '1px solid #2a2a36',
+          borderBottom: '2px solid #00c9a7',
+          boxShadow: '0 6px 20px rgba(0,0,0,0.35), 0 2px 10px rgba(0,201,167,0.10)',
           color: '#ffffff',
           fontSize: 14,
         }}
@@ -182,10 +184,10 @@ export function PromptBar() {
       <button
         title="다시 생성 (Make)"
         onClick={() => document.querySelector<HTMLButtonElement>('[data-make-button]')?.click()}
-        className="absolute right-4 flex items-center justify-center"
-        style={{ color: '#8a8a94' }}
+        className="absolute right-3 flex items-center justify-center rounded-full"
+        style={{ width: 28, height: 28, background: '#23232e', border: '1px solid #343440', color: '#b9b9c4' }}
       >
-        <RotateCw size={14} />
+        <RotateCw size={13} />
       </button>
     </div>
   )

@@ -23,6 +23,31 @@ function getCurrentRenderModeValue(node: NodeData): string {
   return node.type
 }
 
+// 실물 VizMaker: 라벨 좌측 + 어두운 우측정렬 드롭다운 행
+function RightAlignedRow({ label, value, options, onChange }: {
+  label: string
+  value: string
+  options: string[]
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="mb-2.5 flex items-center justify-between">
+      <span style={{ color: '#ccccdd', fontSize: 13 }}>{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: 150, height: 32, padding: '0 10px',
+          background: '#1a1a24', border: '1px solid #2c2c3a', borderRadius: 8,
+          color: '#e6e6ee', fontSize: 12,
+        }}
+      >
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  )
+}
+
 function SegmentedRow({
   label,
   value,
@@ -302,6 +327,16 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
                   )
                 })}
               </div>
+
+              {/* 실물 VizMaker: Priority / Resolution / Aspect ratio 행 (우측정렬 드롭다운) */}
+              <RightAlignedRow label="Priority" value="Standard" options={['Standard']} onChange={() => {}} />
+              <RightAlignedRow
+                label="Resolution"
+                value={{ '1024': '1K', '1536': '1.5K', '1920': '2K' }[(selectedNode.params as RenderParams).resolution ?? '1024'] ?? '1K'}
+                options={['1K', '1.5K', '2K']}
+                onChange={(v) => updateNodeParams(selectedNode.id, { resolution: { '1K': '1024', '1.5K': '1536', '2K': '1920' }[v] })}
+              />
+              <RightAlignedRow label="Aspect ratio" value="Original" options={['Original']} onChange={() => {}} />
 
               {/* 시간대 (구 플러그인 Day/Eve/Night 이식) */}
               <SegmentedRow
