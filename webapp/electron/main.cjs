@@ -6,6 +6,36 @@
 // ---------------------------------------------------------------------------
 const { app, BrowserWindow, shell, ipcMain, desktopCapturer, session } = require('electron')
 const path = require('path')
+const http = require('http')
+const fs = require('fs')
+
+// 구글 로그인(unauthorized-domain) 해결: file:// 대신 http://localhost로 앱을 서빙
+// (Firebase 승인 도메인에 localhost가 기본 포함되어 OAuth가 정상 동작)
+const APP_PORT = 17173
+const MIME = {
+  html: 'text/html', js: 'text/javascript', css: 'text/css', png: 'image/png',
+  jpg: 'image/jpeg', svg: 'image/svg+xml', json: 'application/json',
+  ico: 'image/x-icon', woff2: 'font/woff2', woff: 'font/woff', map: 'application/json',
+}
+
+function startStaticServer() {
+  const root = path.join(__dirname, '../dist')
+  return new Promise((resolve, reject) => {
+    const srv = http.createServer((req, res) => {
+      let p = decodeURIComponent((req.url || '/').split('?')[0])
+      if (p === '/') p = '/index.html'
+      let file = path.normalize(path.join(root, p))
+      if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+        file = path.join(root, 'index.html') // SPA 폴백
+      }
+      const ext = file.split('.').pop()
+      res.setHeader('Content-Type', MIME[ext] || 'application/octet-stream')
+      fs.createReadStream(file).pipe(res)
+    })
+    srv.on('error', reject)
+    srv.listen(APP_PORT, '127.0.0.1', () => resolve(APP_PORT))
+  })
+}
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL
 
@@ -56,7 +86,9 @@ function createWindow() {
   if (DEV_URL) {
     mainWindow.loadURL(DEV_URL)
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+    startStaticServer()
+      .then((port) => mainWindow.loadURL(`http://localhost:${port}`))
+      .catch(() => mainWindow.loadFile(path.join(__dirname, '../dist/index.html')))
   }
 
   mainWindow.on('closed', () => {

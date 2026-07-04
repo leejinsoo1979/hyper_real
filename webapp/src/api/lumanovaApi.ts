@@ -6,9 +6,9 @@ import { firebaseEnabled, getIdToken } from '../auth/firebase'
 // - Electron(file://)에서는 배포 도메인으로, 웹에서는 동일 오리진으로 호출.
 // ---------------------------------------------------------------------------
 
-const API_BASE = window.location.protocol === 'file:'
-  ? 'https://hyper-real-3vvh.vercel.app'
-  : ''
+const API_BASE = window.location.host.endsWith('vercel.app')
+  ? ''
+  : 'https://hyper-real-3vvh.vercel.app'
 
 export function saasMode(): boolean {
   return firebaseEnabled()
