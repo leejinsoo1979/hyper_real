@@ -562,18 +562,14 @@ function NodeCanvasInner() {
         nodeTypes={nodeTypes}
         fitView
         proOptions={{ hideAttribution: true }}
-        style={{ backgroundColor: '#111118' }}
+        style={{ backgroundColor: '#0b0b0f' }}
         defaultEdgeOptions={{
-          style: { stroke: '#555555', strokeWidth: 2 },
+          style: { stroke: '#3a3a44', strokeWidth: 1.5 },
         }}
         deleteKeyCode="Delete"
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1}
-          color="#1a1a24"
-        />
+        {/* 실물 VizMaker: 무광 검정 캔버스 (그리드 없음) */}
+        <Background variant={BackgroundVariant.Dots} gap={9999} size={0.01} color="#0b0b0f" />
       </ReactFlow>
 
       {/* Empty state overlay */}
