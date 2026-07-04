@@ -683,9 +683,11 @@ function CroppedVideo({ videoRef, viewport }: {
   if (dims && viewport && viewport.w <= dims.W && viewport.h < dims.H) {
     const w = viewport.w
     const h = viewport.h
-    const statusBar = Math.round(24 * viewport.sf)
+    // 하단 상태바(측정 박스 포함) 실측 약 31pt - 살짝 넉넉히 잘라 흰 띠 제거
+    const statusBar = Math.round(31 * viewport.sf)
     const top = Math.max(0, dims.H - h - statusBar)
-    crop = { w, h, top }
+    // 상태바를 넉넉히 자른 만큼 표시 높이도 보정
+    crop = { w, h: Math.min(h, dims.H - top - statusBar), top }
   }
 
   return (
