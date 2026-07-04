@@ -74,8 +74,9 @@ function pickSketchUpSource(sources) {
     const byTitle = notSelf.find((s) => s.name.includes(sketchupTitleHint))
     if (byTitle) return byTitle
   }
-  // 폴백: 'SketchUp'으로 시작하거나 .skp 문서 창 (IDE류 제목 'xxx — yyy.md' 배제)
-  return notSelf.find((s) => /^sketchup/i.test(s.name) || /\.skp/i.test(s.name)) ?? null
+  // 폴백은 .skp 문서 창만 허용. 제목 힌트 없이는 섣불리 잡지 않는다
+  // (IDE 창 제목에 'sketchup'이 포함되어 오탐된 사고가 있었음)
+  return notSelf.find((s) => /\.skp/i.test(s.name)) ?? null
 }
 
 ipcMain.handle('sketchup-window-source', async () => {

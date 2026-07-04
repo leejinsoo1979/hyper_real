@@ -110,10 +110,14 @@ export function RenderClassicPage() {
       setLiveStream((prev) => { prev?.getTracks().forEach((t) => t.stop()); return null })
       return
     }
+    // 모델 창 제목을 알기 전에는 스트림을 시작하지 않는다 (다른 창 오탐 방지)
+    const hint = viewport?.title
+    if (!hint) {
+      setLiveStream((prev) => { prev?.getTracks().forEach((t) => t.stop()); return null })
+      return
+    }
     let cancelled = false
-    // 정확한 창 매칭: 모델 창 제목 힌트 전달 (제목에 sketchup이 든 IDE 창 오탐 방지)
-    const hint = useUIStore.getState().sketchUpViewport?.title
-    if (hint) window.vizmakerNative.setSketchUpTitleHint(hint)
+    window.vizmakerNative.setSketchUpTitleHint(hint)
     navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
       .then((stream) => {
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
@@ -125,7 +129,7 @@ export function RenderClassicPage() {
       })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [s.mirror, status])
+  }, [s.mirror, status, viewport?.title])
 
   useEffect(() => {
     if (videoRef.current && liveStream) videoRef.current.srcObject = liveStream
