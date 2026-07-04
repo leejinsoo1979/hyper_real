@@ -22,7 +22,7 @@ const C = {
   panelLabel: '#1a1a1a',
   promptBg: '#111111',
   textarea: '#1a1a1a',
-  blue: '#0066ff',
+  accent: '#00c9a7', // 앱 공통 액센트 (틸) - 화면마다 색 튀지 않게 통일
   text: '#e0e0e0',
   dim: '#666666',
   label: '#666666',
@@ -68,7 +68,7 @@ function CamKey({ k, title, onClick, active }: { k: string; title: string; onCli
       onClick={onClick}
       style={{
         width: 26, height: 26, fontSize: 10, fontWeight: 600, borderRadius: 4,
-        background: active ? C.blue : '#1e1e1e', color: active ? '#fff' : '#999',
+        background: active ? C.accent : '#1e1e1e', color: active ? '#0a0a14' : '#999',
         border: `1px solid ${C.border}`,
       }}
     >
@@ -262,8 +262,8 @@ export function RenderClassicPage() {
                 className="flex-1"
                 style={{
                   height: 32, borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  background: s.mirror ? C.blue : '#1e1e1e',
-                  color: s.mirror ? '#fff' : '#999', border: `1px solid ${s.mirror ? C.blue : C.border}`,
+                  background: s.mirror ? C.accent : '#1e1e1e',
+                  color: s.mirror ? '#0a0a14' : '#999', border: `1px solid ${s.mirror ? C.accent : C.border}`,
                 }}
               >
                 {s.mirror ? 'Mirror ON' : 'Mirror'}
@@ -508,8 +508,8 @@ function Panel({ label, active, image, emptyText, loading, tab, onTab, prompt, n
         className="flex items-center justify-between"
         style={{
           height: 24, padding: '0 12px', fontSize: 10, fontWeight: 600, letterSpacing: 0.5,
-          background: active ? C.blue : C.panelLabel,
-          color: active ? '#fff' : '#555',
+          background: active ? C.accent : C.panelLabel,
+          color: active ? '#0a0a14' : '#555',
         }}
       >
         <span>{label}</span>
@@ -524,7 +524,7 @@ function Panel({ label, active, image, emptyText, loading, tab, onTab, prompt, n
         )}
         {loading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2" style={{ background: 'rgba(10,10,10,0.75)' }}>
-            <Loader2 size={28} className="animate-spin" style={{ color: C.blue }} />
+            <Loader2 size={28} className="animate-spin" style={{ color: C.accent }} />
             <span style={{ fontSize: 11, color: '#aaa' }}>렌더링 중... (20~60초)</span>
           </div>
         )}
@@ -537,7 +537,7 @@ function Panel({ label, active, image, emptyText, loading, tab, onTab, prompt, n
           className="flex-1"
           style={{
             padding: '8px 0', fontSize: 11, color: tab === 'prompt' ? '#fff' : '#666',
-            borderBottom: tab === 'prompt' ? `2px solid ${C.blue}` : '2px solid transparent',
+            borderBottom: tab === 'prompt' ? `2px solid ${C.accent}` : '2px solid transparent',
           }}
         >
           Prompt
