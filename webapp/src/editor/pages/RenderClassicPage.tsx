@@ -97,6 +97,7 @@ export function RenderClassicPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [liveStream, setLiveStream] = useState<MediaStream | null>(null)
   const [editOpen, setEditOpen] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
   const viewport = useUIStore((st) => st.sketchUpViewport)
 
   // SketchUp 미러 이미지 (브릿지가 그래프의 sketchup 소스 노드에 주입)
@@ -165,6 +166,14 @@ export function RenderClassicPage() {
     const t = setTimeout(() => useClassicStore.getState().set({ sourceLoading: false }), 5000)
     return () => clearTimeout(t)
   }, [s.sourceLoading])
+
+  // 렌더링 경과 시간 (하드코딩 추정치 대신 실제 초 카운트)
+  useEffect(() => {
+    if (!s.rendering) { setElapsed(0); return }
+    const t0 = Date.now()
+    const t = setInterval(() => setElapsed(Math.round((Date.now() - t0) / 1000)), 1000)
+    return () => clearInterval(t)
+  }, [s.rendering])
 
   // ── 키보드 단축키 (레거시: WASD 이동 | QE 높이 | ZX 회전) ──
   useEffect(() => {
@@ -249,7 +258,7 @@ export function RenderClassicPage() {
     if (!prompt.trim()) { st.set({ statusText: '프롬프트를 입력하거나 Auto로 생성하세요' }); return }
 
     const lighting = buildLightingDescription(st.timePreset, st.lightsOn)
-    st.set({ rendering: true, statusText: '렌더링 중... (20~60초)' })
+    st.set({ rendering: true, statusText: '렌더링 중...' })
     try {
       const result = await renderMain({
         engine: st.model === 'gemini-3-pro-image' ? 'experimental-interior' : 'main',
@@ -544,6 +553,7 @@ export function RenderClassicPage() {
             image={s.resultImage}
             emptyText={s.rendering ? '렌더링 중...' : 'Ready'}
             loading={s.rendering}
+            loadingText={`렌더링 중... ${elapsed}초`}
             tab={tab.res}
             onTab={(t) => setTab((p) => ({ ...p, res: t }))}
             prompt={s.resultPrompt}
@@ -561,7 +571,7 @@ export function RenderClassicPage() {
 
         {/* 하단 상태바 */}
         <div className="flex items-center" style={{ height: 26, padding: '0 12px', borderTop: `1px solid ${C.border}`, fontSize: 11, color: '#777' }}>
-          {s.statusText}
+          {s.rendering ? `렌더링 중... ${elapsed}초` : s.statusText}
         </div>
       </div>
 
