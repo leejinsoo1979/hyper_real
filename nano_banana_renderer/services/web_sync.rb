@@ -80,9 +80,17 @@ module NanoBanana
             if req.request_method == 'OPTIONS'
               res.status = 200
             else
+              vp = begin
+                v = Sketchup.active_model&.active_view
+                sf = UI.respond_to?(:scale_factor) ? UI.scale_factor : 1.0
+                v ? { w: (v.vpwidth * sf).to_i, h: (v.vpheight * sf).to_i, sf: sf } : nil
+              rescue StandardError
+                nil
+              end
               res.body = {
                 source: @current_source_image,
                 rendered: @current_image,
+                viewport: vp,
                 timestamp: Time.now.to_i
               }.to_json
             end

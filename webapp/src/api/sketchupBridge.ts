@@ -151,6 +151,8 @@ async function fetchCapture(): Promise<string | null> {
     if (!res.ok) return null
 
     const data: DataResponse = await res.json()
+    const vp = (data as { viewport?: { w: number; h: number } }).viewport
+    if (vp && vp.w > 0) useUIStore.getState().setSketchUpViewport({ w: vp.w, h: vp.h })
     if (!data.source) return null
 
     // Deduplicate: compare first 100 chars of base64 to detect actual changes

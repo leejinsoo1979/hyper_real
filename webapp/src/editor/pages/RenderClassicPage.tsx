@@ -6,6 +6,7 @@ import { useGraphStore } from '../../state/graphStore'
 import { selectScene, requestCapture, addScene, sendCamera } from '../../api/sketchupBridge'
 import { generateAutoPrompt, buildLightingDescription } from '../../engine/autoPrompt'
 import { renderMain } from '../../engine/adapters/mainRenderer'
+import { EditOverlay } from '../panels/EditOverlay'
 
 // ---------------------------------------------------------------------------
 // 클래식 렌더 화면 — 레거시 루비 창(main_dialog.html) UI의 충실한 재현
@@ -95,6 +96,8 @@ export function RenderClassicPage() {
   const abortRef = useRef<AbortController | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [liveStream, setLiveStream] = useState<MediaStream | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const viewport = useUIStore((st) => st.sketchUpViewport)
 
   // SketchUp 미러 이미지 (브릿지가 그래프의 sketchup 소스 노드에 주입)
   const liveNode = nodes.find((n) => n.type === 'SOURCE' && 'origin' in n.params && n.params.origin === 'sketchup')
@@ -389,9 +392,15 @@ export function RenderClassicPage() {
             Convert
           </button>
           <button
-            disabled
-            title="이미지 로컬 보정 — 이관 예정"
-            style={{ height: 36, borderRadius: 6, fontSize: 12, background: '#1a1a1a', color: '#444', border: `1px solid #2a2a2a` }}
+            onClick={() => setEditOpen(true)}
+            disabled={!s.resultImage}
+            title="이미지 로컬 보정 (밝기/대비/채도 등 - API 호출 없음)"
+            style={{
+              height: 36, borderRadius: 6, fontSize: 12, fontWeight: 500,
+              background: s.resultImage ? '#222' : '#1a1a1a',
+              color: s.resultImage ? '#ddd' : '#444',
+              border: `1px solid ${s.resultImage ? '#333333' : '#2a2a2a'}`,
+            }}
           >
             Edit
           </button>
@@ -471,6 +480,7 @@ export function RenderClassicPage() {
             loading={s.sourceLoading && !liveStream}
             loadingText="SketchUp 화면 불러오는 중..."
             video={liveStream ? videoRef : null}
+            videoViewport={viewport}
             tab={tab.src}
             onTab={(t) => setTab((p) => ({ ...p, src: t }))}
             prompt={s.sourcePrompt}
@@ -530,6 +540,17 @@ export function RenderClassicPage() {
       </div>
 
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onUpload} />
+
+      {editOpen && s.resultImage && (
+        <EditOverlay
+          image={s.resultImage}
+          onApply={(img) => {
+            s.set({ resultImage: img, statusText: '보정 적용됨' })
+            setEditOpen(false)
+          }}
+          onClose={() => setEditOpen(false)}
+        />
+      )}
     </div>
   )
 }
@@ -556,7 +577,7 @@ function PanelAction({ children, title, onClick, disabled }: {
   )
 }
 
-function Panel({ label, active, image, emptyText, loading, loadingText, video, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions }: {
+function Panel({ label, active, image, emptyText, loading, loadingText, video, videoViewport, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions }: {
   label: string
   active?: boolean
   image: string | null
@@ -564,6 +585,7 @@ function Panel({ label, active, image, emptyText, loading, loadingText, video, t
   loading?: boolean
   loadingText?: string
   video?: React.RefObject<HTMLVideoElement | null> | null
+  videoViewport?: { w: number; h: number } | null
   tab: 'prompt' | 'negative'
   onTab: (t: 'prompt' | 'negative') => void
   prompt: string
@@ -591,7 +613,7 @@ function Panel({ label, active, image, emptyText, loading, loadingText, video, t
       {/* 이미지 영역 (16:9) */}
       <div className="relative flex items-center justify-center" style={{ width: '100%', aspectRatio: '16 / 9', background: C.panelBg, minHeight: 0 }}>
         {video ? (
-          <video ref={video} autoPlay muted playsInline className="h-full w-full object-contain" />
+          <CroppedVideo videoRef={video} viewport={videoViewport ?? null} />
         ) : image ? (
           <img src={image} alt="" className="h-full w-full object-contain" draggable={false} />
         ) : (
@@ -644,6 +666,48 @@ function Panel({ label, active, image, emptyText, loading, loadingText, video, t
         />
         {actions && <div className="flex flex-col gap-2">{actions}</div>}
       </div>
+    </div>
+  )
+}
+
+
+// SketchUp 창 스트림에서 3D 뷰포트 영역만 잘라 표시 (메뉴/툴바 제거)
+function CroppedVideo({ videoRef, viewport }: {
+  videoRef: React.RefObject<HTMLVideoElement | null>
+  viewport: { w: number; h: number } | null
+}) {
+  const [dims, setDims] = useState<{ W: number; H: number } | null>(null)
+
+  // 크롭 계산: 뷰포트 픽셀(레티나 2배 보정) 기준, 좌측 정렬 + 하단 상태바 제외
+  let crop: { w: number; h: number; top: number } | null = null
+  if (dims && viewport) {
+    const factor = dims.W / viewport.w >= 1.5 ? 2 : 1
+    const w = Math.min(viewport.w * factor, dims.W)
+    const h = Math.min(viewport.h * factor, dims.H)
+    const statusBar = 30 * factor
+    const top = Math.max(0, dims.H - h - statusBar)
+    crop = { w, h, top }
+  }
+
+  return (
+    <div
+      className="relative overflow-hidden"
+      style={crop ? { width: '100%', height: '100%' } : { width: '100%', height: '100%' }}
+    >
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        onLoadedMetadata={(e) => setDims({ W: e.currentTarget.videoWidth, H: e.currentTarget.videoHeight })}
+        className={crop ? 'absolute' : 'h-full w-full object-contain'}
+        style={crop && dims ? {
+          width: `${(dims.W / crop.w) * 100}%`,
+          maxWidth: 'none',
+          left: 0,
+          top: `${-(crop.top / crop.h) * 100}%`,
+        } : undefined}
+      />
     </div>
   )
 }
