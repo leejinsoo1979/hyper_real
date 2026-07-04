@@ -15,7 +15,7 @@ require 'tmpdir'
 
 module NanoBanana
   PLUGIN_NAME = 'NanoBanana Renderer'
-  PLUGIN_VERSION = '1.0.3'
+  PLUGIN_VERSION = '1.0.4'
   PLUGIN_AUTHOR = 'NanoBanana Team'
   PLUGIN_DESCRIPTION = 'SketchUp AI 실사 렌더링 플러그인 (Google Gemini 기반)'
 
