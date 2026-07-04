@@ -702,9 +702,10 @@ function CroppedVideo({ videoRef, viewport }: {
   }
 
   return (
+    // 표시 박스를 크롭 영역과 같은 비율로 맞춰 상태바/툴바가 비어져 나오지 않게 한다
     <div
-      className="relative overflow-hidden"
-      style={crop ? { width: '100%', height: '100%' } : { width: '100%', height: '100%' }}
+      className="relative m-auto overflow-hidden"
+      style={crop ? { aspectRatio: `${crop.w} / ${crop.h}`, maxWidth: '100%', maxHeight: '100%' } : { width: '100%', height: '100%' }}
     >
       <video
         ref={videoRef}
