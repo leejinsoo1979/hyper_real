@@ -79,7 +79,7 @@ interface ScenesResponse {
 
 const BRIDGE_BASE_URL = 'http://localhost:9876'
 const POLL_INTERVAL_MS = 2000
-const REQUEST_TIMEOUT_MS = 2000
+const REQUEST_TIMEOUT_MS = 3500
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -331,10 +331,13 @@ async function pollOnce() {
       ui.setSketchUpScenes(scenes)
     }
   } else {
-    // SketchUp이 캡처 등으로 바빠 응답이 늦은 것일 수 있으니, 2회 연속 실패부터 끊김 처리
+    // SketchUp이 캡처 등으로 바빠 응답이 늦은 것일 수 있으니 보수적으로 판정
     pingFailures += 1
-    if (pingFailures >= 2) {
+    if (pingFailures >= 4) {
       ui.setSketchUpStatus('disconnected')
+    }
+    if (pingFailures >= 6) {
+      // 진짜 끊긴 경우에만 탭 제거 (일시 지연에 탭이 사라졌다 나타나는 문제 방지)
       ui.setSketchUpScenes([])
     }
   }
