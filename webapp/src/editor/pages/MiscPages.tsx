@@ -20,14 +20,12 @@ export function AccountPage() {
   const localBalance = useCreditStore((s) => s.balance)
   const [me, setMe] = useState<{ email: string | null; balance: number } | null>(null)
   const [logs, setLogs] = useState<{ engine: string; cost: number; status: string; at: string }[]>([])
-  const [err, setErr] = useState<string | null>(null)
   const saas = saasMode()
   const user = useAuthUser()
 
   useEffect(() => {
     if (!saas || !user) return
-    apiMe().then(setMe).catch((e) => setErr(String(e.message ?? e)))
-    // 최근 사용 내역 (Firestore REST - 본인 로그만 규칙상 허용)
+    apiMe().then(setMe).catch(() => {})
     user.getIdToken().then(async (token) => {
       try {
         const r = await fetch(
@@ -43,7 +41,7 @@ export function AccountPage() {
         }))
         rows.sort((a: { at: string }, b: { at: string }) => b.at.localeCompare(a.at))
         setLogs(rows.slice(0, 10))
-      } catch { /* 내역은 부가 정보 */ }
+      } catch { /* 부가 정보 */ }
     })
   }, [saas, user])
 
@@ -57,87 +55,82 @@ export function AccountPage() {
         <div className="rounded p-4" style={{ backgroundColor: '#1a1a24', border: '1px solid #222233' }}>
           <div style={{ color: '#cccccc', fontSize: 13 }}>Credits (개발자 모드)</div>
           <div style={{ color: '#00c9a7', fontSize: 28, fontWeight: 700 }}>{localBalance}</div>
-          <div className="mt-1" style={{ fontSize: 11, color: '#666666' }}>
-            개발자 모드: 로그인 없이 로컬 키로 직접 호출합니다.
-          </div>
         </div>
       </PageShell>
     )
   }
 
+  // 실물 VizMaker 디자인 언어: 좌측 정렬 페이지 제목 + 전체폭 섹션 행
   return (
-    <div className="flex flex-1 justify-center overflow-y-auto" style={{ background: '#0b0b0f', padding: '48px 24px' }}>
-      <div className="w-full" style={{ maxWidth: 560 }}>
-        {/* 프로필 카드 */}
-        <div
-          className="relative overflow-hidden"
-          style={{
-            borderRadius: 16,
-            padding: 24,
-            background: 'linear-gradient(135deg, #171721 0%, #12121b 60%, #0f1e1a 100%)',
-            border: '1px solid #2c2c38',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
-          }}
-        >
-          <div className="flex items-center gap-4">
-            <span className="flex items-center justify-center overflow-hidden rounded-full" style={{ width: 64, height: 64, background: '#00c9a7', color: '#06251f', fontSize: 26, fontWeight: 800 }}>
-              {user?.photoURL
-                ? <img src={user.photoURL} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                : (me?.email?.[0]?.toUpperCase() ?? '·')}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="truncate" style={{ color: '#ffffff', fontSize: 16, fontWeight: 700 }}>
-                {user?.displayName || me?.email?.split('@')[0] || '...'}
-              </div>
-              <div className="truncate" style={{ color: '#8a8a96', fontSize: 12.5 }}>{me?.email ?? user?.email ?? ''}</div>
-            </div>
-            <button
-              onClick={() => getFirebaseAuth()?.signOut()}
-              style={{ height: 32, padding: '0 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'transparent', color: '#ff8888', border: '1px solid #3a2626' }}
-            >
-              로그아웃
-            </button>
-          </div>
+    <div className="flex-1 overflow-y-auto" style={{ background: '#0d0d11', padding: '36px 48px' }}>
+      <h1 style={{ color: '#ffffff', fontSize: 26, fontWeight: 700, marginBottom: 24 }}>Account</h1>
 
-          {/* 크레딧 */}
-          <div className="flex items-end justify-between" style={{ marginTop: 20, borderRadius: 12, padding: 16, background: 'rgba(0,201,167,0.07)', border: '1px solid rgba(0,201,167,0.3)' }}>
-            <div>
-              <div style={{ color: '#7ddcc9', fontSize: 12, fontWeight: 600, letterSpacing: 0.5 }}>CREDITS</div>
-              <div style={{ color: '#00e5be', fontSize: 38, fontWeight: 800, lineHeight: 1.15, minHeight: 44 }}>
-                {me ? me.balance.toLocaleString() : <span style={{ fontSize: 15, color: '#4da896' }}>불러오는 중...</span>}
-              </div>
+      <Section title="프로필">
+        <div className="flex items-center gap-4">
+          <span className="flex items-center justify-center overflow-hidden rounded-full" style={{ width: 52, height: 52, background: '#00c9a7', color: '#06251f', fontSize: 22, fontWeight: 800, flexShrink: 0 }}>
+            {user?.photoURL
+              ? <img src={user.photoURL} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+              : (me?.email?.[0]?.toUpperCase() ?? '·')}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate" style={{ color: '#ffffff', fontSize: 15, fontWeight: 600 }}>
+              {user?.displayName || me?.email?.split('@')[0] || '...'}
             </div>
-            <div className="text-right" style={{ fontSize: 11, color: '#8a8a96', lineHeight: 1.7 }}>
-              렌더 <b style={{ color: '#cfcfda' }}>1</b> · Pro 렌더 <b style={{ color: '#cfcfda' }}>4</b> · Auto <b style={{ color: '#cfcfda' }}>1</b>
-              <br />충전 문의: sbbc212@gmail.com
-            </div>
+            <div className="truncate" style={{ color: '#8a8a96', fontSize: 12.5 }}>{me?.email ?? user?.email ?? ''}</div>
           </div>
-          {err && <div className="mt-2" style={{ color: '#ff6666', fontSize: 12 }}>{err}</div>}
+          <button
+            onClick={() => getFirebaseAuth()?.signOut()}
+            style={{ height: 32, padding: '0 16px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: 'transparent', color: '#ff8888', border: '1px solid #3a2626', flexShrink: 0 }}
+          >
+            로그아웃
+          </button>
         </div>
+      </Section>
 
-        {/* 데스크톱 앱 로그인용 비밀번호 */}
+      <Section title="크레딧">
+        <div className="flex items-end justify-between">
+          <div style={{ color: '#00e5be', fontSize: 34, fontWeight: 800, lineHeight: 1.1 }}>
+            {me ? me.balance.toLocaleString() : <span style={{ fontSize: 14, color: '#4da896', fontWeight: 500 }}>불러오는 중...</span>}
+          </div>
+          <div className="text-right" style={{ fontSize: 11.5, color: '#8a8a96', lineHeight: 1.7 }}>
+            렌더 <b style={{ color: '#cfcfda' }}>1</b> · Pro 렌더 <b style={{ color: '#cfcfda' }}>4</b> · Auto <b style={{ color: '#cfcfda' }}>1</b> 크레딧
+          </div>
+        </div>
+      </Section>
+
+      <Section title="앱 로그인 비밀번호">
         <AppPasswordCard email={me?.email ?? user?.email ?? ''} />
+      </Section>
 
-        {/* 최근 사용 내역 */}
-        <div style={{ marginTop: 18, borderRadius: 16, padding: 20, background: '#14141d', border: '1px solid #2c2c38' }}>
-          <div style={{ color: '#ffffff', fontSize: 13.5, fontWeight: 700, marginBottom: 10 }}>최근 사용 내역</div>
-          {logs.length === 0 && <div style={{ color: '#55555f', fontSize: 12 }}>아직 사용 내역이 없습니다</div>}
-          {logs.map((l, i) => (
-            <div key={i} className="flex items-center justify-between" style={{ padding: '8px 0', borderTop: i ? '1px solid #1c1c26' : 'none' }}>
-              <div>
-                <span style={{ color: '#d8d8e0', fontSize: 12.5 }}>{ENGINE_LABEL[l.engine] ?? l.engine}</span>
-                <span className="ml-2" style={{ fontSize: 10.5, color: l.status === 'ok' ? '#4cd6a8' : '#ff7777' }}>
-                  {l.status === 'ok' ? '성공' : '실패'}
-                </span>
-              </div>
-              <div className="text-right">
-                <span style={{ color: '#9a9aa6', fontSize: 11 }}>{l.at ? new Date(l.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                <span className="ml-3" style={{ color: '#7ddcc9', fontSize: 12, fontWeight: 700 }}>-{l.cost}</span>
-              </div>
+      <Section title="최근 사용 내역">
+        {logs.length === 0 && <div style={{ color: '#55555f', fontSize: 12.5 }}>아직 사용 내역이 없습니다</div>}
+        {logs.map((l, i) => (
+          <div key={i} className="flex items-center justify-between" style={{ padding: '9px 0', borderTop: i ? '1px solid #22222a' : 'none' }}>
+            <div>
+              <span style={{ color: '#d8d8e0', fontSize: 12.5 }}>{ENGINE_LABEL[l.engine] ?? l.engine}</span>
+              <span className="ml-2" style={{ fontSize: 10.5, color: l.status === 'ok' ? '#4cd6a8' : '#ff7777' }}>
+                {l.status === 'ok' ? '성공' : '실패'}
+              </span>
             </div>
-          ))}
-        </div>
+            <div>
+              <span style={{ color: '#9a9aa6', fontSize: 11 }}>{l.at ? new Date(l.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+              <span className="ml-3" style={{ color: '#7ddcc9', fontSize: 12, fontWeight: 700 }}>-{l.cost}</span>
+            </div>
+          </div>
+        ))}
+      </Section>
+    </div>
+  )
+}
+
+// 실물 스타일 섹션 행: 전체폭, 헤더(제목) + 본문
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ background: '#17171d', border: '1px solid #24242c', borderRadius: 10, marginBottom: 14 }}>
+      <div style={{ padding: '13px 20px', borderBottom: '1px solid #22222a', color: '#e8e8ee', fontSize: 13.5, fontWeight: 600 }}>
+        {title}
       </div>
+      <div style={{ padding: '16px 20px' }}>{children}</div>
     </div>
   )
 }
@@ -213,11 +206,9 @@ function AppPasswordCard({ email }: { email: string }) {
   }
 
   return (
-    <div style={{ marginTop: 18, borderRadius: 16, padding: 20, background: '#14141d', border: '1px solid #2c2c38' }}>
-      <div style={{ color: '#ffffff', fontSize: 13.5, fontWeight: 700 }}>데스크톱 앱 로그인 비밀번호</div>
-      <div className="mb-3 mt-1" style={{ fontSize: 11.5, color: '#8a8a96', lineHeight: 1.6 }}>
-        설치형 Lumanova 앱은 크롬의 구글 자동로그인을 쓸 수 없습니다. 여기서 비밀번호를 한 번 만들어두면,
-        앱에서 <b style={{ color: '#cfcfda' }}>{email}</b> + 이 비밀번호로 로그인됩니다 (같은 계정·같은 크레딧).
+    <div>
+      <div className="mb-3" style={{ fontSize: 11.5, color: '#8a8a96' }}>
+        데스크톱 앱에서 <b style={{ color: '#cfcfda' }}>{email}</b> + 비밀번호 로그인에 사용됩니다.
       </div>
       <div className="flex gap-2">
         <input
