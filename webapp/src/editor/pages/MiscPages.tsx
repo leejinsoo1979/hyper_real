@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useCreditStore } from '../../state/creditStore'
 import { saasMode, apiMe } from '../../api/lumanovaApi'
 import { getFirebaseAuth, useAuthUser } from '../../auth/firebase'
+import { EmailAuthProvider, linkWithCredential, updatePassword } from 'firebase/auth'
 
 /** 공용 심플 페이지 레이아웃 */
 function PageShell({ title, children }: { title: string; children: React.ReactNode }) {
@@ -111,6 +112,9 @@ export function AccountPage() {
           {err && <div className="mt-2" style={{ color: '#ff6666', fontSize: 12 }}>{err}</div>}
         </div>
 
+        {/* 데스크톱 앱 로그인용 비밀번호 */}
+        <AppPasswordCard email={me?.email ?? user?.email ?? ''} />
+
         {/* 최근 사용 내역 */}
         <div className="mt-4 rounded-2xl p-5" style={{ background: '#12121a', border: '1px solid #22222c' }}>
           <div style={{ color: '#ffffff', fontSize: 13.5, fontWeight: 700, marginBottom: 10 }}>최근 사용 내역</div>
@@ -162,5 +166,77 @@ export function SupportPage() {
         문의: <span style={{ color: '#00c9a7' }}>sbbc212@gmail.com</span>
       </p>
     </PageShell>
+  )
+}
+
+
+// 구글 로그인 사용자용: 데스크톱 앱에서 쓸 비밀번호를 웹에서 1회 설정
+function AppPasswordCard({ email }: { email: string }) {
+  const [pw, setPw] = useState('')
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const save = async () => {
+    const auth = getFirebaseAuth()
+    const user = auth?.currentUser
+    if (!user || pw.length < 6) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      try {
+        // 구글 전용 계정: 이메일/비밀번호 자격증명 연결
+        await linkWithCredential(user, EmailAuthProvider.credential(email, pw))
+      } catch (e) {
+        const code = (e as { code?: string }).code ?? ''
+        if (code.includes('provider-already-linked')) {
+          await updatePassword(user, pw) // 이미 연결됨: 비밀번호 갱신
+        } else {
+          throw e
+        }
+      }
+      setMsg({ ok: true, text: '설정 완료! 이제 데스크톱 앱에서 이 이메일 + 방금 만든 비밀번호로 로그인하세요 (최초 1회만, 이후 자동 유지)' })
+      setPw('')
+    } catch (e) {
+      const code = (e as { code?: string }).code ?? String(e)
+      setMsg({
+        ok: false,
+        text: code.includes('requires-recent-login')
+          ? '보안을 위해 다시 로그인이 필요합니다. 로그아웃 후 재로그인하고 다시 시도하세요.'
+          : `실패: ${code}`,
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl p-5" style={{ background: '#12121a', border: '1px solid #22222c' }}>
+      <div style={{ color: '#ffffff', fontSize: 13.5, fontWeight: 700 }}>데스크톱 앱 로그인 비밀번호</div>
+      <div className="mb-3 mt-1" style={{ fontSize: 11.5, color: '#8a8a96', lineHeight: 1.6 }}>
+        설치형 Lumanova 앱은 크롬의 구글 자동로그인을 쓸 수 없습니다. 여기서 비밀번호를 한 번 만들어두면,
+        앱에서 <b style={{ color: '#cfcfda' }}>{email}</b> + 이 비밀번호로 로그인됩니다 (같은 계정·같은 크레딧).
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="password"
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+          placeholder="새 비밀번호 (6자 이상)"
+          className="flex-1 rounded-lg px-3 outline-none"
+          style={{ height: 38, background: '#0d0d15', border: '1px solid #26262f', color: '#fff', fontSize: 13 }}
+        />
+        <button
+          onClick={save}
+          disabled={busy || pw.length < 6}
+          style={{
+            height: 38, padding: '0 18px', borderRadius: 8, fontSize: 12.5, fontWeight: 700,
+            background: '#00c9a7', color: '#06251f', opacity: busy || pw.length < 6 ? 0.45 : 1,
+          }}
+        >
+          설정
+        </button>
+      </div>
+      {msg && <div className="mt-2" style={{ fontSize: 11.5, color: msg.ok ? '#4cd6a8' : '#ff7777' }}>{msg.text}</div>}
+    </div>
   )
 }
