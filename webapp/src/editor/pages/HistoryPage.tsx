@@ -181,33 +181,25 @@ function HistoryCard({ snapshot, onOpen }: { snapshot: GraphSnapshot; onOpen: (s
       </div>
 
       {hovered && (
-        <div
-          className="absolute inset-0 flex items-center justify-center"
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpen(snapshot) }}
+          className="absolute flex items-center justify-center gap-1.5 rounded-full px-3"
           style={{
-            background: showSource ? 'rgba(5,5,9,.18)' : 'rgba(5,5,9,.68)',
+            right: 8,
+            bottom: 4,
+            height: 26,
+            backgroundColor: 'rgba(17,17,24,.94)',
+            border: '1px solid rgba(0,201,167,.58)',
+            color: '#eafffb',
+            fontSize: 11,
+            fontWeight: 800,
+            letterSpacing: 0.2,
           }}
+          title="View"
         >
-          <button
-            onClick={(e) => { e.stopPropagation(); onOpen(snapshot) }}
-            className="flex items-center gap-2 rounded-full px-4"
-            style={{
-              minWidth: 96,
-              height: 38,
-              justifyContent: 'center',
-              backgroundColor: 'rgba(17,17,24,.94)',
-              border: '1px solid rgba(0,201,167,.58)',
-              color: '#eafffb',
-              fontSize: 12,
-              fontWeight: 800,
-              letterSpacing: 0.2,
-              boxShadow: '0 16px 38px rgba(0,0,0,.46), inset 0 1px 0 rgba(255,255,255,.08)',
-            }}
-            title="View"
-          >
-            <Eye size={15} />
-            View
-          </button>
-        </div>
+          <Eye size={13} />
+          View
+        </button>
       )}
 
       <div
