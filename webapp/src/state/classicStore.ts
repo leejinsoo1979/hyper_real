@@ -33,6 +33,7 @@ interface ClassicState {
   maskUri: string | null
   maskMap: { color: string; material: string }[]
   selectedColors: string[]
+  resultMaskView: boolean
 
   // 씬별 미리보기 캐시 (탭 클릭 즉시 표시용 - 레거시 방식)
   scenePreviews: Record<string, string>
@@ -66,6 +67,7 @@ export const useClassicStore = create<ClassicState>((set) => ({
   maskUri: null,
   maskMap: [],
   selectedColors: [],
+  resultMaskView: false,
 
   scenePreviews: {},
   previewOverride: null,

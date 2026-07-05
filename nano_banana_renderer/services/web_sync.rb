@@ -3,6 +3,13 @@
 # NanoBanana Renderer - 웹 동기화
 # 로컬 WEBrick 서버, 동기화 기능
 
+# WEBrick ProcHandler는 do_OPTIONS가 없어 브라우저 CORS 프리플라이트에 405(헤더 없음)로
+# 응답한다 → 브라우저에서 POST(/api/command 등)가 전부 차단. GET 핸들러로 위임해 해결.
+if defined?(WEBrick::HTTPServlet::ProcHandler) &&
+   !WEBrick::HTTPServlet::ProcHandler.method_defined?(:do_OPTIONS)
+  WEBrick::HTTPServlet::ProcHandler.class_eval { alias_method :do_OPTIONS, :do_GET }
+end
+
 module NanoBanana
   # UI.start_timer 컨텍스트에서 카메라/씬 '변경'이 조용히 무시되는 SketchUp 제약 회피.
   # View#animation의 nextFrame은 렌더 루프에서 실행되어 뷰 변경이 허용된다.
