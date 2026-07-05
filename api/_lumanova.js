@@ -38,7 +38,7 @@ export async function verifyUser(req) {
 
 const FS_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`
 
-async function fsFetch(path, { method = 'GET', body, token, query = '' } = {}) {
+export async function fsFetch(path, { method = 'GET', body, token, query = '' } = {}) {
   const res = await fetch(`${FS_BASE}${path}${query}`, {
     method,
     headers: {

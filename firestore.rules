@@ -18,5 +18,10 @@ service cloud.firestore {
       allow read, create: if request.auth != null && request.auth.uid == uid;
       allow update, delete: if false;
     }
+    // 히스토리 대시보드: 본인만 생성/읽기, 수정/삭제 불가
+    match /users/{uid}/history/{historyId} {
+      allow read, create: if request.auth != null && request.auth.uid == uid;
+      allow update, delete: if false;
+    }
   }
 }

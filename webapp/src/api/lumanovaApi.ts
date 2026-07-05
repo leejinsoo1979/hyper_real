@@ -6,9 +6,11 @@ import { firebaseEnabled, getIdToken } from '../auth/firebase'
 // - Electron(file://)에서는 배포 도메인으로, 웹에서는 동일 오리진으로 호출.
 // ---------------------------------------------------------------------------
 
+const PRODUCTION_API_BASE = 'https://nanobanana-renderer.vercel.app'
+
 const API_BASE = window.location.host.endsWith('vercel.app')
   ? ''
-  : 'https://hyper-real-3vvh.vercel.app'
+  : PRODUCTION_API_BASE
 
 export function saasMode(): boolean {
   return firebaseEnabled()
@@ -61,4 +63,35 @@ export async function apiAutoPrompt(opts: { image: string; instruction: string }
 export async function apiMe(): Promise<{ email: string | null; balance: number }> {
   const r = await call('/api/me')
   return { email: (r.email as string) ?? null, balance: Number(r.balance) }
+}
+
+export interface HistoryItemDTO {
+  id: string
+  clientId: string
+  engine: string
+  cost: number
+  status: string
+  kind: string
+  prompt: string
+  thumbnail: string
+  sourceThumbnail: string
+  createdAt: string
+}
+
+export async function apiHistory(limit = 50): Promise<{ items: HistoryItemDTO[] }> {
+  const r = await call(`/api/history?limit=${limit}`)
+  return { items: (r.items as HistoryItemDTO[] | undefined) ?? [] }
+}
+
+export async function apiSaveHistory(opts: {
+  clientId?: string
+  thumbnail: string
+  sourceThumbnail?: string
+  prompt?: string
+  engine?: string
+  cost?: number
+  createdAt?: string
+}): Promise<{ ok: boolean; id: string }> {
+  const r = await call('/api/history', opts)
+  return { ok: Boolean(r.ok), id: String(r.id ?? '') }
 }

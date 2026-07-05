@@ -15,6 +15,7 @@ interface UIState {
   zoom: number
   pan: { x: number; y: number }
   promptText: string
+  materialLibraryOpen: boolean
   compareANodeId: string | null
   compareBNodeId: string | null
   sketchUpStatus: ConnectionStatus
@@ -26,6 +27,8 @@ interface UIState {
   setZoom: (zoom: number) => void
   setPan: (pan: { x: number; y: number }) => void
   setPromptText: (text: string) => void
+  setMaterialLibraryOpen: (open: boolean) => void
+  toggleMaterialLibrary: () => void
   setCompareA: (nodeId: string | null) => void
   setCompareB: (nodeId: string | null) => void
   setSketchUpStatus: (status: ConnectionStatus) => void
@@ -39,17 +42,20 @@ export const useUIStore = create<UIState>((set) => ({
   zoom: 1.0,
   pan: { x: 0, y: 0 },
   promptText: '',
+  materialLibraryOpen: false,
   compareANodeId: null,
   compareBNodeId: null,
   sketchUpStatus: 'disconnected',
   sketchUpScenes: [],
   sketchUpViewport: null,
 
-  setActiveSidebarItem: (item) => set({ activeSidebarItem: item }),
+  setActiveSidebarItem: (item) => set({ activeSidebarItem: item, materialLibraryOpen: false }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setZoom: (zoom) => set({ zoom }),
   setPan: (pan) => set({ pan }),
   setPromptText: (text) => set({ promptText: text }),
+  setMaterialLibraryOpen: (open) => set({ materialLibraryOpen: open }),
+  toggleMaterialLibrary: () => set((s) => ({ materialLibraryOpen: !s.materialLibraryOpen })),
   setCompareA: (nodeId) => set({ compareANodeId: nodeId }),
   setCompareB: (nodeId) => set({ compareBNodeId: nodeId }),
   setSketchUpStatus: (status) => set({ sketchUpStatus: status }),

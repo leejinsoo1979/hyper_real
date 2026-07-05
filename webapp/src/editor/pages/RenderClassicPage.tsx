@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ImagePlus, Zap, Loader2, SlidersHorizontal, Download, MousePointerSquareDashed, X } from 'lucide-react'
+import { ImagePlus, Zap, Loader2, SlidersHorizontal, Download, X } from 'lucide-react'
 import { useClassicStore, type ClassicModel, type ClassicSize } from '../../state/classicStore'
 import { useUIStore } from '../../state/uiStore'
 import { useGraphStore } from '../../state/graphStore'
+import { useHistoryStore } from '../../state/historyStore'
 import { selectScene, requestCapture, addScene, sendCamera, fetchSourceOnce, captureMask } from '../../api/sketchupBridge'
 import { generateAutoPrompt, buildLightingDescription } from '../../engine/autoPrompt'
 import { renderMain } from '../../engine/adapters/mainRenderer'
 import { EditOverlay } from '../panels/EditOverlay'
+import type { NodeData } from '../../types/node'
+import type { EdgeData } from '../../types/graph'
 
 // ---------------------------------------------------------------------------
 // 클래식 렌더 화면 — 레거시 루비 창(main_dialog.html) UI의 충실한 재현
@@ -27,6 +30,65 @@ const C = {
   text: '#e0e0e0',
   dim: '#666666',
   label: '#666666',
+}
+
+function saveClassicRenderHistory(opts: {
+  sourceImage: string
+  resultImage: string
+  prompt: string
+  negativePrompt: string
+  engine: 'main' | 'experimental-interior'
+  resolution: string
+  timePreset: 'day' | 'evening' | 'night'
+  lightsOn: boolean
+}) {
+  const now = new Date().toISOString()
+  const sourceId = `classic-source-${Date.now()}`
+  const renderId = `classic-render-${Date.now()}`
+  const nodes: NodeData[] = [
+    {
+      id: sourceId,
+      type: 'SOURCE',
+      position: { x: 80, y: 180 },
+      status: 'done',
+      params: {
+        origin: 'sketchup',
+        image: opts.sourceImage,
+        cameraLocked: true,
+        sceneMeta: null,
+      },
+      result: { image: opts.sourceImage, timestamp: now, cacheKey: '' },
+      cost: 0,
+      version: '1.0.0',
+    },
+    {
+      id: renderId,
+      type: 'RENDER',
+      position: { x: 420, y: 180 },
+      status: 'done',
+      params: {
+        engine: opts.engine,
+        prompt: opts.prompt,
+        negativePrompt: opts.negativePrompt,
+        presetId: null,
+        seed: null,
+        resolution: opts.resolution,
+        timePreset: opts.timePreset,
+        lightsOn: opts.lightsOn,
+      },
+      result: { image: opts.resultImage, resolution: opts.resolution, timestamp: now, cacheKey: '' },
+      cost: opts.engine === 'experimental-interior' ? 4 : 1,
+      version: '1.0.0',
+    },
+  ]
+  const edges: EdgeData[] = [{
+    id: `classic-edge-${Date.now()}`,
+    from: sourceId,
+    fromPort: 'image',
+    to: renderId,
+    toPort: 'image',
+  }]
+  useHistoryStore.getState().saveSnapshot(nodes, edges, nodes[1].cost)
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -208,6 +270,11 @@ export function RenderClassicPage() {
           sourceLoading: false,
           statusText: `고품질 캡처 완료 (${s.size}px) - Auto로 프롬프트 생성하세요. Mirror를 켜면 실시간으로 복귀`,
         })
+        // 같은 카메라로 마스크 패스도 즉시 캡처해 소스와 쌍으로 고정
+        // (렌더 완료 시점에 찍으면 렌더 도중 씬이 바뀌었을 때 다른 뷰가 찍힌다)
+        captureMask().then((m) => {
+          useClassicStore.getState().set({ maskUri: m?.uri ?? null, maskMap: m?.map ?? [] })
+        })
         return
       }
       if (Date.now() - t0 < 10_000) setTimeout(poll, 450)
@@ -259,14 +326,28 @@ export function RenderClassicPage() {
 
     const lighting = buildLightingDescription(st.timePreset, st.lightsOn)
     // 영역 선택이 있으면 흑백 선택 마스크 생성 (흰색=변경 허용 영역)
+    // 마스크는 RESULT와 쌍이므로 2차 생성('res')에만 적용한다
     let selMask: string | null = null
-    if (st.selectMode && st.maskUri && st.selectedColors.length > 0) {
+    if (which === 'res' && st.maskUri && st.selectedColors.length > 0) {
       selMask = await buildSelectionMask(st.maskUri, st.selectedColors)
     }
-    st.set({ rendering: true, statusText: selMask ? '선택 영역만 편집 렌더링 중...' : '렌더링 중...' })
+    st.set({
+      rendering: true,
+      statusText: selMask ? '선택 영역만 편집 렌더링 중...' : '렌더링 중...',
+      resultMaskView: false,
+    })
+    // 미러(라이브) 입력으로 렌더하는 경우: 지금 카메라가 곧 입력 화면이므로
+    // 렌더와 병행해서 같은 카메라의 마스크를 캡처해 쌍으로 만든다
+    // (Convert를 거쳤다면 doConvert에서 이미 쌍으로 캡처됨)
+    if (which === 'src' && !st.frozenSource) {
+      captureMask().then((m) => {
+        useClassicStore.getState().set({ maskUri: m?.uri ?? null, maskMap: m?.map ?? [] })
+      })
+    }
+    const engine = st.model === 'gemini-3-pro-image' ? 'experimental-interior' : 'main'
     try {
       const result = await renderMain({
-        engine: st.model === 'gemini-3-pro-image' ? 'experimental-interior' : 'main',
+        engine,
         image: input,
         prompt: `${prompt}\n\n[LIGHTING]\n${lighting}`,
         systemPrompt: '',
@@ -275,7 +356,32 @@ export function RenderClassicPage() {
         resolution: st.size,
         mask: selMask,
       })
-      useClassicStore.getState().set({ resultImage: result.image, rendering: false, statusText: '렌더링 완료' })
+      if (!result.image) throw new Error('렌더링 결과 이미지가 없습니다')
+      // 선택 영역 편집: AI가 마스크 밖까지 바꿔버리는 것을 원천 차단 -
+      // 선택 영역 밖은 원본 픽셀로 되돌려 합성한다 (선택 부위만 변경 100% 보장)
+      let finalImage = result.image
+      if (selMask) {
+        finalImage = (await compositeMasked(input, result.image, selMask)) ?? result.image
+      }
+      useClassicStore.getState().set({
+        resultImage: finalImage,
+        rendering: false,
+        statusText: selMask
+          ? '선택 부위만 적용 완료 (나머지 영역은 원본 유지)'
+          : '렌더링 완료 - RESULT의 [마스크 패스] 탭에서 부위를 선택할 수 있습니다',
+        // 마스크 적용 렌더가 끝나면 선택 소진 (다음 렌더에 의도치 않게 재적용 방지)
+        ...(selMask ? { selectedColors: [] } : {}),
+      })
+      saveClassicRenderHistory({
+        sourceImage: input,
+        resultImage: finalImage,
+        prompt,
+        negativePrompt: negative,
+        engine,
+        resolution: st.size,
+        timePreset: st.timePreset,
+        lightsOn: st.lightsOn,
+      })
     } catch (err) {
       useClassicStore.getState().set({
         rendering: false,
@@ -283,22 +389,6 @@ export function RenderClassicPage() {
       })
     }
   }, [sourceImage, liveImage])
-
-  // 영역 선택 모드: 켜면 ID 마스크 캡처 (모델 무변경 롤백 방식)
-  const toggleSelectMode = useCallback(async () => {
-    const st = useClassicStore.getState()
-    if (st.selectMode) {
-      st.set({ selectMode: false, selectedColors: [], statusText: 'Ready' })
-      return
-    }
-    st.set({ selectMode: true, sourceLoading: true, statusText: '영역 마스크 생성 중... (모델 크기에 따라 최대 30초, SketchUp이 잠시 멈춘 것처럼 보일 수 있음)' })
-    const m = await captureMask()
-    if (m) {
-      useClassicStore.getState().set({ maskUri: m.uri, maskMap: m.map, sourceLoading: false, statusText: '바꿀 부위를 클릭하세요' })
-    } else {
-      useClassicStore.getState().set({ selectMode: false, sourceLoading: false, statusText: '마스크 생성 실패 - SketchUp 연결 확인' })
-    }
-  }, [])
 
   const doExport = useCallback(() => {
     const img = useClassicStore.getState().resultImage
@@ -536,9 +626,8 @@ export function RenderClassicPage() {
             emptyText="SketchUp 연결 대기 중... (또는 이미지 버튼으로 불러오기)"
             loading={s.sourceLoading && !liveStream}
             loadingText="SketchUp 화면 불러오는 중..."
-            video={liveStream && !s.selectMode ? videoRef : null}
+            video={liveStream ? videoRef : null}
             videoViewport={viewport}
-            imageOverlay={s.selectMode && s.maskUri ? <MaskSelectOverlay /> : null}
             tab={tab.src}
             onTab={(t) => setTab((p) => ({ ...p, src: t }))}
             prompt={s.sourcePrompt}
@@ -552,22 +641,16 @@ export function RenderClassicPage() {
                 className="flex items-center gap-1"
                 style={{
                   padding: '3px 12px', borderRadius: 5, fontSize: 11, fontWeight: 600,
-                  background: s.autoLoading ? '#ff4466' : '#00c9a7',
-                  color: s.autoLoading ? '#fff' : '#06251f',
+                  background: s.autoLoading ? '#1a1a1a' : '#00c9a7',
+                  color: s.autoLoading ? '#bbb' : '#06251f',
+                  border: s.autoLoading ? '1px solid #333' : '1px solid transparent',
                 }}
               >
-                {s.autoLoading ? <><Loader2 size={11} className="animate-spin" /> 취소</> : 'Auto'}
+                {s.autoLoading ? <><Loader2 size={11} className="animate-spin" style={{ color: '#00c9a7' }} /> 취소</> : 'Auto'}
               </button>
             }
             actions={
               <>
-                <PanelAction
-                  title={s.selectMode ? '영역 선택 종료' : '영역 선택 (클릭으로 부위 지정)'}
-                  onClick={toggleSelectMode}
-                  active={s.selectMode}
-                >
-                  <MousePointerSquareDashed size={16} />
-                </PanelAction>
                 <PanelAction title="이미지 불러오기" onClick={() => fileRef.current?.click()}>
                   <ImagePlus size={16} />
                 </PanelAction>
@@ -591,7 +674,16 @@ export function RenderClassicPage() {
                 </button>
               </>
             ) : undefined}
-            image={s.resultImage}
+            image={s.resultMaskView && s.maskUri ? s.maskUri : s.resultImage}
+            imageOverlay={s.resultMaskView && s.maskUri && s.resultImage ? <MaskSelectOverlay /> : null}
+            viewTabs={s.resultImage && s.maskUri ? {
+              items: [
+                { key: 'render', label: '렌더' },
+                { key: 'mask', label: '마스크 패스' },
+              ],
+              active: s.resultMaskView ? 'mask' : 'render',
+              onSelect: (k) => s.set({ resultMaskView: k === 'mask' }),
+            } : undefined}
             emptyText={s.rendering ? '렌더링 중...' : 'Ready'}
             loading={s.rendering}
             loadingText={`렌더링 중... ${elapsed}초`}
@@ -655,7 +747,7 @@ function PanelAction({ children, title, onClick, disabled, active }: {
   )
 }
 
-function Panel({ label, labelRight, active, image, emptyText, loading, loadingText, video, videoViewport, imageOverlay, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions }: {
+function Panel({ label, labelRight, active, image, emptyText, loading, loadingText, video, videoViewport, imageOverlay, viewTabs, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions }: {
   label: string
   labelRight?: React.ReactNode
   active?: boolean
@@ -666,6 +758,7 @@ function Panel({ label, labelRight, active, image, emptyText, loading, loadingTe
   video?: React.RefObject<HTMLVideoElement | null> | null
   videoViewport?: { w: number; h: number; sf: number } | null
   imageOverlay?: React.ReactNode
+  viewTabs?: { items: { key: string; label: string }[]; active: string; onSelect: (key: string) => void }
   tab: 'prompt' | 'negative'
   onTab: (t: 'prompt' | 'negative') => void
   prompt: string
@@ -687,7 +780,26 @@ function Panel({ label, labelRight, active, image, emptyText, loading, loadingTe
           color: active ? '#0a0a14' : '#555',
         }}
       >
-        <span>{label}</span>
+        <span className="flex items-center gap-3">
+          {label}
+          {viewTabs && (
+            <span className="flex items-center" style={{ gap: 2 }}>
+              {viewTabs.items.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => viewTabs.onSelect(t.key)}
+                  style={{
+                    padding: '2px 10px', fontSize: 9.5, fontWeight: 700, borderRadius: 4,
+                    background: viewTabs.active === t.key ? (active ? 'rgba(0,0,0,0.35)' : C.accent) : 'transparent',
+                    color: viewTabs.active === t.key ? (active ? '#fff' : '#06251f') : (active ? 'rgba(0,0,0,0.55)' : '#888'),
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </span>
+          )}
+        </span>
         {labelRight && <span className="flex items-center gap-2">{labelRight}</span>}
       </div>
 
@@ -695,6 +807,10 @@ function Panel({ label, labelRight, active, image, emptyText, loading, loadingTe
       <div className="relative flex flex-1 items-center justify-center" style={{ width: '100%', background: C.panelBg, minHeight: 0 }}>
         {video ? (
           <CroppedVideo videoRef={video} viewport={videoViewport ?? null} />
+        ) : image && imageOverlay ? (
+          // 오버레이(클릭 선택)는 이미지의 실제 표시 영역과 정확히 겹쳐야 한다
+          // - 컨테이너 전체가 아니라 이미지 비율 박스 안에 이미지+캔버스를 함께 넣는다
+          <AspectFitBox src={image}>{imageOverlay}</AspectFitBox>
         ) : image ? (
           <img src={image} alt="" className="h-full w-full object-contain" draggable={false} />
         ) : (
@@ -706,7 +822,6 @@ function Panel({ label, labelRight, active, image, emptyText, loading, loadingTe
             <span style={{ fontSize: 11, color: '#aaa' }}>{loadingText ?? '렌더링 중... (20~60초)'}</span>
           </div>
         )}
-        {imageOverlay}
       </div>
 
       {/* Prompt / Negative 탭 */}
@@ -797,6 +912,42 @@ function CroppedVideo({ videoRef, viewport }: {
 }
 
 
+// 이미지 비율에 맞춘 컨테인 박스: 이미지와 오버레이(캔버스)가 픽셀 단위로 정확히 겹친다
+// (object-contain 이미지 위에 inset-0 캔버스를 얹으면 레터박스만큼 어긋난다)
+function AspectFitBox({ src, children }: { src: string; children: React.ReactNode }) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [nat, setNat] = useState<{ w: number; h: number } | null>(null)
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
+
+  useEffect(() => {
+    setNat(null)
+    const img = new Image()
+    img.onload = () => setNat({ w: img.naturalWidth, h: img.naturalHeight })
+    img.src = src
+  }, [src])
+
+  useEffect(() => {
+    if (!nat) return
+    const container = wrapRef.current?.parentElement
+    if (!container) return
+    const compute = () => {
+      const scale = Math.min(container.clientWidth / nat.w, container.clientHeight / nat.h)
+      setDims({ w: Math.floor(nat.w * scale), h: Math.floor(nat.h * scale) })
+    }
+    compute()
+    const ro = new ResizeObserver(compute)
+    ro.observe(container)
+    return () => ro.disconnect()
+  }, [nat])
+
+  return (
+    <div ref={wrapRef} className="relative" style={dims ? { width: dims.w, height: dims.h } : undefined}>
+      {dims && <img src={src} alt="" className="absolute inset-0 h-full w-full" draggable={false} />}
+      {dims && children}
+    </div>
+  )
+}
+
 // ── 클릭 영역 선택 오버레이 (오브젝트 ID 마스크 기반) ─────────────────────────
 // 호버: 해당 재질 영역 하이라이트 / 클릭: 선택 토글 (여러 영역 가능)
 function MaskSelectOverlay() {
@@ -835,30 +986,51 @@ function MaskSelectOverlay() {
     return `#${[d[0], d[1], d[2]].map((v) => v.toString(16).padStart(2, '0')).join('')}`
   }
 
-  // 근사 매칭 (안티앨리어싱/압축 오차 허용)
-  const near = (a: number, b: number) => Math.abs(a - b) <= 14
+  // 근사 매칭 (재질 단위 마스크: 색이 비슷한 다른 재질과 섞이지 않게 좁은 허용오차)
+  const near = (a: number, b: number) => Math.abs(a - b) <= 3
   const matches = (d: Uint8ClampedArray, i: number, hex: string) => {
     const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), bl = parseInt(hex.slice(5, 7), 16)
     return near(d[i], r) && near(d[i + 1], g) && near(d[i + 2], bl)
   }
 
+  // 선택 표시: 어떤 마스크 색 위에서도 확실히 보이도록
+  // - 선택 있음: 선택 부위만 원색 그대로(밝게) + 흰 테두리, 나머지는 어둡게 덮음
+  // - 선택 없음: 호버 부위만 흰색 하이라이트
   const redraw = (selected: string[], hover: string | null) => {
     const cv = canvasRef.current
     const mc = maskCanvasRef.current
     if (!cv || !mc) return
-    cv.width = mc.width
-    cv.height = mc.height
+    const W = mc.width, H = mc.height
+    cv.width = W
+    cv.height = H
     const ctx = cv.getContext('2d')!
-    ctx.clearRect(0, 0, cv.width, cv.height)
-    const src = mc.getContext('2d')!.getImageData(0, 0, mc.width, mc.height)
-    const out = ctx.createImageData(mc.width, mc.height)
-    for (let i = 0; i < src.data.length; i += 4) {
-      const isSel = selected.some((c) => matches(src.data, i, c))
-      const isHov = hover ? matches(src.data, i, hover) : false
-      if (isSel) { // 선택: 틸 반투명
-        out.data[i] = 0; out.data[i + 1] = 201; out.data[i + 2] = 167; out.data[i + 3] = 110
-      } else if (isHov) { // 호버: 흰색 반투명
-        out.data[i] = 255; out.data[i + 1] = 255; out.data[i + 2] = 255; out.data[i + 3] = 70
+    ctx.clearRect(0, 0, W, H)
+    const src = mc.getContext('2d')!.getImageData(0, 0, W, H)
+    const out = ctx.createImageData(W, H)
+    const n = W * H
+    const sel = new Uint8Array(n)
+    const hov = new Uint8Array(n)
+    for (let p = 0; p < n; p++) {
+      const i = p * 4
+      if (selected.length && selected.some((c) => matches(src.data, i, c))) sel[p] = 1
+      if (hover && matches(src.data, i, hover)) hov[p] = 1
+    }
+    for (let p = 0; p < n; p++) {
+      const i = p * 4
+      if (selected.length === 0) {
+        if (hov[p]) { out.data[i] = 255; out.data[i + 1] = 255; out.data[i + 2] = 255; out.data[i + 3] = 90 }
+        continue
+      }
+      if (sel[p]) {
+        // 선택 부위: 경계엔 흰 테두리, 내부는 덮지 않음(원색 그대로 밝게 보임)
+        const x = p % W, y = (p / W) | 0
+        const edge = (x > 0 && !sel[p - 1]) || (x < W - 1 && !sel[p + 1]) ||
+                     (y > 0 && !sel[p - W]) || (y < H - 1 && !sel[p + W])
+        if (edge) { out.data[i] = 255; out.data[i + 1] = 255; out.data[i + 2] = 255; out.data[i + 3] = 255 }
+      } else {
+        // 비선택 부위: 어둡게 (호버 중인 부위는 덜 어둡게 - 다음 선택 미리보기)
+        out.data[i] = 0; out.data[i + 1] = 0; out.data[i + 2] = 0
+        out.data[i + 3] = hov[p] ? 70 : 150
       }
     }
     ctx.putImageData(out, 0, 0)
@@ -866,14 +1038,26 @@ function MaskSelectOverlay() {
 
   useEffect(() => { redraw(s.selectedColors, hoverColor) }, [s.selectedColors, hoverColor]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectedNames = s.selectedColors
-    .map((c) => s.maskMap.find((m) => m.color.toLowerCase() === c.toLowerCase())?.material ?? c)
+  const selectedNames = s.selectedColors.map((c) => {
+    const exact = s.maskMap.find((m) => m.color.toLowerCase() === c.toLowerCase())
+    if (exact) return exact.material
+    // 정확 일치 실패(셰이딩 편차 등): 가장 가까운 매핑 색의 재질명
+    const r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16)
+    let best: string | null = null
+    let bestD = 60 * 60
+    for (const m of s.maskMap) {
+      const mr = parseInt(m.color.slice(1, 3), 16), mg = parseInt(m.color.slice(3, 5), 16), mb = parseInt(m.color.slice(5, 7), 16)
+      const d = (r - mr) ** 2 + (g - mg) ** 2 + (b - mb) ** 2
+      if (d < bestD) { bestD = d; best = m.material }
+    }
+    return best ?? '선택 영역'
+  })
 
   return (
     <>
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 h-full w-full cursor-crosshair"
+        className="absolute inset-0 h-full w-full cursor-pointer"
         style={{ imageRendering: 'pixelated' }}
         onMouseMove={(e) => setHoverColor(colorAt(e.clientX, e.clientY))}
         onMouseLeave={() => setHoverColor(null)}
@@ -907,23 +1091,52 @@ function MaskSelectOverlay() {
 }
 
 // 선택 영역 -> 흑백 마스크 PNG (AI 입력용: 흰색=선택)
+// 선택 픽셀을 몇 px 팽창(dilate)시켜, 마스크 캡처와 렌더 캡처 사이의 미세 정렬 오차로
+// 경계에서 인접 재질이 새어나오는 것을 방지한다.
 export function buildSelectionMask(maskUri: string, colors: string[]): Promise<string | null> {
   return new Promise((resolve) => {
     const img = new Image()
     img.onload = () => {
+      const W = img.naturalWidth, H = img.naturalHeight
       const c = document.createElement('canvas')
-      c.width = img.naturalWidth
-      c.height = img.naturalHeight
+      c.width = W
+      c.height = H
       const ctx = c.getContext('2d')!
       ctx.drawImage(img, 0, 0)
-      const src = ctx.getImageData(0, 0, c.width, c.height)
-      const near = (a: number, b: number) => Math.abs(a - b) <= 14
-      for (let i = 0; i < src.data.length; i += 4) {
-        const sel = colors.some((hex) => {
-          const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), bl = parseInt(hex.slice(5, 7), 16)
-          return near(src.data[i], r) && near(src.data[i + 1], g) && near(src.data[i + 2], bl)
-        })
-        const v = sel ? 255 : 0
+      const src = ctx.getImageData(0, 0, W, H)
+      const near = (a: number, b: number) => Math.abs(a - b) <= 3
+      const targets = colors.map((hex) => [
+        parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16),
+      ])
+      // 1) 원본 선택 비트맵
+      const sel = new Uint8Array(W * H)
+      for (let p = 0; p < W * H; p++) {
+        const i = p * 4
+        if (targets.some(([r, g, b]) => near(src.data[i], r) && near(src.data[i + 1], g) && near(src.data[i + 2], b))) {
+          sel[p] = 1
+        }
+      }
+      // 2) 팽창 (radius px): 선택 경계를 바깥으로 넓혀 이음새 누출 제거
+      const R = 3
+      const out = new Uint8Array(W * H)
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          if (!sel[y * W + x]) continue
+          out[y * W + x] = 1
+          for (let dy = -R; dy <= R; dy++) {
+            const ny = y + dy
+            if (ny < 0 || ny >= H) continue
+            for (let dx = -R; dx <= R; dx++) {
+              const nx = x + dx
+              if (nx < 0 || nx >= W) continue
+              if (dx * dx + dy * dy <= R * R) out[ny * W + nx] = 1
+            }
+          }
+        }
+      }
+      // 3) 흑백 PNG 출력
+      for (let p = 0; p < W * H; p++) {
+        const i = p * 4, v = out[p] ? 255 : 0
         src.data[i] = v; src.data[i + 1] = v; src.data[i + 2] = v; src.data[i + 3] = 255
       }
       ctx.putImageData(src, 0, 0)
@@ -932,4 +1145,52 @@ export function buildSelectionMask(maskUri: string, colors: string[]): Promise<s
     img.onerror = () => resolve(null)
     img.src = maskUri
   })
+}
+
+function loadImageElement(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(null)
+    img.src = src
+  })
+}
+
+async function compositeMasked(baseImage: string, editedImage: string, maskImage: string): Promise<string | null> {
+  const [base, edited, mask] = await Promise.all([
+    loadImageElement(baseImage),
+    loadImageElement(editedImage),
+    loadImageElement(maskImage),
+  ])
+  if (!base || !edited || !mask) return null
+
+  const canvas = document.createElement('canvas')
+  canvas.width = edited.naturalWidth || base.naturalWidth
+  canvas.height = edited.naturalHeight || base.naturalHeight
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  ctx.drawImage(base, 0, 0, canvas.width, canvas.height)
+  const baseData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(edited, 0, 0, canvas.width, canvas.height)
+  const editedData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(mask, 0, 0, canvas.width, canvas.height)
+  const maskData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+  for (let i = 0; i < baseData.data.length; i += 4) {
+    const maskValue = maskData.data[i]
+    if (maskValue > 127) {
+      baseData.data[i] = editedData.data[i]
+      baseData.data[i + 1] = editedData.data[i + 1]
+      baseData.data[i + 2] = editedData.data[i + 2]
+      baseData.data[i + 3] = editedData.data[i + 3]
+    }
+  }
+
+  ctx.putImageData(baseData, 0, 0)
+  return canvas.toDataURL('image/png')
 }

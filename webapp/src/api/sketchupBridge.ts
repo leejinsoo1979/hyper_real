@@ -224,11 +224,16 @@ async function sendCommand(cmd: Record<string, unknown>): Promise<boolean> {
   }
 }
 
+// 낙관적 씬 고정: SketchUp이 전환을 마칠 때까지(수 초) 폴링이 옛 활성 씬으로
+// 탭을 되돌리지 않도록, 서버가 전환을 확인하거나 유예가 끝날 때까지 고정한다.
+let pendingScene: { name: string; until: number } | null = null
+
 /** SketchUp 씬 전환. 탭 하이라이트는 즉시(낙관적) 반영, 캡처는 연속 폴링으로 수신. */
 export async function selectScene(name: string): Promise<boolean> {
   // 낙관적 UI: 서버 응답을 기다리지 않고 active 탭 즉시 갱신
   const ui = useUIStore.getState()
   ui.setSketchUpScenes(ui.sketchUpScenes.map((s) => ({ ...s, active: s.name === name })))
+  pendingScene = { name, until: Date.now() + 8000 }
 
   const ok = await sendCommand({ type: 'select_scene', name })
   if (ok) {
@@ -465,7 +470,19 @@ async function pollOnce() {
     // 씬 목록 동기화 — 일시적 실패(null)면 기존 탭 유지 (탭이 깜빡이며 사라지는 문제 방지)
     const scenes = await getScenes()
     if (scenes !== null) {
-      ui.setSketchUpScenes(scenes)
+      // 전환 대기 중이면 서버가 아직 옛 씬을 활성으로 보고해도 탭을 되돌리지 않는다
+      if (pendingScene) {
+        const p = pendingScene
+        const serverActive = scenes.find((s) => s.active)?.name
+        if (serverActive === p.name || Date.now() > p.until || !scenes.some((s) => s.name === p.name)) {
+          pendingScene = null // 전환 확인됨(또는 유예 종료) - 서버 상태 수용
+          ui.setSketchUpScenes(scenes)
+        } else {
+          ui.setSketchUpScenes(scenes.map((s) => ({ ...s, active: s.name === p.name })))
+        }
+      } else {
+        ui.setSketchUpScenes(scenes)
+      }
     }
   } else {
     // SketchUp이 캡처 등으로 바빠 응답이 늦은 것일 수 있으니 보수적으로 판정

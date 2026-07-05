@@ -75,3 +75,8 @@ export const useClassicStore = create<ClassicState>((set) => ({
 
   set: (partial) => set(partial),
 }))
+
+// 개발 모드 전용: E2E 테스트에서 스토어 조작용 (프로덕션 번들엔 미포함)
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as { __classicStore?: typeof useClassicStore }).__classicStore = useClassicStore
+}

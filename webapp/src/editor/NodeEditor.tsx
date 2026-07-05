@@ -9,6 +9,7 @@ import { HistoryPage } from './pages/HistoryPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { AccountPage, TutorialPage, SupportPage } from './pages/MiscPages'
 import { RenderClassicPage } from './pages/RenderClassicPage'
+import { MaterialsPage } from './pages/MaterialsPage'
 import { useGraphStore } from '../state/graphStore'
 import { useExecutionStore } from '../state/executionStore'
 import { useCreditStore } from '../state/creditStore'
@@ -43,6 +44,7 @@ export function NodeEditor() {
   const balance = useCreditStore((s) => s.balance)
   const activeSidebarItem = useUIStore((s) => s.activeSidebarItem)
   const sketchUpStatus = useUIStore((s) => s.sketchUpStatus)
+  const materialsOpen = useUIStore((s) => s.materialLibraryOpen)
 
   // Start/stop SketchUp bridge polling
   useEffect(() => {
@@ -156,9 +158,10 @@ export function NodeEditor() {
       </div>
 
       {/* Main Area */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         {/* Left Sidebar */}
         <LeftSidebar />
+        <MaterialsPage open={materialsOpen} />
 
         {/* Center + Right */}
         <div className="flex flex-1 flex-col overflow-hidden">

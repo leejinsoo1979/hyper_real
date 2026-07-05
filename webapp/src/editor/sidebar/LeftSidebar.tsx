@@ -1,5 +1,6 @@
 import {
   Monitor,
+  Palette,
   Workflow,
   RotateCcw,
   Users,
@@ -12,13 +13,14 @@ import { useUIStore, type SidebarItem } from '../../state/uiStore'
 import { firebaseEnabled, useAuthUser } from '../../auth/firebase'
 
 interface SidebarButton {
-  id: SidebarItem
+  id: SidebarItem | 'materials'
   icon: LucideIcon
   label: string
 }
 
 const topButtons: SidebarButton[] = [
   { id: 'render', icon: Monitor, label: 'Render' },
+  { id: 'materials', icon: Palette, label: 'Materials' },
   { id: 'nodes', icon: Workflow, label: 'Nodes' },
   { id: 'history', icon: RotateCcw, label: 'History' },
   { id: 'account', icon: Users, label: 'Account' },
@@ -33,12 +35,21 @@ const bottomButtons: SidebarButton[] = [
 function SidebarIcon({ button }: { button: SidebarButton }) {
   const activeSidebarItem = useUIStore((s) => s.activeSidebarItem)
   const setActiveSidebarItem = useUIStore((s) => s.setActiveSidebarItem)
-  const isActive = activeSidebarItem === button.id
+  const materialLibraryOpen = useUIStore((s) => s.materialLibraryOpen)
+  const toggleMaterialLibrary = useUIStore((s) => s.toggleMaterialLibrary)
+  const isMaterialButton = button.id === 'materials'
+  const isActive = isMaterialButton ? materialLibraryOpen : activeSidebarItem === button.id
   const Icon = button.icon
 
   return (
     <button
-      onClick={() => setActiveSidebarItem(button.id)}
+      onClick={() => {
+        if (isMaterialButton) {
+          toggleMaterialLibrary()
+          return
+        }
+        setActiveSidebarItem(button.id as SidebarItem)
+      }}
       className="relative my-0.5 flex flex-col items-center justify-center self-center"
       style={{
         height: 62,
