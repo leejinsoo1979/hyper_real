@@ -271,7 +271,7 @@ export interface MaskData {
 export async function captureMask(): Promise<MaskData | null> {
   const before = await fetchMaskOnce()
   await sendCommand({ type: 'capture_mask' })
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 90; i++) {
     await new Promise((r) => setTimeout(r, 500))
     const now = await fetchMaskOnce()
     if (now && (!before || now.timestamp !== before.timestamp)) {

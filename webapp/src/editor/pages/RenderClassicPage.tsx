@@ -291,7 +291,7 @@ export function RenderClassicPage() {
       st.set({ selectMode: false, selectedColors: [], statusText: 'Ready' })
       return
     }
-    st.set({ selectMode: true, sourceLoading: true, statusText: '영역 마스크 생성 중... (2~4초)' })
+    st.set({ selectMode: true, sourceLoading: true, statusText: '영역 마스크 생성 중... (모델 크기에 따라 최대 30초, SketchUp이 잠시 멈춘 것처럼 보일 수 있음)' })
     const m = await captureMask()
     if (m) {
       useClassicStore.getState().set({ maskUri: m.uri, maskMap: m.map, sourceLoading: false, statusText: '바꿀 부위를 클릭하세요' })
