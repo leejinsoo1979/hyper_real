@@ -179,7 +179,7 @@ export function LandingPage() {
               onClick={goApp}
               style={{ padding: '15px 34px', borderRadius: 12, background: TEAL, color: '#06251f', fontSize: 16, fontWeight: 800 }}
             >
-              무료로 시작하기
+              Start
             </button>
             <a
               href="/downloads/NanoBananaRenderer_v1.0.5.rbz"
@@ -239,7 +239,7 @@ export function LandingPage() {
           </div>
           <div className="flex gap-3">
             <button onClick={goApp} style={{ padding: '11px 22px', borderRadius: 9, background: TEAL, color: '#06251f', fontSize: 13.5, fontWeight: 700 }}>
-              앱 시작하기
+              Start
             </button>
             <a href="/downloads/NanoBananaRenderer_v1.0.5.rbz" download style={{ padding: '11px 22px', borderRadius: 9, border: '1px solid #2c2c38', color: '#ccc', fontSize: 13.5, fontWeight: 600, textDecoration: 'none' }}>
               플러그인 다운로드
