@@ -42,13 +42,27 @@
       // Render 버튼은 onConvertComplete에서 활성화
     }
 
-    // Convert 진행 상황 업데이트 (Ruby에서 호출)
-    function updateConvertProgress(stage, detail) {
+    // Convert 진행 상황 업데이트 (Ruby 콜백 + 내부 진행률 공용)
+    function updateConvertProgress(progressOrStage, textOrDetail, subtext) {
+      if (typeof progressOrStage === 'number') {
+        const percentEl = document.getElementById('loading-percent-source');
+        const subtextEl = document.getElementById('loading-subtext-source');
+        const barEl = document.getElementById('loading-bar-source');
+
+        if (percentEl) percentEl.textContent = progressOrStage + '%';
+        if (subtextEl) subtextEl.textContent = subtext || textOrDetail || '';
+        if (barEl) {
+          barEl.classList.remove('indeterminate');
+          barEl.style.width = progressOrStage + '%';
+        }
+        return;
+      }
+
       const loadingText = el.loadingSource.querySelector('.loading-text');
       const loadingSubtext = el.loadingSource.querySelector('.loading-subtext');
-      if (loadingText) loadingText.textContent = stage;
-      if (loadingSubtext) loadingSubtext.textContent = detail;
-      setStatus(stage + ' - ' + detail);
+      if (loadingText) loadingText.textContent = progressOrStage;
+      if (loadingSubtext) loadingSubtext.textContent = textOrDetail;
+      setStatus(progressOrStage + ' - ' + textOrDetail);
     }
 
     // Convert 에러 (Ruby에서 호출)
@@ -563,19 +577,6 @@
       { percent: 95, text: 'Converting', subtext: 'Almost done' }
     ];
     let convertStepIndex = 0;
-
-    function updateConvertProgress(percent, text, subtext) {
-      const percentEl = document.getElementById('loading-percent-source');
-      const subtextEl = document.getElementById('loading-subtext-source');
-      const barEl = document.getElementById('loading-bar-source');
-
-      if (percentEl) percentEl.textContent = percent + '%';
-      if (subtextEl) subtextEl.textContent = subtext;
-      if (barEl) {
-        barEl.classList.remove('indeterminate');
-        barEl.style.width = percent + '%';
-      }
-    }
 
     function startConvertProgress() {
       convertStepIndex = 0;
@@ -1246,6 +1247,255 @@
       togglePanelExpand(resultPanel, sourcePanel, btnExpandResult);
     });
 
+    // ========================================
+    // Material Library
+    // ========================================
+    const materialCategories = [
+      { id: 'Glass', name: 'Glass' },
+      { id: 'Metal', name: 'Metal' },
+      { id: 'Concrete', name: 'Concrete' },
+      { id: 'Wood', name: 'Wood' },
+      { id: 'Stones', name: 'Stones' },
+      { id: 'Brick', name: 'Brick' },
+      { id: 'Ground', name: 'Ground' },
+      { id: 'Plastic', name: 'Plastic' },
+      { id: 'Wall coverings', name: 'Wall coverings' },
+      { id: 'Roof coverings', name: 'Roof coverings' },
+      { id: 'Ceilings', name: 'Ceilings' },
+      { id: 'Grids', name: 'Grids' },
+      { id: 'Marble and granite', name: 'Marble and granite' },
+      { id: 'Tiles', name: 'Tiles' }
+    ];
+
+    const materialLibrary = [
+      { id: 'clear-glass-01', name: 'Clear glass 01', category: 'Glass', meta: 'Transparent', colors: ['#d9f0f7', '#8ab5c4', '#f7ffff'], description: 'Clear architectural glass, transparent material, subtle blue tint, realistic reflections' },
+      { id: 'frosted-glass-01', name: 'Frosted glass 01', category: 'Glass', meta: 'Matte', colors: ['#cfd8dc', '#eef4f5', '#8fa1aa'], description: 'Frosted translucent glass, soft matte surface, diffused reflections, privacy glass finish' },
+      { id: 'brushed-brass', name: 'Brushed brass 01', category: 'Metal', meta: 'Warm metal', colors: ['#8c642b', '#d0a24a', '#5f431f'], description: 'Brushed brass metal, warm golden tone, satin reflection, fine linear grain' },
+      { id: 'black-steel', name: 'Black steel 01', category: 'Metal', meta: 'Powder coated', colors: ['#0f1112', '#2b2f31', '#555b5e'], description: 'Matte black powder coated steel, subtle edge highlights, modern architectural metal finish' },
+      { id: 'raw-concrete', name: 'Raw concrete 01', category: 'Concrete', meta: 'Matte', colors: ['#77736b', '#a19d92', '#4d4b46'], description: 'Raw architectural concrete, matte surface, subtle trowel marks, realistic mineral texture' },
+      { id: 'microcement', name: 'Microcement 01', category: 'Concrete', meta: 'Seamless', colors: ['#9a9488', '#c4beb2', '#6f6a62'], description: 'Seamless warm grey microcement, smooth matte finish, subtle handcrafted tonal variation' },
+      { id: 'oak-herringbone', name: 'Oak herringbone 01', category: 'Wood', meta: 'Flooring', colors: ['#8a5f34', '#c79b62', '#6e4525'], description: 'Herringbone oak wood flooring, warm natural tone, matte finish, visible grain, premium interior material' },
+      { id: 'walnut-panel', name: 'Dark walnut 01', category: 'Wood', meta: 'Panel', colors: ['#2b1810', '#5a351f', '#8a5b37'], description: 'Dark walnut wood veneer, satin finish, deep brown natural grain, high-end architectural wall panel' },
+      { id: 'travertine', name: 'Travertine 01', category: 'Stones', meta: 'Honed', colors: ['#b69b79', '#d5c1a0', '#8e765b'], description: 'Natural travertine stone, honed beige surface, subtle horizontal pores and veins, luxury interior finish' },
+      { id: 'limestone', name: 'Limestone 01', category: 'Stones', meta: 'Natural', colors: ['#a69a85', '#d2c7b2', '#7b725f'], description: 'Natural limestone stone, soft beige grey color, honed matte mineral surface' },
+      { id: 'clean-brick-01', name: 'Clean brick 01', category: 'Brick', meta: 'Clean', colors: ['#8b3f2d', '#c56f54', '#f0c5aa'], description: 'Clean red brick wall material, regular mortar joints, crisp architectural masonry texture' },
+      { id: 'clean-brick-02', name: 'Clean brick 02', category: 'Brick', meta: 'Clean', colors: ['#9a4b36', '#d98d6b', '#f4d3bd'], description: 'Clean warm brick material, light mortar joints, realistic brick masonry pattern' },
+      { id: 'dirty-brick-01', name: 'Dirty brick 01', category: 'Brick', meta: 'Weathered', colors: ['#b96e5b', '#f1dfd6', '#6b4a42'], description: 'Weathered dirty brick wall, faded red clay, white worn mortar, aged exterior masonry' },
+      { id: 'painted-brick-01', name: 'Painted brick 01', category: 'Brick', meta: 'Painted', colors: ['#ebe7df', '#cfc8bd', '#9d9488'], description: 'Painted white brick wall, visible brick relief, matte worn paint finish' },
+      { id: 'rough-brick-01', name: 'Rough brick 01', category: 'Brick', meta: 'Rough', colors: ['#6d3a32', '#9a5648', '#33414a'], description: 'Rough aged brick, uneven clay tones, dark weathering, realistic exterior texture' },
+      { id: 'round-brick-01', name: 'Round brick 01', category: 'Brick', meta: 'Pattern', colors: ['#b7b5ae', '#dedbd1', '#78736d'], description: 'Rounded light brick pattern, soft grey mortar, decorative masonry surface' },
+      { id: 'grass-ground-01', name: 'Grass ground 01', category: 'Ground', meta: 'Landscape', colors: ['#284a24', '#5f8a3a', '#1d2b18'], description: 'Natural grass ground material, dense green landscape texture, outdoor architectural site surface' },
+      { id: 'gravel-ground-01', name: 'Gravel ground 01', category: 'Ground', meta: 'Landscape', colors: ['#6f6a61', '#aaa092', '#3d3a35'], description: 'Fine gravel ground surface, mixed grey stones, realistic outdoor path material' },
+      { id: 'white-plastic-01', name: 'White plastic 01', category: 'Plastic', meta: 'Matte', colors: ['#f1f0ea', '#c8c8c2', '#ffffff'], description: 'Matte white plastic, smooth manufactured surface, subtle soft reflections' },
+      { id: 'black-plastic-01', name: 'Black plastic 01', category: 'Plastic', meta: 'Satin', colors: ['#121212', '#363638', '#050505'], description: 'Satin black plastic, smooth modern surface, controlled soft reflection' },
+      { id: 'linen-wall-01', name: 'Linen wall 01', category: 'Wall coverings', meta: 'Textile', colors: ['#b7aa98', '#e0d5c5', '#8f8372'], description: 'Natural linen wall covering, soft woven texture, warm neutral beige, realistic textile surface' },
+      { id: 'wallpaper-01', name: 'Wallpaper 01', category: 'Wall coverings', meta: 'Patterned', colors: ['#5d6470', '#c1b8a9', '#2d3137'], description: 'Premium patterned wallpaper, subtle decorative lines, matte interior wall covering' },
+      { id: 'slate-roof-01', name: 'Slate roof 01', category: 'Roof coverings', meta: 'Slate', colors: ['#31363a', '#596167', '#191c1e'], description: 'Dark slate roof covering, overlapping shingles, realistic exterior roofing material' },
+      { id: 'clay-roof-01', name: 'Clay roof 01', category: 'Roof coverings', meta: 'Clay', colors: ['#7f3521', '#c2643c', '#4a1d12'], description: 'Terracotta clay roof tiles, curved overlapping pattern, warm exterior roofing material' },
+      { id: 'acoustic-ceiling-01', name: 'Acoustic ceiling 01', category: 'Ceilings', meta: 'Panel', colors: ['#d8d5cd', '#f0eee8', '#a5a198'], description: 'White acoustic ceiling panels, fine perforated texture, clean commercial interior finish' },
+      { id: 'linear-ceiling-01', name: 'Linear ceiling 01', category: 'Ceilings', meta: 'Slats', colors: ['#b08a5f', '#d2b083', '#6d4b2f'], description: 'Linear wood slat ceiling, warm timber strips, modern architectural ceiling finish' },
+      { id: 'metal-grid-01', name: 'Metal grid 01', category: 'Grids', meta: 'Mesh', colors: ['#22272b', '#707982', '#111315'], description: 'Dark metal grid mesh, regular square pattern, industrial architectural screen material' },
+      { id: 'white-grid-01', name: 'White grid 01', category: 'Grids', meta: 'Panel', colors: ['#d9d9d3', '#ffffff', '#9d9d98'], description: 'White architectural grid panel, clean regular divisions, bright interior screen surface' },
+      { id: 'calacatta', name: 'Calacatta 01', category: 'Marble and granite', meta: 'Marble', colors: ['#f2eee7', '#c9c0b6', '#8f867c'], description: 'Calacatta white marble, polished surface, soft grey veining, luxury stone slab' },
+      { id: 'black-granite-01', name: 'Black granite 01', category: 'Marble and granite', meta: 'Granite', colors: ['#111111', '#4b4b4b', '#88847c'], description: 'Polished black granite, subtle mineral speckles, high-end stone countertop material' },
+      { id: 'terracotta-tile', name: 'Terracotta tile 01', category: 'Tiles', meta: 'Ceramic', colors: ['#9c4e2c', '#c76f42', '#6f321e'], description: 'Handmade terracotta ceramic tile, warm clay color, slight irregularity, matte rustic finish' },
+      { id: 'green-zellige', name: 'Green zellige 01', category: 'Tiles', meta: 'Glossy', colors: ['#16493e', '#2f7965', '#0d2d26'], description: 'Glossy green zellige tile, handmade ceramic, uneven surface reflections, artisanal wall finish' }
+    ];
+
+    let materialCategory = null;
+    let selectedMaterialId = null;
+
+    function initMaterialLibrary() {
+      const search = document.getElementById('material-library-search');
+      const back = document.getElementById('material-library-back');
+      if (!search || search.dataset.ready) return;
+
+      search.addEventListener('input', renderMaterialLibrary);
+      if (back) {
+        back.addEventListener('click', () => {
+          materialCategory = null;
+          search.value = '';
+          renderMaterialLibrary();
+        });
+      }
+
+      search.dataset.ready = 'true';
+      renderMaterialLibrary();
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[char]));
+    }
+
+    function materialCategoryIcon(category) {
+      const common = {
+        Glass: '<rect x="5" y="3" width="14" height="18"></rect><path d="M8 8l4-4M8 14l7-7M13 17l4-4"></path>',
+        Metal: '<rect x="4" y="4" width="16" height="16"></rect><path d="M8 9c1-2 3-2 4 0s3 2 4 0M8 14c1-2 3-2 4 0s3 2 4 0M8 19c1-2 3-2 4 0s3 2 4 0"></path>',
+        Concrete: '<rect x="4" y="4" width="16" height="16"></rect><path d="M8 8h.01M12 8h.01M16 8h.01M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"></path>',
+        Wood: '<rect x="4" y="3" width="16" height="18"></rect><path d="M8 4c3 4-2 7 1 16M13 4c-2 5 4 8 0 16M17 4c-1 4 2 8 0 16"></path>',
+        Stones: '<path d="M5 8l4-2 5 1 5 3-1 4-5 3-6-1-3-4 1-4Z"></path><path d="M6 15l5-3 7 1M9 6l2 6"></path>',
+        Brick: '<rect x="4" y="5" width="16" height="14"></rect><path d="M4 10h16M4 15h16M9 5v5M15 10v5M9 15v4"></path>',
+        Ground: '<path d="M4 15h16M7 12h7M4 18h8M9 15c0-4 4-4 4-8"></path>',
+        Plastic: '<rect x="5" y="4" width="14" height="16"></rect><path d="M8 5c5 4 3 8 8 14M13 5c-3 5 3 8-1 14"></path>',
+        'Wall coverings': '<rect x="5" y="3" width="14" height="18"></rect><path d="M8 19V8l8-4v15M8 12h8M11 6v6"></path>',
+        'Roof coverings': '<path d="M5 18c0-4 3-4 3-8 0 4 3 4 3 8 0-4 3-4 3-8 0 4 3 4 3 8"></path><path d="M5 10h14M5 14h14"></path>',
+        Ceilings: '<path d="M4 7h16M4 10h16M12 10v6"></path><path d="M9 17a3 3 0 0 1 6 0"></path>',
+        Grids: '<rect x="4" y="4" width="16" height="16"></rect><path d="M4 9h16M4 14h16M9 4v16M14 4v16"></path>',
+        'Marble and granite': '<rect x="4" y="4" width="16" height="16"></rect><path d="M7 18c5-4 2-8 9-12M6 9c4 0 4-4 9-4M11 20c0-5 5-5 6-9"></path>',
+        Tiles: '<rect x="4" y="4" width="16" height="16"></rect><path d="M4 10h16M10 4v16M14 14l4 4 4-4-4-4-4 4Z"></path>'
+      };
+      return `<svg viewBox="0 0 24 24">${common[category] || common.Concrete}</svg>`;
+    }
+
+    function materialSwatchStyle(material) {
+      return `background-image: url(${createMaterialTexture(material)});`;
+    }
+
+    function renderMaterialLibrary() {
+      const panel = document.getElementById('material-library-panel');
+      const grid = document.getElementById('material-library-grid');
+      const search = document.getElementById('material-library-search');
+      const breadcrumb = document.getElementById('material-library-breadcrumb');
+      const back = document.getElementById('material-library-back');
+      if (!grid) return;
+
+      const isDetail = Boolean(materialCategory);
+      if (panel) panel.classList.toggle('material-detail-view', isDetail);
+      if (breadcrumb) breadcrumb.textContent = isDetail ? `Library > Materials > ${materialCategory}` : 'Library > Materials';
+      if (back) back.classList.toggle('hidden', !isDetail);
+
+      if (!isDetail) {
+        grid.innerHTML = materialCategories.map(category => `
+          <button class="material-category-card" data-category="${escapeHtml(category.id)}" title="${escapeHtml(category.name)}">
+            <div class="material-category-icon">${materialCategoryIcon(category.id)}</div>
+            <div class="material-category-name">${escapeHtml(category.name)}</div>
+          </button>
+        `).join('');
+
+        grid.querySelectorAll('.material-category-card').forEach(card => {
+          card.addEventListener('click', () => {
+            materialCategory = card.dataset.category;
+            if (search) search.value = '';
+            renderMaterialLibrary();
+          });
+        });
+        return;
+      }
+
+      const query = (search?.value || '').trim().toLowerCase();
+      const visible = materialLibrary.filter(material => {
+        const categoryMatch = material.category === materialCategory;
+        const queryMatch = !query ||
+          material.name.toLowerCase().includes(query) ||
+          material.category.toLowerCase().includes(query) ||
+          material.description.toLowerCase().includes(query);
+        return categoryMatch && queryMatch;
+      });
+
+      if (!visible.length) {
+        grid.innerHTML = '<div class="material-library-empty">No materials found.</div>';
+        return;
+      }
+
+      grid.innerHTML = visible.map(material => `
+        <button class="material-card ${selectedMaterialId === material.id ? 'selected' : ''}" data-material-id="${material.id}" title="Use ${material.name}">
+          <div class="material-swatch" style="${materialSwatchStyle(material)}"></div>
+          <div class="material-card-body">
+            <div class="material-card-name">${escapeHtml(material.name)}</div>
+            <div class="material-card-meta">${escapeHtml(material.meta)}</div>
+          </div>
+        </button>
+      `).join('');
+
+      grid.querySelectorAll('.material-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const material = materialLibrary.find(item => item.id === card.dataset.materialId);
+          if (material) useMaterialPreset(material);
+        });
+      });
+    }
+
+    function createMaterialTexture(material) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      const c = material.colors;
+
+      const gradient = ctx.createLinearGradient(0, 0, 512, 512);
+      gradient.addColorStop(0, c[0]);
+      gradient.addColorStop(0.5, c[1]);
+      gradient.addColorStop(1, c[2]);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 512, 512);
+
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = '#ffffff';
+      for (let i = -512; i < 512; i += material.category === 'Brick' ? 78 : 32) {
+        ctx.beginPath();
+        if (['Brick', 'Tiles', 'Grids'].includes(material.category)) {
+          ctx.moveTo(i, 0);
+          ctx.lineTo(i, 512);
+          ctx.moveTo(0, i);
+          ctx.lineTo(512, i);
+        } else {
+          ctx.moveTo(i, 0);
+          ctx.lineTo(i + 512, 512);
+        }
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha = 0.16;
+      ctx.strokeStyle = '#000000';
+      for (let i = 0; i < 512; i += 64) {
+        ctx.beginPath();
+        if (['Wood', 'Wall coverings', 'Roof coverings'].includes(material.category)) {
+          ctx.moveTo(i, 0);
+          ctx.bezierCurveTo(i + 28, 140, i - 28, 320, i + 18, 512);
+        } else {
+          ctx.moveTo(0, i);
+          ctx.bezierCurveTo(140, i + 28, 320, i - 28, 512, i + 18);
+        }
+        ctx.stroke();
+      }
+
+      return canvas.toDataURL('image/png');
+    }
+
+    function useMaterialPreset(material) {
+      selectedMaterialId = material.id;
+      renderMaterialLibrary();
+
+      if (currentMode !== 'mix') switchToMixMode();
+
+      document.querySelectorAll('.mix-mode-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.mixmode === 'material');
+      });
+      if (typeof switchMixSubMode === 'function') switchMixSubMode('material');
+
+      const dataUrl = createMaterialTexture(material);
+      const base64 = dataUrl.split(',')[1];
+      mixState.materialImage = base64;
+
+      const preview = document.getElementById('mix-material-preview');
+      const upload = document.getElementById('mix-upload-material');
+      const description = document.getElementById('mix-material-description');
+      if (preview) {
+        preview.src = dataUrl;
+        preview.classList.remove('hidden');
+      }
+      if (upload) upload.classList.add('has-image');
+      if (description) description.value = material.description;
+      if (typeof updateMixApplyButton === 'function') updateMixApplyButton();
+      if (typeof setMixStatus === 'function') setMixStatus('Material selected: ' + material.name);
+    }
+
     // 아이콘 메뉴 클릭 이벤트
     document.querySelectorAll('.icon-menu-item').forEach(item => {
       item.addEventListener('click', () => {
@@ -1267,6 +1517,9 @@
           case 'menu-mix':
             // Mix 모드로 전환 (팝업 대신 인라인)
             switchToMixMode();
+            break;
+          case 'menu-materials':
+            switchToMaterialLibraryMode();
             break;
           case 'menu-history':
             // 히스토리 패널
@@ -1294,6 +1547,7 @@
       // Render 모드 UI 표시
       document.getElementById('render-sidebar').style.display = 'flex';
       document.getElementById('render-main-area').style.display = 'flex';
+      document.getElementById('material-library-panel').classList.remove('active');
 
       // Mix 모드 UI 숨김
       document.getElementById('mix-mode-panel').classList.remove('active');
@@ -1317,6 +1571,7 @@
       // Render 모드 UI 숨김
       document.getElementById('render-sidebar').style.display = 'none';
       document.getElementById('render-main-area').style.display = 'none';
+      document.getElementById('material-library-panel').classList.remove('active');
 
       // Node 모드 UI 숨김 + Enlarge 모드 리셋
       document.getElementById('node-editor-container').classList.remove('active');
@@ -1335,6 +1590,28 @@
       setMixStatus('Mix Mode - ' + mixState.mode);
     }
 
+    function switchToMaterialLibraryMode() {
+      if (currentMode === 'materials') return;
+      currentMode = 'materials';
+
+      document.getElementById('render-sidebar').style.display = 'none';
+      document.getElementById('render-main-area').style.display = 'flex';
+
+      document.getElementById('mix-mode-panel').classList.remove('active');
+      document.getElementById('mix-main-area').classList.remove('active');
+      document.getElementById('mix-options-panel').classList.remove('active');
+
+      document.getElementById('node-editor-container').classList.remove('active');
+      document.getElementById('node-enlarged-preview').classList.remove('active');
+      document.getElementById('node-canvas-area').classList.remove('minimized');
+      document.querySelector('.node-inspector-preview').classList.remove('minimap-mode');
+      document.getElementById('node-enlarge-btn').classList.remove('active');
+
+      document.getElementById('material-library-panel').classList.add('active');
+      initMaterialLibrary();
+      setStatus('Material Library');
+    }
+
     function switchToNodeMode() {
       if (currentMode === 'node') return;
       currentMode = 'node';
@@ -1342,6 +1619,7 @@
       // Render 모드 UI 숨김
       document.getElementById('render-sidebar').style.display = 'none';
       document.getElementById('render-main-area').style.display = 'none';
+      document.getElementById('material-library-panel').classList.remove('active');
 
       // Mix 모드 UI 숨김
       document.getElementById('mix-mode-panel').classList.remove('active');

@@ -329,55 +329,39 @@ module NanoBanana
       puts "[NanoBanana] 로컬 서버 중지"
     end
 
-    # 오브젝트 ID 마스크 캡처: 재질별 고유색 -> 캡처 -> 전체 롤백(모델 무변경)
-    MASK_PALETTE = [
-      [230, 25, 75], [60, 180, 75], [255, 225, 25], [0, 130, 200], [245, 130, 48],
-      [145, 30, 180], [70, 240, 240], [240, 50, 230], [210, 245, 60], [250, 190, 212],
-      [0, 128, 128], [220, 190, 255], [170, 110, 40], [255, 250, 200], [128, 0, 0],
-      [170, 255, 195], [128, 128, 0], [255, 215, 180], [0, 0, 128], [128, 128, 128],
-      [255, 105, 97], [119, 221, 119], [174, 198, 207], [253, 253, 150], [203, 153, 201],
-      [255, 179, 71], [100, 149, 237], [189, 236, 182], [244, 154, 194], [176, 224, 230]
-    ].freeze
-
+    # 오브젝트 ID 마스크 캡처 (태그별 색상 - 즉시/무변경)
     def capture_id_mask
       model = Sketchup.active_model
       return unless model
 
       view = model.active_view
-      ro = view.model.rendering_options
-      # 표시 옵션 백업 (abort로 복구되지 않으므로 수동 복구)
+      ro = model.rendering_options
+      # 태그별 색상 표시 모드: 모델 무변경 + 즉시 전환 (재질 색칠 방식은 대형 모델에서 수 분 프리즈)
       saved = {}
-      { 'Texture' => false, 'DisplayShadows' => false, 'EdgeDisplayMode' => 0,
-        'DrawSilhouettes' => false, 'ModelTransparency' => false }.each do |k, v|
-        begin
-          saved[k] = ro[k]
-          ro[k] = v
-        rescue StandardError
-        end
-      end
-
-      map = []
       begin
-        model.start_operation('LumanovaMask', true)
-        # 재질별 고유색 (텍스처 OFF 상태에선 color가 그대로 표시됨)
-        model.materials.each_with_index do |m, i|
-          rgb = MASK_PALETTE[i % MASK_PALETTE.length]
-          # 팔레트 초과 시 변형색으로 유일성 확보
-          rgb = rgb.map { |c| (c + (i / MASK_PALETTE.length) * 37) % 256 } if i >= MASK_PALETTE.length
-          m.color = Sketchup::Color.new(*rgb)
-          map << { color: format('#%02x%02x%02x', *rgb), material: m.display_name }
+        { 'DisplayColorByLayer' => true, 'Texture' => false,
+          'DisplayShadows' => false, 'EdgeDisplayMode' => 0 }.each do |k, v|
+          begin
+            saved[k] = ro[k]
+            ro[k] = v
+          rescue StandardError
+          end
         end
-        # 배경/기본재질 영역 식별을 위해 배경색 지정
+
+        map = model.layers.map do |l|
+          c = l.color
+          { color: format('#%02x%02x%02x', c.red, c.green, c.blue), material: l.name == 'Layer0' ? '기본' : l.name }
+        end
+
         temp_path = File.join(Dir.tmpdir, 'lumanova_mask.png')
         view.write_image(filename: temp_path, width: 960, height: 540, antialias: false, transparent: false)
         @bridge_mask_image = Base64.strict_encode64(File.binread(temp_path))
         @bridge_mask_map = map
         @bridge_mask_time = Time.now.to_i
-        puts "[NanoBanana] ID 마스크 캡처 완료 (재질 #{map.length}개)"
+        puts "[NanoBanana] ID 마스크 캡처 완료 (태그 #{map.length}개)"
       rescue StandardError => e
         puts "[NanoBanana] 마스크 캡처 에러: #{e.message}"
       ensure
-        model.abort_operation rescue nil # 재질 색 전부 롤백 - 모델 무변경
         saved.each { |k, v| ro[k] = v rescue nil }
         view.invalidate
       end
