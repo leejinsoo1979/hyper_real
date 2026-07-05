@@ -256,7 +256,7 @@ function mergeSnapshots(...groups: GraphSnapshot[][]): GraphSnapshot[] {
 
 function mergeServerSnapshotsWithLocalOriginals(serverSnapshots: GraphSnapshot[], localSnapshots: GraphSnapshot[]): GraphSnapshot[] {
   const localById = new Map(localSnapshots.map((snapshot) => [snapshot.id, snapshot]))
-  return serverSnapshots.map((serverSnapshot) => {
+  const merged = serverSnapshots.map((serverSnapshot) => {
     const localSnapshot = localById.get(serverSnapshot.id)
     if (!localSnapshot) return serverSnapshot
     return {
@@ -267,6 +267,11 @@ function mergeServerSnapshotsWithLocalOriginals(serverSnapshots: GraphSnapshot[]
         || (serverSnapshot as GraphSnapshot & { sourceThumbnail?: string }).sourceThumbnail,
     } as GraphSnapshot
   })
+  // 서버에 아직 반영 안 된 로컬 항목(방금 렌더한 것 등)을 유지 — 서버 저장은 비동기라
+  // 렌더 직후 히스토리를 열면 서버 목록에는 없다. 이를 버리면 "저장 안 됨"으로 보인다.
+  const serverIds = new Set(serverSnapshots.map((s) => s.id))
+  const localOnly = localSnapshots.filter((s) => !serverIds.has(s.id))
+  return mergeSnapshots(localOnly, merged)
 }
 
 export const useHistoryStore = create<HistoryState>((set, get) => ({
@@ -348,3 +353,8 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     // Placeholder for pagination
   },
 }))
+
+// 개발 모드 전용: E2E 테스트에서 스토어 조작용 (프로덕션 번들엔 미포함)
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as { __historyStore?: typeof useHistoryStore }).__historyStore = useHistoryStore
+}
