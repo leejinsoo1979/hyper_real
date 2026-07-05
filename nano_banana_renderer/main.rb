@@ -147,8 +147,7 @@ module NanoBanana
       menu = UI.menu('Extensions')
       submenu = menu.add_submenu(PLUGIN_NAME)
 
-      submenu.add_item('루비실행') { show_main_dialog }
-      submenu.add_item('Vizmaker 앱 열기') { open_vizmaker_app }
+      submenu.add_item('Lumanova 열기') { open_vizmaker_app }
       submenu.add_separator
       submenu.add_item('설정') { show_settings_dialog }
       submenu.add_separator
@@ -168,13 +167,8 @@ module NanoBanana
       cmd_app.large_icon = File.join(PLUGIN_ROOT, 'assets/icons/vizmaker_large.png')
       toolbar.add_item(cmd_app)
 
-      # 레거시 렌더 창 (기존 바나나 아이콘)
-      cmd_render = UI::Command.new('렌더링(레거시)') { show_main_dialog }
-      cmd_render.tooltip = 'NanoBanana 렌더링 (레거시 창)'
-      cmd_render.status_bar_text = 'AI 실사 렌더링을 시작합니다'
-      cmd_render.small_icon = File.join(PLUGIN_ROOT, 'assets/icons/render_small.png')
-      cmd_render.large_icon = File.join(PLUGIN_ROOT, 'assets/icons/render_large.png')
-      toolbar.add_item(cmd_render)
+      # 레거시 렌더 창(바나나 아이콘)은 Lumanova 앱으로 대체되어 툴바에서 제거.
+      # show_main_dialog 코드는 비상용으로 유지(메뉴/툴바 노출만 제거).
 
       toolbar.show
     end
