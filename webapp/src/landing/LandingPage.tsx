@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Nav, Footer as SiteFooter } from './shared'
 
 // ---------------------------------------------------------------------------
 // Lumanova 랜딩 페이지 — 프리미엄 SaaS 스타일
@@ -29,47 +30,6 @@ function useReveal<T extends HTMLElement>(threshold = 0.2) {
 function Logo({ size = 30 }: { size?: number }) {
   // LN 모노그램 원형 마크 (사용자 지정 로고)
   return <img src="/landing/logo-circle.png" alt="Lumanova" width={size} height={size} style={{ objectFit: 'contain', display: 'block' }} />
-}
-
-// ── 상단 네비 ──
-function Nav() {
-  const [scrolled, setScrolled] = useState(false)
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20)
-    window.addEventListener('scroll', onScroll)
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-  return (
-    <header
-      className="fixed inset-x-0 top-0 z-50 flex items-center justify-between"
-      style={{
-        padding: '16px 5vw',
-        background: scrolled ? 'rgba(8,8,11,0.82)' : 'transparent',
-        backdropFilter: scrolled ? 'blur(12px)' : 'none',
-        borderBottom: scrolled ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
-        transition: 'background .3s, border-color .3s',
-      }}
-    >
-      <div className="flex items-center gap-2.5">
-        <Logo size={30} />
-        <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.01em' }}>Lumanova</span>
-      </div>
-      <nav className="hidden items-center gap-8 md:flex" style={{ fontSize: 14, color: '#b8b8c2' }}>
-        {['Features', 'Gallery', 'Pricing', 'Docs'].map((n) => (
-          <a key={n} href="#" className="transition-colors hover:text-white">{n}</a>
-        ))}
-      </nav>
-      <div className="flex items-center gap-4">
-        <button onClick={goApp} className="hidden sm:block" style={{ fontSize: 14, color: '#d9d9e2', background: 'none' }}>Log in</button>
-        <button
-          onClick={goApp}
-          style={{ padding: '9px 20px', borderRadius: 999, background: TEAL, color: '#06251f', fontSize: 13.5, fontWeight: 700 }}
-        >
-          Get Started
-        </button>
-      </div>
-    </header>
-  )
 }
 
 // ── 히어로 ──
@@ -337,38 +297,6 @@ function CTA() {
   )
 }
 
-// ── 푸터 ──
-function Footer() {
-  return (
-    <footer style={{ borderTop: '1px solid #16161d', padding: '48px 5vw 40px', background: '#0b0b0f' }}>
-      <div className="flex flex-wrap items-start justify-between gap-8">
-        <div>
-          <div className="flex items-center gap-2.5"><Logo size={26} /><span style={{ fontSize: 17, fontWeight: 800 }}>Lumanova</span></div>
-          <p style={{ marginTop: 12, fontSize: 13, color: '#71717c', maxWidth: 260 }}>AI 기술로 상상을 현실로 만드는 차세대 렌더링 플랫폼.</p>
-        </div>
-        <div className="flex flex-wrap gap-14" style={{ fontSize: 13.5 }}>
-          {[
-            { h: 'Product', items: ['Features', 'Gallery', 'Pricing'] },
-            { h: 'Resources', items: ['Docs', 'SketchUp 플러그인', 'Discord'] },
-            { h: 'Company', items: ['About', 'Contact', 'Privacy'] },
-          ].map((col) => (
-            <div key={col.h}>
-              <p style={{ color: '#e6e6ee', fontWeight: 700, marginBottom: 12 }}>{col.h}</p>
-              {col.items.map((it) => (
-                <a key={it} href={it.includes('플러그인') ? '/api/download-rbz' : '#'} className="block" style={{ color: '#8a8a95', marginBottom: 8, textDecoration: 'none' }}>{it}</a>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="mt-10 flex flex-wrap items-center justify-between gap-4" style={{ borderTop: '1px solid #16161d', paddingTop: 20, fontSize: 12, color: '#5d5d68' }}>
-        <span>© Lumanova 2026 — All Rights Reserved</span>
-        <span className="flex gap-5"><a href="#" style={{ color: '#8a8a95' }}>Privacy Policy</a><a href="#" style={{ color: '#8a8a95' }}>Terms &amp; Conditions</a></span>
-      </div>
-    </footer>
-  )
-}
-
 export function LandingPage() {
   return (
     <div style={{ background: '#000', color: '#fff', minHeight: '100vh', overflowX: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
@@ -382,7 +310,7 @@ export function LandingPage() {
       <FeatureRow title="100% Privacy" subtitle="당신의 프로젝트는 보호받아야 합니다" body="내장된 프라이빗 모드는 원본 파일·생성 결과·프롬프트가 오직 당신의 컴퓨터에만 남도록 보장합니다." align="right" media={<Media src="/landing/privacy.webp" />} />
       <FeatureRow title="Create 3D Models" subtitle="단 한 장의 이미지로" align="left" media={<Media src="/landing/model3d.webp" />} />
       <CTA />
-      <Footer />
+      <SiteFooter />
     </div>
   )
 }
