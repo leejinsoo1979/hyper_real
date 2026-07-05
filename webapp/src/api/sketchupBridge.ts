@@ -280,10 +280,95 @@ export async function captureMask(): Promise<MaskData | null> {
     await new Promise((r) => setTimeout(r, 500))
     const now = await fetchMaskOnce()
     if (now && (!before || now.timestamp !== before.timestamp)) {
-      return { uri: toDataUri(now.mask), map: now.map }
+      return vivifyMask(toDataUri(now.mask), now.map)
     }
   }
   return null
+}
+
+// 마스크 재배색: SketchUp이 주는 재질 평균색(칙칙하고 서로 비슷할 수 있음)을
+// 재질별 쨍한 고유색으로 바꿔 칠한다 (CG 오브젝트 ID 패스 룩).
+// 매핑에 없는 픽셀(하늘/배경)은 검정. 평균색이 완전히 같은 재질들은 하나로 병합 표기.
+async function vivifyMask(
+  uri: string,
+  map: { color: string; material: string }[],
+): Promise<MaskData | null> {
+  const img = await new Promise<HTMLImageElement | null>((resolve) => {
+    const i = new Image()
+    i.onload = () => resolve(i)
+    i.onerror = () => resolve(null)
+    i.src = uri
+  })
+  if (!img) return { uri, map }
+
+  // 원본색 -> {비비드색, 재질명(병합)} 배정 (황금각 색상환: 서로 뚜렷이 구분)
+  const groups = new Map<string, string[]>()
+  for (const m of map) {
+    const k = m.color.toLowerCase()
+    const g = groups.get(k)
+    if (g) g.push(m.material)
+    else groups.set(k, [m.material])
+  }
+  const vivid = (i: number): [number, number, number] => {
+    const h = (i * 137.508) % 360
+    const s = 1 - 0.22 * (Math.floor(i / 3) % 2)
+    const v = 1 - 0.25 * (Math.floor(i / 2) % 2)
+    const c = v * s
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+    const mm = v - c
+    const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x]
+      : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
+    return [Math.round((r1 + mm) * 255), Math.round((g1 + mm) * 255), Math.round((b1 + mm) * 255)]
+  }
+  const origins: [number, number, number][] = []
+  const vivids: [number, number, number][] = []
+  const newMap: { color: string; material: string }[] = []
+  let idx = 0
+  for (const [orig, names] of groups) {
+    const [r, g, b] = vivid(idx++)
+    origins.push([parseInt(orig.slice(1, 3), 16), parseInt(orig.slice(3, 5), 16), parseInt(orig.slice(5, 7), 16)])
+    vivids.push([r, g, b])
+    newMap.push({
+      color: `#${[r, g, b].map((v2) => v2.toString(16).padStart(2, '0')).join('')}`,
+      material: names.length > 2 ? `${names[0]} 외 ${names.length - 1}` : names.join(' / '),
+    })
+  }
+
+  const c = document.createElement('canvas')
+  c.width = img.naturalWidth
+  c.height = img.naturalHeight
+  const ctx = c.getContext('2d', { willReadFrequently: true })!
+  ctx.drawImage(img, 0, 0)
+  const d = ctx.getImageData(0, 0, c.width, c.height)
+
+  // 최근접 재질색 매칭: 화면 명암(면 방향 셰이딩)으로 픽셀색이 재질색에서
+  // 어긋나는 것을 허용. 너무 먼 색(하늘/배경/가장자리)은 검정 처리.
+  const cache = new Map<number, number>() // 양자화 픽셀색 -> 그룹 인덱스(-1=배경)
+  const MAX_D2 = 90 * 90
+  for (let i = 0; i < d.data.length; i += 4) {
+    const pr = d.data[i], pg = d.data[i + 1], pb = d.data[i + 2]
+    const key = ((pr >> 2) << 12) | ((pg >> 2) << 6) | (pb >> 2)
+    let gi = cache.get(key)
+    if (gi === undefined) {
+      let best = -1
+      let bestD = MAX_D2
+      for (let j = 0; j < origins.length; j++) {
+        const dr = pr - origins[j][0], dg = pg - origins[j][1], db = pb - origins[j][2]
+        const dist = dr * dr + dg * dg + db * db
+        if (dist < bestD) { bestD = dist; best = j }
+      }
+      gi = best
+      cache.set(key, gi)
+    }
+    if (gi >= 0) {
+      d.data[i] = vivids[gi][0]; d.data[i + 1] = vivids[gi][1]; d.data[i + 2] = vivids[gi][2]
+    } else {
+      d.data[i] = 0; d.data[i + 1] = 0; d.data[i + 2] = 0
+    }
+    d.data[i + 3] = 255
+  }
+  ctx.putImageData(d, 0, 0)
+  return { uri: c.toDataURL('image/png'), map: newMap }
 }
 
 async function fetchMaskOnce(): Promise<{ mask: string; map: { color: string; material: string }[]; timestamp: number } | null> {

@@ -350,7 +350,10 @@ module NanoBanana
       begin
         { 'Texture' => false, 'DisplayColorByLayer' => false,
           'DisplayShadows' => false, 'EdgeDisplayMode' => 0,
-          'ModelTransparency' => false }.each do |k, v|
+          'ModelTransparency' => false,
+          # 배경을 순검정으로: 하늘/지면이 재질로 오인되지 않게 (앱이 검정=배경 처리)
+          'DrawHorizon' => false, 'DrawGround' => false, 'DrawSky' => false,
+          'BackgroundColor' => Sketchup::Color.new(0, 0, 0) }.each do |k, v|
           begin
             saved[k] = ro[k]
             ro[k] = v
