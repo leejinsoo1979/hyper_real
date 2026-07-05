@@ -659,8 +659,8 @@ function Panel({ label, labelRight, active, image, emptyText, loading, loadingTe
         {labelRight && <span className="flex items-center gap-2">{labelRight}</span>}
       </div>
 
-      {/* 이미지 영역 (16:9) */}
-      <div className="relative flex items-center justify-center" style={{ width: '100%', aspectRatio: '16 / 9', background: C.panelBg, minHeight: 0 }}>
+      {/* 이미지 영역: 남는 세로 공간을 모두 사용 */}
+      <div className="relative flex flex-1 items-center justify-center" style={{ width: '100%', background: C.panelBg, minHeight: 0 }}>
         {video ? (
           <CroppedVideo videoRef={video} viewport={videoViewport ?? null} />
         ) : image ? (
@@ -702,7 +702,7 @@ function Panel({ label, labelRight, active, image, emptyText, loading, loadingTe
       </div>
 
       {/* 텍스트영역 + 액션버튼 */}
-      <div className="flex flex-1 gap-2 overflow-hidden" style={{ padding: 10, background: C.promptBg, minHeight: 90 }}>
+      <div className="flex gap-2 overflow-hidden" style={{ padding: 10, background: C.promptBg, height: 150, flexShrink: 0 }}>
         <textarea
           value={tab === 'prompt' ? prompt : negative}
           onChange={(e) => (tab === 'prompt' ? onPrompt(e.target.value) : onNegative(e.target.value))}
