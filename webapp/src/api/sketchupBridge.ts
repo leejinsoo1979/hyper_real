@@ -270,15 +270,25 @@ export interface MaskData {
 /** 오브젝트 ID 마스크 캡처 요청 후 수신 (클릭 선택용). */
 export async function captureMask(): Promise<MaskData | null> {
   const before = await fetchMaskOnce()
-  await sendCommand({ type: 'capture_mask' })
-  for (let i = 0; i < 90; i++) {
-    await new Promise((r) => setTimeout(r, 500))
-    const now = await fetchMaskOnce()
-    if (now && (!before || now.timestamp !== before.timestamp)) {
-      return { uri: toDataUri(now.mask), map: now.map }
+  const sent = await sendCommand({ type: 'capture_mask' })
+  if (sent) {
+    for (let i = 0; i < 90; i++) {
+      await new Promise((r) => setTimeout(r, 500))
+      const now = await fetchMaskOnce()
+      if (now && (!before || now.timestamp !== before.timestamp)) {
+        return { uri: toDataUri(now.mask), map: now.map }
+      }
     }
   }
-  return null
+  // 새 캡처 실패(명령 차단/타임아웃) 시 기존 마스크로 폴백 (GET은 항상 통과)
+  const existing = before ?? (await fetchMaskOnce())
+  return existing ? { uri: toDataUri(existing.mask), map: existing.map } : null
+}
+
+/** 기존 마스크만 조회 (새 캡처 없이). 앱 시작 시 ▦ 마스크 뷰 활성화용. */
+export async function fetchExistingMask(): Promise<MaskData | null> {
+  const m = await fetchMaskOnce()
+  return m ? { uri: toDataUri(m.mask), map: m.map } : null
 }
 
 async function fetchMaskOnce(): Promise<{ mask: string; map: { color: string; material: string }[]; timestamp: number } | null> {
