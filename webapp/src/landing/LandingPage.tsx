@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 
 // ---------------------------------------------------------------------------
-// Lumanova 랜딩 페이지 — VizMaker(vizmaker.vizacademy.co.uk) 레이아웃 클론
-// 브랜드/문구/색상은 Lumanova로 각색 (틸 #00c9a7)
-// 구조: Hero → Download → 기능 8종(대형 헤드라인 + 우측 설명 + 배경 미디어)
-//        스크롤 등장(fade/slide) → Footer
+// Lumanova 랜딩 페이지 — 프리미엄 SaaS 스타일
+// 검정 배경 + 틸(#00c9a7) 액센트. 히어로 / Trusted / 기능 그리드 / 제품 프리뷰 /
+// 기능 상세(스크롤 등장) / CTA / 푸터
 // ---------------------------------------------------------------------------
 
 const TEAL = '#00c9a7'
 const APP_URL = '/app'
+const goApp = () => { window.location.href = APP_URL }
 
-// 스크롤 진입 시 페이드/슬라이드로 등장
-function useReveal<T extends HTMLElement>() {
+function useReveal<T extends HTMLElement>(threshold = 0.2) {
   const ref = useRef<T>(null)
   const [shown, setShown] = useState(false)
   useEffect(() => {
@@ -19,268 +18,373 @@ function useReveal<T extends HTMLElement>() {
     if (!el) return
     const io = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) { setShown(true); io.disconnect() } },
-      { threshold: 0.25 },
+      { threshold },
     )
     io.observe(el)
     return () => io.disconnect()
-  }, [])
+  }, [threshold])
   return { ref, shown }
 }
 
-function LumanovaMark({ size = 96 }: { size?: number }) {
-  // VizMaker 원형 로고(∨∨) 오마주 — 링 + 이중 셰브론
+function Logo({ size = 30 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" aria-hidden>
-      <circle cx="50" cy="50" r="44" stroke={TEAL} strokeWidth="4" />
-      <path d="M28 40 L50 56 L72 40" stroke={TEAL} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M28 54 L50 70 L72 54" stroke={TEAL} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" aria-hidden>
+      <path d="M8 32 V8 L20 20 L32 8 V32" stroke={TEAL} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
 
-// 기능 섹션: 대형 흐린 헤드라인 + 우측 설명 + 좌우 배치 미디어
-function Feature({
-  title, subtitle, body, media, align = 'right', extra,
-}: {
-  title: string
-  subtitle: string
-  body?: string
-  media: React.ReactNode
-  align?: 'left' | 'right'
-  extra?: React.ReactNode
-}) {
-  const { ref, shown } = useReveal<HTMLDivElement>()
-  const right = align === 'right'
+// ── 상단 네비 ──
+function Nav() {
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20)
+    window.addEventListener('scroll', onScroll)
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
   return (
-    <section
-      ref={ref}
-      className="relative flex min-h-[90vh] items-center overflow-hidden"
-      style={{ padding: '80px 6vw' }}
+    <header
+      className="fixed inset-x-0 top-0 z-50 flex items-center justify-between"
+      style={{
+        padding: '16px 5vw',
+        background: scrolled ? 'rgba(8,8,11,0.82)' : 'transparent',
+        backdropFilter: scrolled ? 'blur(12px)' : 'none',
+        borderBottom: scrolled ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
+        transition: 'background .3s, border-color .3s',
+      }}
     >
-      {/* 배경 미디어 (한쪽으로 치우침) */}
-      <div
-        className="pointer-events-none absolute inset-y-0 flex items-center"
-        style={{
-          [right ? 'left' : 'right']: 0,
-          width: '58%',
-          opacity: shown ? 1 : 0,
-          transform: shown ? 'translateX(0)' : `translateX(${right ? '-' : ''}40px)`,
-          transition: 'opacity 1s ease, transform 1.1s cubic-bezier(.16,1,.3,1)',
-        }}
-      >
-        <div className="h-full w-full overflow-hidden" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {media}
-        </div>
+      <div className="flex items-center gap-2.5">
+        <Logo size={30} />
+        <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.01em' }}>Lumanova</span>
       </div>
+      <nav className="hidden items-center gap-8 md:flex" style={{ fontSize: 14, color: '#b8b8c2' }}>
+        {['Features', 'Gallery', 'Pricing', 'Docs'].map((n) => (
+          <a key={n} href="#" className="transition-colors hover:text-white">{n}</a>
+        ))}
+      </nav>
+      <div className="flex items-center gap-4">
+        <button onClick={goApp} className="hidden sm:block" style={{ fontSize: 14, color: '#d9d9e2', background: 'none' }}>Log in</button>
+        <button
+          onClick={goApp}
+          style={{ padding: '9px 20px', borderRadius: 999, background: TEAL, color: '#06251f', fontSize: 13.5, fontWeight: 700 }}
+        >
+          Get Started
+        </button>
+      </div>
+    </header>
+  )
+}
 
-      {/* 텍스트 (미디어 반대편) */}
-      <div
-        className="relative z-10 w-full"
-        style={{ maxWidth: 620, marginLeft: right ? 'auto' : 0, textAlign: right ? 'right' : 'left' }}
-      >
-        <h2
-          style={{
-            fontSize: 'clamp(48px, 7vw, 104px)', fontWeight: 800, lineHeight: 1,
-            color: 'rgba(255,255,255,0.09)', letterSpacing: '-0.02em',
-            opacity: shown ? 1 : 0, transform: shown ? 'none' : 'translateY(24px)',
-            transition: 'opacity .9s ease, transform .9s ease',
-          }}
+// ── 히어로 ──
+function Hero() {
+  return (
+    <section className="relative flex items-center overflow-hidden" style={{ minHeight: '100vh', padding: '0 5vw' }}>
+      {/* 우측 결정체 배경 영상 */}
+      <div className="pointer-events-none absolute inset-y-0 right-0" style={{ width: '58%' }}>
+        <video src="/landing/hero.mp4" autoPlay muted loop playsInline className="h-full w-full" style={{ objectFit: 'cover' }} />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, #000 8%, rgba(0,0,0,0.2) 55%, rgba(0,0,0,0) 100%)' }} />
+      </div>
+      <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(120% 90% at 100% 0%, rgba(0,201,167,0.10), rgba(0,0,0,0) 55%)' }} />
+
+      <div className="relative z-10" style={{ maxWidth: 620 }}>
+        <span
+          className="inline-block"
+          style={{ padding: '6px 14px', borderRadius: 999, border: `1px solid rgba(0,201,167,0.4)`, color: TEAL, fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em' }}
         >
-          {title}
-        </h2>
-        <p
-          style={{
-            marginTop: 10, fontSize: 'clamp(18px, 2vw, 26px)', fontWeight: 600, color: '#fff',
-            opacity: shown ? 1 : 0, transform: shown ? 'none' : 'translateY(16px)',
-            transition: 'opacity 1s ease .12s, transform 1s ease .12s',
-          }}
-        >
-          {subtitle}
+          AI-POWERED RENDERING
+        </span>
+        <h1 style={{ marginTop: 24, fontSize: 'clamp(48px, 6.5vw, 92px)', fontWeight: 800, lineHeight: 1.02, letterSpacing: '-0.03em' }}>
+          <span style={{ color: '#fff' }}>Render Beyond</span><br />
+          <span style={{ color: TEAL }}>Imagination</span>
+        </h1>
+        <p style={{ marginTop: 22, fontSize: 'clamp(16px, 1.6vw, 19px)', lineHeight: 1.65, color: '#a9a9b6', maxWidth: 460 }}>
+          Lumanova는 AI 기술로 상상을 현실로 만드는<br />차세대 렌더링 플랫폼입니다.
         </p>
-        {body && (
-          <p
-            style={{
-              marginTop: 14, fontSize: 15, lineHeight: 1.7, color: '#9a9aa6', maxWidth: 460,
-              marginLeft: right ? 'auto' : 0,
-              opacity: shown ? 1 : 0, transition: 'opacity 1.1s ease .2s',
-            }}
+        <div className="mt-9 flex flex-wrap items-center gap-3.5">
+          <button
+            onClick={goApp}
+            className="flex items-center gap-2"
+            style={{ padding: '15px 30px', borderRadius: 999, background: TEAL, color: '#06251f', fontSize: 15.5, fontWeight: 800 }}
           >
-            {body}
-          </p>
-        )}
-        {extra}
+            무료로 시작하기 <span style={{ fontSize: 17 }}>→</span>
+          </button>
+          <a
+            href="#gallery"
+            className="flex items-center gap-2"
+            style={{ padding: '15px 26px', borderRadius: 999, border: '1px solid #333', color: '#e6e6ee', fontSize: 15, fontWeight: 600, textDecoration: 'none' }}
+          >
+            갤러리 보기 <span style={{ fontSize: 13 }}>▷</span>
+          </a>
+        </div>
+        <div className="mt-16 flex items-center gap-2.5" style={{ color: '#7a7a86', fontSize: 13 }}>
+          <span style={{ display: 'inline-flex', width: 26, height: 26, borderRadius: 999, border: '1px solid #333', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>↓</span>
+          Scroll to explore
+        </div>
       </div>
     </section>
   )
 }
 
-function MediaImg({ src, alt }: { src: string; alt: string }) {
+// ── Trusted by ──
+function TrustedBy() {
+  const brands = ['IDEO', 'ARUP', 'Zaha Hadid Architects', 'd5', 'KPF', 'Aedas', 'studio mk27']
   return (
-    <img
-      src={src}
-      alt={alt}
-      style={{ maxWidth: '100%', maxHeight: '78vh', objectFit: 'contain', borderRadius: 14, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' }}
-      draggable={false}
-    />
+    <section style={{ padding: '48px 5vw 56px', borderTop: '1px solid #16161d', borderBottom: '1px solid #16161d', background: '#0b0b0f' }}>
+      <p style={{ fontSize: 11.5, letterSpacing: '0.14em', color: '#63636e', fontWeight: 600 }}>TRUSTED BY CREATORS AT</p>
+      <div className="mt-7 flex flex-wrap items-center justify-between gap-x-8 gap-y-5">
+        {brands.map((b) => (
+          <span key={b} style={{ fontSize: 'clamp(16px, 1.7vw, 22px)', fontWeight: 700, color: '#4c4c56', letterSpacing: '-0.01em' }}>{b}</span>
+        ))}
+      </div>
+    </section>
   )
 }
 
-function MediaVideo({ src }: { src: string }) {
+// ── 기능 그리드 ──
+function FeatureGrid() {
+  const { ref, shown } = useReveal<HTMLDivElement>()
+  const cards = [
+    { icon: 'sparkle', title: '초고속 렌더링', body: '몇 초 만에 고품질\n결과물 생성' },
+    { icon: 'cube', title: '강력한 AI 엔진', body: '딥러닝 기반 이미지\n품질 향상' },
+    { icon: 'layers', title: '직관적인 워크플로우', body: '간단한 입력으로\n완벽한 결과' },
+    { icon: 'cloud', title: '클라우드 기반', body: '어디서든 빠르고\n안정적으로' },
+  ]
   return (
-    <video
-      src={src}
-      autoPlay muted loop playsInline
-      style={{ maxWidth: '100%', maxHeight: '78vh', objectFit: 'contain', borderRadius: 14, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' }}
-    />
-  )
-}
-
-export function LandingPage() {
-  const goApp = () => { window.location.href = APP_URL }
-
-  return (
-    <div style={{ background: '#000', color: '#fff', minHeight: '100vh', overflowX: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      {/* ── 상단 네비 ── */}
-      <header
-        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between"
-        style={{ padding: '18px 6vw', background: 'linear-gradient(180deg, rgba(0,0,0,.7), rgba(0,0,0,0))' }}
-      >
-        <div className="flex items-center gap-2.5">
-          <LumanovaMark size={30} />
-          <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: '-0.01em' }}>Lumanova</span>
-        </div>
-        <button
-          onClick={goApp}
-          style={{ padding: '9px 20px', borderRadius: 8, border: `1px solid ${TEAL}`, color: TEAL, fontSize: 13.5, fontWeight: 700, background: 'transparent' }}
-        >
-          로그인
-        </button>
-      </header>
-
-      {/* ── Hero ── */}
-      <section className="relative flex flex-col items-center justify-center text-center" style={{ minHeight: '100vh', padding: '0 6vw' }}>
-        <video
-          src="/landing/hero.mp4"
-          autoPlay muted loop playsInline
-          className="pointer-events-none absolute inset-0 h-full w-full"
-          style={{ objectFit: 'cover', opacity: 0.35 }}
-        />
-        <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(circle at center, rgba(0,0,0,0) 30%, rgba(0,0,0,0.85) 100%)' }} />
-        <div className="relative z-10 flex flex-col items-center">
-          <LumanovaMark size={110} />
-          <h1 style={{ marginTop: 26, fontSize: 'clamp(56px, 9vw, 120px)', fontWeight: 800, lineHeight: 1, color: TEAL, letterSpacing: '-0.03em' }}>
-            Lumanova
-          </h1>
-          <p style={{ marginTop: 18, fontSize: 'clamp(18px, 2.4vw, 30px)', fontWeight: 500, color: '#eaeaf0' }}>
-            당신의 아이디어를, 즉시 렌더링
+    <section ref={ref} style={{ padding: '90px 5vw' }}>
+      <div className="grid items-center gap-12 lg:grid-cols-[minmax(260px,380px)_1fr]">
+        <div style={{ opacity: shown ? 1 : 0, transform: shown ? 'none' : 'translateY(20px)', transition: 'opacity .8s, transform .8s' }}>
+          <p style={{ fontSize: 12, letterSpacing: '0.12em', color: TEAL, fontWeight: 700 }}>POWERFUL BY AI</p>
+          <h2 style={{ marginTop: 14, fontSize: 'clamp(28px, 3.4vw, 40px)', fontWeight: 800, lineHeight: 1.15, color: '#fff' }}>
+            AI가 만드는<br />압도적인 결과물
+          </h2>
+          <p style={{ marginTop: 16, fontSize: 15.5, lineHeight: 1.7, color: '#9a9aa6' }}>
+            복잡한 과정 없이, 아이디어만으로<br />새로운 시각을 경험하세요.
           </p>
-          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={goApp}
-              style={{ padding: '15px 34px', borderRadius: 12, background: TEAL, color: '#06251f', fontSize: 16, fontWeight: 800 }}
-            >
-              Start
-            </button>
-            <a
-              href="/downloads/NanoBananaRenderer_v1.0.5.rbz"
-              download
-              style={{ padding: '15px 30px', borderRadius: 12, border: '1px solid #333', color: '#ddd', fontSize: 15, fontWeight: 600, textDecoration: 'none' }}
-            >
-              SketchUp 플러그인 (.rbz)
-            </a>
-          </div>
+          <button
+            onClick={goApp}
+            className="mt-7 flex items-center gap-2"
+            style={{ padding: '11px 22px', borderRadius: 10, border: '1px solid #2c2c38', color: '#e6e6ee', fontSize: 14, fontWeight: 600 }}
+          >
+            모든 기능 보기 <span>→</span>
+          </button>
         </div>
-      </section>
-
-      {/* ── Download / 통합 CAD ── */}
-      <DownloadSection goApp={goApp} />
-
-      {/* ── 기능 8종 ── */}
-      <Feature
-        title="ArchViz" subtitle="실사 건축 렌더링을 생성하세요" align="right"
-        media={<MediaImg src="/landing/archviz.webp" alt="ArchViz" />}
-      />
-      <Feature
-        title="Best AI Engines" subtitle="모든 것이 한곳에" align="left"
-        body="여러 최상위 AI 엔진을 한 화면에서 골라 쓰세요. 씬에 맞는 최적의 렌더 품질을 선택할 수 있습니다."
-        media={<MediaImg src="/landing/engines.webp" alt="AI Engines" />}
-      />
-      <Feature
-        title="Fashion" subtitle="모델을 생성하고, 디자인을 선보이세요" align="right"
-        media={<MediaVideo src="/landing/fashion.mp4" />}
-      />
-      <Feature
-        title="100% Privacy" subtitle="당신의 프로젝트는 보호받아야 합니다" align="left"
-        body="내장된 프라이빗 모드는 원본 파일·생성 결과·프롬프트가 오직 당신의 컴퓨터에만 남도록 보장합니다."
-        media={<MediaImg src="/landing/privacy.webp" alt="Privacy" />}
-      />
-      <Feature
-        title="Versatile" subtitle="건축가, 디자이너, 아티스트를 위해" align="right"
-        media={<MediaImg src="/landing/versatile.webp" alt="Versatile" />}
-      />
-      <Feature
-        title="Create 3D Models" subtitle="단 한 장의 이미지로" align="left"
-        media={<MediaImg src="/landing/model3d.webp" alt="3D Models" />}
-      />
-      <Feature
-        title="Effortless" subtitle="빠르고 간편하게" align="right"
-        media={<MediaVideo src="/landing/effortless.mp4" />}
-      />
-
-      {/* ── Footer ── */}
-      <footer style={{ borderTop: '1px solid #1a1a22', padding: '48px 6vw 40px' }}>
-        <div className="flex flex-wrap items-start justify-between gap-8">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <LumanovaMark size={28} />
-              <span style={{ fontSize: 17, fontWeight: 800 }}>Lumanova</span>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {cards.map((c, i) => (
+            <div
+              key={c.title}
+              style={{
+                padding: '28px 22px', borderRadius: 16, background: '#131319', border: '1px solid #22222c',
+                opacity: shown ? 1 : 0, transform: shown ? 'none' : 'translateY(24px)',
+                transition: `opacity .7s ${0.1 + i * 0.08}s, transform .7s ${0.1 + i * 0.08}s`,
+              }}
+            >
+              <FeatureIcon name={c.icon} />
+              <h3 style={{ marginTop: 20, fontSize: 15.5, fontWeight: 700, color: '#fff' }}>{c.title}</h3>
+              <p style={{ marginTop: 8, fontSize: 13, lineHeight: 1.6, color: '#8a8a95', whiteSpace: 'pre-line' }}>{c.body}</p>
             </div>
-            <p style={{ marginTop: 12, fontSize: 13, color: '#71717c' }}>당신의 아이디어를, 즉시 렌더링</p>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function FeatureIcon({ name }: { name: string }) {
+  const common = { width: 30, height: 30, fill: 'none', stroke: TEAL, strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+  if (name === 'sparkle') return (<svg viewBox="0 0 24 24" {...common}><path d="M12 3v6M12 15v6M3 12h6M15 12h6" /><path d="M12 8l1.5 2.5L16 12l-2.5 1.5L12 16l-1.5-2.5L8 12l2.5-1.5z" /></svg>)
+  if (name === 'cube') return (<svg viewBox="0 0 24 24" {...common}><path d="M12 2l9 5v10l-9 5-9-5V7z" /><path d="M12 12l9-5M12 12v10M12 12L3 7" /></svg>)
+  if (name === 'layers') return (<svg viewBox="0 0 24 24" {...common}><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 12l9 5 9-5M3 16l9 5 9-5" /></svg>)
+  return (<svg viewBox="0 0 24 24" {...common}><path d="M18 10a4 4 0 00-7.7-1.5A3.5 3.5 0 106 15h11a3.5 3.5 0 001-6.9z" /></svg>)
+}
+
+// ── 제품 프리뷰 (앱 UI 목업 CSS 재현) ──
+function ProductPreview() {
+  const { ref, shown } = useReveal<HTMLDivElement>()
+  return (
+    <section ref={ref} id="gallery" style={{ padding: '90px 5vw', background: 'linear-gradient(180deg, #000, #0b0b12)' }}>
+      <div className="grid items-center gap-12 lg:grid-cols-[minmax(260px,360px)_1fr]">
+        <div style={{ opacity: shown ? 1 : 0, transform: shown ? 'none' : 'translateY(20px)', transition: 'opacity .8s, transform .8s' }}>
+          <p style={{ fontSize: 12, letterSpacing: '0.1em', color: TEAL, fontWeight: 700 }}>DESIGN. GENERATE. PERFECTION.</p>
+          <h2 style={{ marginTop: 14, fontSize: 'clamp(28px, 3.4vw, 40px)', fontWeight: 800, lineHeight: 1.18, color: '#fff' }}>
+            직관적인 인터페이스<br />완벽한 제어
+          </h2>
+          <p style={{ marginTop: 16, fontSize: 15.5, lineHeight: 1.7, color: '#9a9aa6' }}>
+            간단한 입력, 세밀한 조정,<br />그리고 놀라운 결과.
+          </p>
+        </div>
+        <div style={{ opacity: shown ? 1 : 0, transform: shown ? 'none' : 'translateX(30px)', transition: 'opacity 1s, transform 1s' }}>
+          <AppMockup />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function AppMockup() {
+  const railItems = ['Home', 'Create', 'Assets', 'Gallery', 'Models']
+  return (
+    <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid #24242e', background: '#0f0f15', boxShadow: '0 40px 100px rgba(0,0,0,0.6)' }}>
+      <div className="flex" style={{ height: 'clamp(300px, 34vw, 440px)' }}>
+        {/* 좌측 레일 */}
+        <div className="hidden sm:flex" style={{ width: 168, flexShrink: 0, flexDirection: 'column', background: '#0b0b10', borderRight: '1px solid #1c1c26', padding: '16px 12px' }}>
+          <div className="flex items-center gap-2" style={{ padding: '4px 6px 16px' }}>
+            <Logo size={18} /><span style={{ fontSize: 13, fontWeight: 700 }}>Lumanova</span>
           </div>
-          <div className="flex gap-3">
-            <button onClick={goApp} style={{ padding: '11px 22px', borderRadius: 9, background: TEAL, color: '#06251f', fontSize: 13.5, fontWeight: 700 }}>
-              Start
-            </button>
-            <a href="/downloads/NanoBananaRenderer_v1.0.5.rbz" download style={{ padding: '11px 22px', borderRadius: 9, border: '1px solid #2c2c38', color: '#ccc', fontSize: 13.5, fontWeight: 600, textDecoration: 'none' }}>
-              플러그인 다운로드
-            </a>
+          {railItems.map((n, i) => (
+            <div key={n} className="flex items-center gap-2.5" style={{
+              padding: '9px 10px', borderRadius: 8, marginBottom: 3, fontSize: 12.5,
+              background: i === 1 ? 'rgba(0,201,167,0.12)' : 'transparent',
+              color: i === 1 ? TEAL : '#8a8a95', fontWeight: i === 1 ? 600 : 500,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: 2, background: i === 1 ? TEAL : '#3a3a44' }} />{n}
+            </div>
+          ))}
+        </div>
+        {/* 중앙 씬 */}
+        <div className="flex-1" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div className="flex-1" style={{ background: 'linear-gradient(135deg, #2a2a2e, #16161a)', position: 'relative' }}>
+            <div style={{ position: 'absolute', inset: '10% 12%', borderRadius: 8, background: 'linear-gradient(160deg, #4a4a50, #26262b)', boxShadow: 'inset 0 0 60px rgba(0,0,0,0.5)' }} />
+          </div>
+          <div className="flex items-center gap-2" style={{ padding: '10px 12px', borderTop: '1px solid #1c1c26' }}>
+            <div className="flex-1" style={{ height: 30, borderRadius: 7, background: '#16161d', border: '1px solid #26262f', display: 'flex', alignItems: 'center', padding: '0 12px', fontSize: 11.5, color: '#6a6a74' }}>
+              Describe your image…
+            </div>
+            <div style={{ height: 30, padding: '0 16px', borderRadius: 7, background: TEAL, color: '#06251f', fontSize: 11.5, fontWeight: 700, display: 'flex', alignItems: 'center' }}>Generate</div>
           </div>
         </div>
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-4" style={{ borderTop: '1px solid #16161d', paddingTop: 20, fontSize: 12, color: '#5d5d68' }}>
-          <span>© Lumanova 2026 — All Rights Reserved</span>
-          <span className="flex gap-5">
-            <a href="#" style={{ color: '#8a8a95' }}>Privacy Policy</a>
-            <a href="#" style={{ color: '#8a8a95' }}>Terms &amp; Conditions</a>
-          </span>
+        {/* 우측 설정 */}
+        <div className="hidden lg:block" style={{ width: 172, flexShrink: 0, background: '#0b0b10', borderLeft: '1px solid #1c1c26', padding: '16px 14px', fontSize: 11 }}>
+          <MockRow label="Model" value="Luma Nova v1.0" />
+          <p style={{ marginTop: 14, color: '#6a6a74' }}>Aspect Ratio</p>
+          <div className="mt-2 flex gap-1.5">
+            {['1:1', '16:9', '4:3', '3:4'].map((r, i) => (
+              <span key={r} style={{ padding: '4px 8px', borderRadius: 5, fontSize: 10.5, background: i === 1 ? TEAL : '#17171e', color: i === 1 ? '#06251f' : '#8a8a95', fontWeight: 600 }}>{r}</span>
+            ))}
+          </div>
+          <p style={{ marginTop: 14, color: '#6a6a74' }}>Resolution</p>
+          <div className="mt-2 flex gap-1.5">
+            {['2K', '4K'].map((r, i) => (
+              <span key={r} style={{ padding: '4px 10px', borderRadius: 5, fontSize: 10.5, background: i === 0 ? TEAL : '#17171e', color: i === 0 ? '#06251f' : '#8a8a95', fontWeight: 600 }}>{r}</span>
+            ))}
+          </div>
+          <p style={{ marginTop: 14, color: '#6a6a74' }}>Style</p>
+          <div className="mt-2 flex gap-1.5">
+            {['Realistic', 'Concept'].map((r, i) => (
+              <span key={r} style={{ padding: '4px 10px', borderRadius: 5, fontSize: 10.5, border: `1px solid ${i === 0 ? TEAL : '#26262f'}`, color: i === 0 ? TEAL : '#8a8a95', fontWeight: 600 }}>{r}</span>
+            ))}
+          </div>
         </div>
-      </footer>
+      </div>
     </div>
   )
 }
 
-function DownloadSection({ goApp }: { goApp: () => void }) {
-  const { ref, shown } = useReveal<HTMLDivElement>()
+function MockRow({ label, value }: { label: string; value: string }) {
   return (
-    <section ref={ref} className="relative flex flex-col items-center justify-center text-center" style={{ minHeight: '80vh', padding: '80px 6vw' }}>
-      <div style={{ opacity: shown ? 1 : 0, transform: shown ? 'none' : 'translateY(24px)', transition: 'opacity .9s ease, transform .9s ease' }}>
-        <h2 style={{ fontSize: 'clamp(48px, 8vw, 96px)', fontWeight: 800, color: TEAL, lineHeight: 1 }}>Download</h2>
-        <p style={{ marginTop: 12, fontSize: 'clamp(16px, 2vw, 22px)', color: '#eaeaf0' }}>데스크톱 앱을 무료로 받으세요</p>
+    <div>
+      <p style={{ color: '#6a6a74' }}>{label}</p>
+      <div className="mt-1.5 flex items-center justify-between" style={{ padding: '6px 10px', borderRadius: 6, background: '#17171e', border: '1px solid #26262f', color: '#d9d9e2', fontSize: 10.5 }}>
+        {value} <span style={{ color: '#6a6a74' }}>▾</span>
+      </div>
+    </div>
+  )
+}
 
-        <p style={{ marginTop: 34, fontSize: 13.5, color: '#8a8a95' }}>완전히 통합되는 CAD</p>
-        <p style={{ marginTop: 6, fontSize: 15, fontWeight: 600, color: '#ddd' }}>
-          3ds Max · Revit · SketchUp · Archicad · Rhino · Unreal Engine
-        </p>
-        <img src="/landing/softwares.png" alt="Integrated CAD" style={{ marginTop: 22, maxWidth: 460, width: '80%', opacity: 0.9 }} />
-
-        <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-          <button onClick={goApp} style={{ padding: '14px 32px', borderRadius: 12, background: TEAL, color: '#06251f', fontSize: 15.5, fontWeight: 800 }}>
-            웹에서 바로 시작
-          </button>
-          <a href="/downloads/NanoBananaRenderer_v1.0.5.rbz" download style={{ padding: '14px 28px', borderRadius: 12, border: '1px solid #333', color: '#ddd', fontSize: 14.5, fontWeight: 600, textDecoration: 'none' }}>
-            SketchUp 플러그인 받기
-          </a>
-        </div>
+// ── 기능 상세 (스크롤 등장, 미디어 좌우 교차) ──
+function FeatureRow({ title, subtitle, body, media, align }: {
+  title: string; subtitle: string; body?: string; media: React.ReactNode; align: 'left' | 'right'
+}) {
+  const { ref, shown } = useReveal<HTMLDivElement>(0.25)
+  const right = align === 'right'
+  return (
+    <section ref={ref} className="grid items-center gap-10 lg:grid-cols-2" style={{ padding: '70px 5vw' }}>
+      <div style={{
+        order: right ? 2 : 1,
+        opacity: shown ? 1 : 0, transform: shown ? 'none' : `translateX(${right ? '' : '-'}30px)`,
+        transition: 'opacity 1s, transform 1s',
+      }}>
+        {media}
+      </div>
+      <div style={{ order: right ? 1 : 2, opacity: shown ? 1 : 0, transform: shown ? 'none' : 'translateY(20px)', transition: 'opacity .9s .1s, transform .9s .1s' }}>
+        <h3 style={{ fontSize: 'clamp(26px, 3vw, 38px)', fontWeight: 800, color: '#fff', lineHeight: 1.15 }}>{title}</h3>
+        <p style={{ marginTop: 12, fontSize: 17, fontWeight: 600, color: TEAL }}>{subtitle}</p>
+        {body && <p style={{ marginTop: 14, fontSize: 15, lineHeight: 1.7, color: '#9a9aa6', maxWidth: 440 }}>{body}</p>}
       </div>
     </section>
+  )
+}
+
+function Media({ src, video }: { src: string; video?: boolean }) {
+  const style = { width: '100%', borderRadius: 14, boxShadow: '0 30px 70px rgba(0,0,0,0.5)', objectFit: 'cover' as const, maxHeight: 420 }
+  return video
+    ? <video src={src} autoPlay muted loop playsInline style={style} />
+    : <img src={src} alt="" style={style} draggable={false} />
+}
+
+// ── CTA ──
+function CTA() {
+  const { ref, shown } = useReveal<HTMLDivElement>()
+  return (
+    <section ref={ref} style={{ padding: '110px 5vw', textAlign: 'center' }}>
+      <div style={{ opacity: shown ? 1 : 0, transform: shown ? 'none' : 'translateY(24px)', transition: 'opacity .9s, transform .9s' }}>
+        <h2 style={{ fontSize: 'clamp(34px, 5vw, 62px)', fontWeight: 800, lineHeight: 1.08, color: '#fff', letterSpacing: '-0.02em' }}>
+          지금 바로<br /><span style={{ color: TEAL }}>렌더링을 시작하세요</span>
+        </h2>
+        <p style={{ marginTop: 18, fontSize: 16.5, color: '#a9a9b6' }}>가입하면 무료 크레딧을 드립니다. 카드 등록은 필요 없습니다.</p>
+        <button onClick={goApp} style={{ marginTop: 34, padding: '16px 40px', borderRadius: 999, background: TEAL, color: '#06251f', fontSize: 16.5, fontWeight: 800 }}>
+          무료로 시작하기 →
+        </button>
+      </div>
+    </section>
+  )
+}
+
+// ── 푸터 ──
+function Footer() {
+  return (
+    <footer style={{ borderTop: '1px solid #16161d', padding: '48px 5vw 40px', background: '#0b0b0f' }}>
+      <div className="flex flex-wrap items-start justify-between gap-8">
+        <div>
+          <div className="flex items-center gap-2.5"><Logo size={26} /><span style={{ fontSize: 17, fontWeight: 800 }}>Lumanova</span></div>
+          <p style={{ marginTop: 12, fontSize: 13, color: '#71717c', maxWidth: 260 }}>AI 기술로 상상을 현실로 만드는 차세대 렌더링 플랫폼.</p>
+        </div>
+        <div className="flex flex-wrap gap-14" style={{ fontSize: 13.5 }}>
+          {[
+            { h: 'Product', items: ['Features', 'Gallery', 'Pricing'] },
+            { h: 'Resources', items: ['Docs', 'SketchUp 플러그인', 'Discord'] },
+            { h: 'Company', items: ['About', 'Contact', 'Privacy'] },
+          ].map((col) => (
+            <div key={col.h}>
+              <p style={{ color: '#e6e6ee', fontWeight: 700, marginBottom: 12 }}>{col.h}</p>
+              {col.items.map((it) => (
+                <a key={it} href={it.includes('플러그인') ? '/downloads/NanoBananaRenderer_v1.0.5.rbz' : '#'} className="block" style={{ color: '#8a8a95', marginBottom: 8, textDecoration: 'none' }}>{it}</a>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-10 flex flex-wrap items-center justify-between gap-4" style={{ borderTop: '1px solid #16161d', paddingTop: 20, fontSize: 12, color: '#5d5d68' }}>
+        <span>© Lumanova 2026 — All Rights Reserved</span>
+        <span className="flex gap-5"><a href="#" style={{ color: '#8a8a95' }}>Privacy Policy</a><a href="#" style={{ color: '#8a8a95' }}>Terms &amp; Conditions</a></span>
+      </div>
+    </footer>
+  )
+}
+
+export function LandingPage() {
+  return (
+    <div style={{ background: '#000', color: '#fff', minHeight: '100vh', overflowX: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      <Nav />
+      <Hero />
+      <TrustedBy />
+      <FeatureGrid />
+      <ProductPreview />
+      <FeatureRow title="ArchViz" subtitle="실사 건축 렌더링을 생성하세요" align="right" media={<Media src="/landing/archviz.webp" />} />
+      <FeatureRow title="Best AI Engines" subtitle="모든 것이 한곳에" body="여러 최상위 AI 엔진을 한 화면에서 골라 쓰세요. 씬에 맞는 최적의 렌더 품질을 선택할 수 있습니다." align="left" media={<Media src="/landing/engines.webp" />} />
+      <FeatureRow title="100% Privacy" subtitle="당신의 프로젝트는 보호받아야 합니다" body="내장된 프라이빗 모드는 원본 파일·생성 결과·프롬프트가 오직 당신의 컴퓨터에만 남도록 보장합니다." align="right" media={<Media src="/landing/privacy.webp" />} />
+      <FeatureRow title="Create 3D Models" subtitle="단 한 장의 이미지로" align="left" media={<Media src="/landing/model3d.webp" />} />
+      <CTA />
+      <Footer />
+    </div>
   )
 }
