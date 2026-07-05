@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { NodeData } from '../types/node'
-import type { UpscaleParams, VideoParams } from '../types/node'
+import type { RenderParams, UpscaleParams, VideoParams } from '../types/node'
 
 interface CreditState {
   balance: number
@@ -14,7 +14,10 @@ function nodeCost(node: NodeData): number {
     case 'SOURCE':
     case 'COMPARE':
       return 0
-    case 'RENDER':
+    case 'RENDER': {
+      const params = node.params as RenderParams
+      return params.engine?.startsWith('experimental') ? 4 : 1
+    }
     case 'MODIFIER':
       return 1
     case 'UPSCALE': {

@@ -55,7 +55,7 @@ export class ServerError extends GeminiError {
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 // gemini-2.0-* 계열은 2026-07 Google이 폐기함(404) — BRIEFING.md §5 참조
-const DEFAULT_MODEL = 'gemini-2.5-flash-image' // Nanobanana
+const DEFAULT_MODEL = 'gemini-3-pro-image' // Nanobanana Pro
 const TEXT_MODEL = 'gemini-2.5-flash' // 텍스트 분석/프롬프트 생성 전용
 const MAX_RETRIES = 2
 const REQUEST_TIMEOUT_MS = 120_000

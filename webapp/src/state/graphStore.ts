@@ -34,7 +34,7 @@ function getDefaultParams(type: NodeType): NodeParams {
     case 'SOURCE':
       return { origin: 'upload', image: '', cameraLocked: false, sceneMeta: null }
     case 'RENDER':
-      return { engine: 'main', prompt: 'Create photorealistic image', negativePrompt: '', presetId: null, seed: null, resolution: '1024', timePreset: 'day' as const, lightsOn: true }
+      return { engine: 'experimental-interior', prompt: 'Create photorealistic image', negativePrompt: '', presetId: null, seed: null, resolution: '1024', timePreset: 'day' as const, lightsOn: true }
     case 'MODIFIER':
       return { prompt: '', presetId: null, mask: null, maskLayers: [] }
     case 'UPSCALE':
@@ -49,7 +49,7 @@ function getDefaultParams(type: NodeType): NodeParams {
 function getDefaultCost(type: NodeType): number {
   switch (type) {
     case 'SOURCE': return 0
-    case 'RENDER': return 1
+    case 'RENDER': return 4
     case 'MODIFIER': return 1
     case 'UPSCALE': return 2
     case 'VIDEO': return 5

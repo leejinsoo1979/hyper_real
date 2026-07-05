@@ -9,8 +9,8 @@ interface RenderSettingsProps {
 
 // 실제 사용 모델을 라벨에 그대로 표기 (숨기지 말 것)
 const RENDER_MODE_OPTIONS = [
-  { value: 'RENDER:main', label: '1. Main renderer — Nanobanana (gemini-2.5-flash-image)' },
-  { value: 'RENDER:experimental-exterior', label: '1P. Nanobanana Pro (gemini-3-pro-image)' },
+  { value: 'RENDER:experimental-interior', label: '1. Nanobanana Pro (gemini-3-pro-image)' },
+  { value: 'RENDER:main', label: '1F. Nanobanana (gemini-2.5-flash-image)' },
   { value: 'MODIFIER', label: '2. Details editor' },
   { value: 'UPSCALE', label: '3. Creative upscaler' },
   { value: 'VIDEO', label: '4. Image to video' },
@@ -244,6 +244,7 @@ function SettingsSlider({
 export function RenderSettings({ selectedNode }: RenderSettingsProps) {
   const [collapsed, setCollapsed] = useState(false)
   const updateNodeParams = useGraphStore((s) => s.updateNodeParams)
+  const updateNode = useGraphStore((s) => s.updateNode)
 
   const handleRenderModeChange = useCallback(
     (value: string) => {
@@ -253,9 +254,10 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
       if (value.startsWith('RENDER:')) {
         const engine = value.split(':')[1] as RenderParams['engine']
         updateNodeParams(selectedNode.id, { engine })
+        updateNode(selectedNode.id, { cost: engine.startsWith('experimental') ? 4 : 1 })
       }
     },
-    [selectedNode, updateNodeParams],
+    [selectedNode, updateNode, updateNodeParams],
   )
 
   // Hide for SOURCE and COMPARE

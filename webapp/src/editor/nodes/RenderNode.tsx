@@ -14,11 +14,11 @@ type RenderNodeType = Node<RenderNodeData, 'RENDER'>
 function getRenderLabel(engine: RenderParams['engine']): string {
   switch (engine) {
     case 'main':
-      return '1. Main renderer'
+      return 'Nanobanana'
     case 'experimental-exterior':
-      return '(exp) Exterior render'
+      return 'Nanobanana Pro'
     case 'experimental-interior':
-      return '(exp) Interior render'
+      return 'Nanobanana Pro'
   }
 }
 

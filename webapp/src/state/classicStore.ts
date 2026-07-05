@@ -46,7 +46,7 @@ interface ClassicState {
 export const useClassicStore = create<ClassicState>((set) => ({
   timePreset: 'day',
   lightsOn: true,
-  model: 'gemini-2.5-flash-image',
+  model: 'gemini-3-pro-image',
   size: '1024',
   mirror: true,
 

@@ -9,11 +9,11 @@ export default async function handler(req, res) {
   const user = await verifyUser(req)
   if (!user) return res.status(401).json({ error: 'UNAUTHORIZED' })
 
-  const { engine = 'main', image, prompt, negativePrompt = '', mask = null } = req.body ?? {}
+  const { engine = 'pro', image, prompt, negativePrompt = '', mask = null } = req.body ?? {}
   if (!image || !prompt) return res.status(400).json({ error: 'BAD_REQUEST' })
   if (String(image).length > 12_000_000) return res.status(413).json({ error: 'IMAGE_TOO_LARGE' })
 
-  const cost = COSTS[engine] ?? COSTS.main
+  const cost = COSTS[engine] ?? COSTS.pro
   const balance = await spendCredits(user, cost)
   if (balance === null) {
     return res.status(402).json({ error: 'INSUFFICIENT_CREDITS', balance: await getBalance(user).catch(() => 0) })
