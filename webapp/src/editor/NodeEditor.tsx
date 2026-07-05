@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { LeftSidebar } from './sidebar/LeftSidebar'
 import { NodeCanvas } from './canvas/NodeCanvas'
 import { InspectorPanel } from './panels/InspectorPanel'
@@ -19,6 +19,8 @@ import { useUndoStore } from '../state/undoStore'
 import { executePipeline, estimatePipelineCost } from '../engine'
 import { useMock } from '../engine/geminiClient'
 import { startBridge, stopBridge } from '../api/sketchupBridge'
+import { useAuthUser } from '../auth/firebase'
+import { apiMe } from '../api/lumanovaApi'
 
 function statusColor(s: ConnectionStatus): string {
   switch (s) {
@@ -28,12 +30,62 @@ function statusColor(s: ConnectionStatus): string {
   }
 }
 
-function statusLabel(s: ConnectionStatus): string {
-  switch (s) {
-    case 'connected': return 'Connected'
-    case 'connecting': return 'Connecting...'
-    case 'disconnected': return 'Offline'
-  }
+// ── 앱 상단 헤더: 로고+제품명 · 크레딧 · 프로필 (SketchUp 연결 텍스트 제거) ──
+function AppHeader() {
+  const sketchUpStatus = useUIStore((s) => s.sketchUpStatus)
+  const setActiveSidebarItem = useUIStore((s) => s.setActiveSidebarItem)
+  const saas = saasMode()
+  const user = useAuthUser()
+  const [balance, setBalance] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!saas || !user) return
+    apiMe().then((m) => setBalance(m.balance)).catch(() => {})
+  }, [saas, user])
+
+  const initial = (user?.displayName || user?.email || '·')[0]?.toUpperCase() ?? '·'
+
+  return (
+    <div
+      className="flex shrink-0 items-center justify-between"
+      style={{ height: 48, padding: '0 18px', background: 'linear-gradient(180deg, #0e0e16, #0a0a12)', borderBottom: '1px solid #1c1c26' }}
+    >
+      {/* 좌: 로고 + 제품명 */}
+      <div className="flex items-center gap-2.5">
+        <img src="/landing/logo-circle.png" alt="" width={24} height={24} style={{ objectFit: 'contain' }} />
+        <span style={{ color: '#f0f0f5', fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em' }}>Lumanova</span>
+        {/* 연결 상태: 은은한 점 인디케이터 (텍스트 없이) */}
+        <span
+          title={sketchUpStatus === 'connected' ? 'SketchUp 연결됨' : sketchUpStatus === 'connecting' ? '연결 중' : '연결 안 됨'}
+          style={{ width: 7, height: 7, borderRadius: 999, background: statusColor(sketchUpStatus), marginLeft: 4, boxShadow: sketchUpStatus === 'connected' ? `0 0 6px ${statusColor(sketchUpStatus)}` : 'none' }}
+        />
+      </div>
+
+      {/* 우: 크레딧 + 프로필 */}
+      <div className="flex items-center gap-3">
+        {saas && (
+          <button
+            onClick={() => setActiveSidebarItem('account')}
+            className="flex items-center gap-1.5"
+            style={{ height: 30, padding: '0 12px', borderRadius: 999, background: 'rgba(0,201,167,0.1)', border: '1px solid rgba(0,201,167,0.28)', color: '#37e7cb', fontSize: 12.5, fontWeight: 700 }}
+          >
+            <span style={{ fontSize: 13 }}>◈</span>
+            {balance === null ? '—' : balance.toLocaleString()}
+          </button>
+        )}
+        <button
+          onClick={() => setActiveSidebarItem('account')}
+          className="flex items-center justify-center overflow-hidden rounded-full"
+          style={{ width: 30, height: 30, background: '#00c9a7', color: '#06251f', fontSize: 13, fontWeight: 800, flexShrink: 0 }}
+          title="계정"
+        >
+          {user?.photoURL
+            ? <img src={user.photoURL} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+            : initial}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export function NodeEditor() {
@@ -43,7 +95,6 @@ export function NodeEditor() {
   const executionError = useExecutionStore((s) => s.error)
   const balance = useCreditStore((s) => s.balance)
   const activeSidebarItem = useUIStore((s) => s.activeSidebarItem)
-  const sketchUpStatus = useUIStore((s) => s.sketchUpStatus)
   const materialsOpen = useUIStore((s) => s.materialLibraryOpen)
 
   // Start/stop SketchUp bridge polling
@@ -127,35 +178,16 @@ export function NodeEditor() {
 
   return (
     <div className="flex h-full w-full flex-col">
-      {/* Title Bar */}
-      <div
-        className="flex shrink-0 items-center px-4"
-        style={{
-          height: 28,
-          backgroundColor: '#0a0a14',
-          borderBottom: '1px solid #222233',
-        }}
-      >
-        <span style={{ color: '#888888', fontSize: 12 }}>
-          Lumanova
-        </span>
-        <span style={{ color: '#444444', fontSize: 12, margin: '0 8px' }}>|</span>
-        <span style={{ color: '#888888', fontSize: 12 }}>
-          SketchUp:{' '}
-          <span style={{ color: statusColor(sketchUpStatus) }}>
-            {statusLabel(sketchUpStatus)}
-          </span>
-        </span>
-        {/* MOCK 배너는 개발자 모드 전용. SaaS 모드는 서버 키로 렌더하므로 해당 없음 */}
-        {!saasMode() && useMock() && (
-          <span
-            className="ml-3 rounded px-2 py-0.5"
-            style={{ backgroundColor: '#ffaa0022', color: '#ffaa00', fontSize: 11 }}
-          >
+      {/* App Header */}
+      <AppHeader />
+      {/* MOCK 배너 (개발자 모드 전용) */}
+      {!saasMode() && useMock() && (
+        <div className="flex shrink-0 items-center px-5" style={{ height: 26, background: '#ffaa0014', borderBottom: '1px solid #2a220f' }}>
+          <span style={{ color: '#ffaa00', fontSize: 11 }}>
             MOCK 모드 — Settings에서 API Key를 입력하면 실제 렌더링됩니다
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Main Area */}
       <div className="relative flex flex-1 overflow-hidden">

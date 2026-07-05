@@ -413,8 +413,8 @@ export function RenderClassicPage() {
     <div className="flex flex-1 overflow-hidden" style={{ background: C.bg, color: C.text, fontSize: 12 }}>
       {/* ══ 좌측 컨트롤 사이드바 (레거시 .sidebar 200px) ══ */}
       <aside className="flex flex-col" style={{ width: 200, minWidth: 200, background: C.sidebar, borderRight: `1px solid ${C.border}` }}>
-        <div style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 13, fontWeight: 600, color: '#fff' }}>
-          Lumanova
+        <div style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', color: '#9a9aa6' }}>
+          RENDER
         </div>
 
         <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto" style={{ padding: '10px 12px', minHeight: 0 }}>
