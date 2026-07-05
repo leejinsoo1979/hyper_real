@@ -106,7 +106,7 @@ function Hero() {
             무료로 시작하기 <span style={{ fontSize: 17 }}>→</span>
           </button>
           <a
-            href="/downloads/NanoBananaRenderer_v1.0.5.rbz"
+            href="/api/download-rbz"
             download
             className="flex items-center gap-2"
             style={{ padding: '16px 28px', borderRadius: 999, border: '1px solid #333', color: '#e6e6ee', fontSize: 15, fontWeight: 600, textDecoration: 'none' }}
@@ -355,7 +355,7 @@ function Footer() {
             <div key={col.h}>
               <p style={{ color: '#e6e6ee', fontWeight: 700, marginBottom: 12 }}>{col.h}</p>
               {col.items.map((it) => (
-                <a key={it} href={it.includes('플러그인') ? '/downloads/NanoBananaRenderer_v1.0.5.rbz' : '#'} className="block" style={{ color: '#8a8a95', marginBottom: 8, textDecoration: 'none' }}>{it}</a>
+                <a key={it} href={it.includes('플러그인') ? '/api/download-rbz' : '#'} className="block" style={{ color: '#8a8a95', marginBottom: 8, textDecoration: 'none' }}>{it}</a>
               ))}
             </div>
           ))}

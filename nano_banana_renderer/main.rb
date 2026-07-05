@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# NanoBanana Renderer - SketchUp AI 렌더링 플러그인
+# Lumanova - SketchUp AI 렌더링 플러그인
 # 메인 진입점
 
 require 'sketchup'
@@ -14,10 +14,10 @@ require 'webrick'
 require 'tmpdir'
 
 module NanoBanana
-  PLUGIN_NAME = 'NanoBanana Renderer'
+  PLUGIN_NAME = 'Lumanova'
   PLUGIN_VERSION = '1.0.5'
-  PLUGIN_AUTHOR = 'NanoBanana Team'
-  PLUGIN_DESCRIPTION = 'SketchUp AI 실사 렌더링 플러그인 (Google Gemini 기반)'
+  PLUGIN_AUTHOR = 'Lumanova'
+  PLUGIN_DESCRIPTION = 'SketchUp과 연동되는 AI 실사 렌더링 플러그인'
 
   # 플러그인 루트 경로
   PLUGIN_ROOT = File.dirname(__FILE__)

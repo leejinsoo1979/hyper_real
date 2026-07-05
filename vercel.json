@@ -2,20 +2,20 @@
   "installCommand": "cd webapp && npm install",
   "buildCommand": "cd webapp && npm run build",
   "outputDirectory": "webapp/dist",
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
+      "handle": "filesystem"
     },
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ],
   "functions": {
     "api/*.js": {
       "memory": 512,
-      "maxDuration": 120
+      "maxDuration": 120,
+      "includeFiles": "webapp/public/downloads/Lumanova_v1.0.5.rbz"
     }
   }
 }

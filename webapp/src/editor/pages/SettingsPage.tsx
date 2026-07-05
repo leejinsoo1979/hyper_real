@@ -45,7 +45,7 @@ export function SettingsPage() {
             </span>
           }
         />
-        <Row label="플러그인" value="NanoBanana Renderer v1.0.5" />
+        <Row label="플러그인" value="Lumanova SketchUp Plugin v1.0.5" />
         <div style={{ marginTop: 8, fontSize: 11.5, color: '#71717c', lineHeight: 1.6 }}>
           SketchUp을 실행하면 자동으로 연결됩니다. 연결이 안 되면 SketchUp을 재시작하세요.
         </div>
@@ -60,7 +60,7 @@ export function SettingsPage() {
             </div>
           </div>
           <a
-            href="/downloads/NanoBananaRenderer_v1.0.5.rbz"
+            href="/api/download-rbz"
             download
             className="flex items-center"
             style={{

@@ -1,5 +1,6 @@
 .vercel
 *.rbz
+!webapp/public/downloads/Lumanova_v1.0.5.rbz
 temp.zip
 webapp/release/
 node_modules/
