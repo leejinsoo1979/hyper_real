@@ -99,10 +99,10 @@ function HistorySkeletonGrid() {
             <div style={{ aspectRatio: '16 / 10', backgroundColor: '#1d1d28' }} />
             <div
               className="flex items-center justify-between gap-2 px-3"
-              style={{ borderTop: '1px solid #222233', height: 34 }}
+              style={{ borderTop: '1px solid #222233', height: 40 }}
             >
               <div style={{ width: 72, height: 8, borderRadius: 4, backgroundColor: '#242430' }} />
-              <div style={{ width: 20, height: 8, borderRadius: 4, backgroundColor: '#242430' }} />
+              <div style={{ width: 48, height: 20, borderRadius: 6, backgroundColor: '#242430' }} />
             </div>
           </div>
         ))}
@@ -180,41 +180,38 @@ function HistoryCard({ snapshot, onOpen }: { snapshot: GraphSnapshot; onOpen: (s
         )}
       </div>
 
-      {hovered && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onOpen(snapshot) }}
-          className="absolute flex items-center justify-center gap-1.5 rounded-full px-3"
-          style={{
-            right: 8,
-            bottom: 4,
-            height: 26,
-            backgroundColor: 'rgba(17,17,24,.94)',
-            border: '1px solid rgba(0,201,167,.58)',
-            color: '#eafffb',
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: 0.2,
-          }}
-          title="View"
-        >
-          <Eye size={13} />
-          View
-        </button>
-      )}
-
       <div
         className="flex items-center justify-between gap-2 px-3"
-        style={{ borderTop: '1px solid #222233' }}
+        style={{ borderTop: '1px solid #222233', height: 40 }}
       >
-        <div className="flex min-w-0 items-center gap-1.5" style={{ height: 34 }}>
+        <div className="flex min-w-0 items-center gap-1.5">
           <Clock size={11} style={{ color: '#777784', flexShrink: 0 }} />
           <span className="truncate" style={{ color: '#9a9aa6', fontSize: 11 }}>
             {formatTimeAgo(snapshot.timestamp)}
           </span>
         </div>
-        <span style={{ color: '#5d5d68', fontSize: 10, flexShrink: 0 }}>
-          -{snapshot.creditUsed}
-        </span>
+        <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+          <span style={{ color: '#5d5d68', fontSize: 10 }}>
+            -{snapshot.creditUsed}
+          </span>
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpen(snapshot) }}
+            className="flex items-center gap-1 rounded-md px-2.5 transition-colors duration-150"
+            style={{
+              height: 24,
+              backgroundColor: hovered ? 'rgba(0,201,167,.16)' : '#20202c',
+              border: `1px solid ${hovered ? 'rgba(0,201,167,.55)' : '#2e2e3b'}`,
+              color: hovered ? '#7df0dc' : '#b8b8c4',
+              fontSize: 11,
+              fontWeight: 700,
+              lineHeight: 1,
+            }}
+            title="View"
+          >
+            <Eye size={12} />
+            View
+          </button>
+        </div>
       </div>
     </div>
   )
