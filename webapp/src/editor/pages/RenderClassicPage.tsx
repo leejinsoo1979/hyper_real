@@ -159,6 +159,52 @@ const EYEDROPPER_CURSOR = (() => {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 1 17, crosshair`
 })()
 
+// ── 이미지 단독 스포이드 (브릿지 마스크 없이) ────────────────────────────────
+// 업로드 이미지/미연결 상태에선 ID 마스크가 없으므로 클릭 지점을 좌표 기반
+// 의사 재질('@point:fx,fy')로 저장하고, 생성 시 그 지점에 원을 그린 사본을
+// 참조 이미지로 보내 "표시된 표면만 교체"를 지시한다.
+const POINT_MATERIAL_PREFIX = '@point:'
+
+function parsePointMaterial(material: string): { fx: number; fy: number } | null {
+  if (!material.startsWith(POINT_MATERIAL_PREFIX)) return null
+  const [fx, fy] = material.slice(POINT_MATERIAL_PREFIX.length).split(',').map(Number)
+  return Number.isFinite(fx) && Number.isFinite(fy) ? { fx, fy } : null
+}
+
+function swapMaterialLabel(material: string): string {
+  const p = parsePointMaterial(material)
+  return p ? `지점 (${Math.round(p.fx * 100)}%, ${Math.round(p.fy * 100)}%)` : material
+}
+
+async function markPointOnImage(image: string, fx: number, fy: number): Promise<string | null> {
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image()
+      i.onload = () => resolve(i)
+      i.onerror = () => reject(new Error('image load failed'))
+      i.src = image.startsWith('data:') || image.startsWith('http') ? image : `data:image/png;base64,${image}`
+    })
+    const c = document.createElement('canvas')
+    c.width = img.naturalWidth
+    c.height = img.naturalHeight
+    const ctx = c.getContext('2d')
+    if (!ctx) return null
+    ctx.drawImage(img, 0, 0)
+    const x = fx * c.width
+    const y = fy * c.height
+    const r = Math.max(14, Math.min(c.width, c.height) * 0.05)
+    ctx.lineWidth = Math.max(4, r * 0.22)
+    ctx.strokeStyle = '#ffffff'
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke()
+    ctx.lineWidth = Math.max(2.5, r * 0.13)
+    ctx.strokeStyle = '#ff2d2d'
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke()
+    return c.toDataURL('image/png')
+  } catch {
+    return null
+  }
+}
+
 // ── 메인 페이지 ──────────────────────────────────────────────────────────────
 
 export function RenderClassicPage() {
@@ -188,7 +234,11 @@ export function RenderClassicPage() {
 
   // 카메라 조작 = 다시 구도 잡는 중: 고정 캡처를 풀고 미러를 재개해 변화가 바로 보이게 한다
   const camCommand = useCallback((action: Parameters<typeof sendCamera>[0], value?: string) => {
-    useClassicStore.getState().set({ mirror: true, frozenSource: null, previewOverride: null, sourceLoading: true })
+    // 카메라가 바뀌면 이전 뷰의 재질 마스크/선택은 어긋나므로 함께 무효화
+    useClassicStore.getState().set({
+      mirror: true, frozenSource: null, previewOverride: null, sourceLoading: true,
+      maskUri: null, maskMap: [], sourceSelectedColors: [],
+    })
     sendCamera(action, value)
   }, [])
 
@@ -197,9 +247,17 @@ export function RenderClassicPage() {
   const [regionPickOpen, setRegionPickOpen] = useState(false)
 
   // 소스 이미지 클릭(비율 좌표) → ID 마스크 픽셀 색 → 재질 이름
+  // 업로드 이미지/브릿지 미연결이면 좌표 기반 지점 선택으로 폴백 (마스크 불필요)
   const handleSourcePick = useCallback(async (fx: number, fy: number) => {
     const st = useClassicStore.getState()
     if (st.sourceTool !== 'eyedropper' && st.resultTool !== 'eyedropper') return
+
+    const uploadedSource = Boolean(st.frozenSource) && !st.frozenFromBridge
+    if (uploadedSource || useUIStore.getState().sketchUpStatus !== 'connected') {
+      setPickedMaterial(`${POINT_MATERIAL_PREFIX}${fx.toFixed(4)},${fy.toFixed(4)}`)
+      st.set({ statusText: '지점 선택됨 — 교체할 재질을 고르세요 (생성 시 해당 표면에 적용)' })
+      return
+    }
 
     let maskUri = st.maskUri
     let maskMap = st.maskMap
@@ -207,7 +265,9 @@ export function RenderClassicPage() {
       st.set({ statusText: '재질 마스크 캡처 중...' })
       const m = await captureMask()
       if (!m) {
-        useClassicStore.getState().set({ statusText: '재질 인식 실패 - 3D 툴 연결을 확인하세요' })
+        // 마스크 캡처 실패 시에도 지점 선택으로 폴백 (스포이드가 죽지 않게)
+        setPickedMaterial(`${POINT_MATERIAL_PREFIX}${fx.toFixed(4)},${fy.toFixed(4)}`)
+        useClassicStore.getState().set({ statusText: '지점 선택됨 — 교체할 재질을 고르세요' })
         return
       }
       maskUri = m.uri
@@ -305,12 +365,24 @@ export function RenderClassicPage() {
     const st = useClassicStore.getState()
     const activeScene = useUIStore.getState().sketchUpScenes.find((sc) => sc.active)?.name
     const key = st.lastSceneClicked ?? activeScene
+    // 미러 중 새 캡처 = 카메라/뷰가 바뀜 → 이전 뷰의 재질 마스크는 이제 어긋난다.
+    // 무효화하고, 매직툴이 켜져 있으면 새 뷰 기준으로 즉시 재캡처한다.
+    const viewChanged = st.mirror && st.maskUri !== null
     st.set({
       sourceLoading: false,
       previewOverride: null,
       lastSceneClicked: null,
       ...(key ? { scenePreviews: { ...st.scenePreviews, [key]: liveImage } } : {}),
+      ...(viewChanged ? { maskUri: null, maskMap: [], sourceSelectedColors: [] } : {}),
     })
+    if (viewChanged && (st.sourceTool === 'magic' || st.resultTool === 'magic')) {
+      useClassicStore.getState().set({ statusText: '뷰 변경 감지 — 재질 마스크 재캡처 중...' })
+      void captureMask().then((m) => {
+        useClassicStore.getState().set(m
+          ? { maskUri: m.uri, maskMap: m.map, statusText: '매직: 새 뷰 기준으로 준비됨' }
+          : { statusText: '재질 마스크 재캡처 실패 - 3D 툴 연결을 확인하세요' })
+      })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveImage])
 
@@ -454,7 +526,38 @@ export function RenderClassicPage() {
     const bridgeInput = !st.frozenSource || st.frozenFromBridge
     if (which === 'src' && st.depthLock && bridgeInput && useUIStore.getState().sketchUpStatus === 'connected') {
       st.set({ statusText: '깊이맵 캡처 중... (구조 고정)' })
-      const depth = await captureDepth()
+      let depth = await captureDepth()
+      // 유효성 검증: 명암 변화가 거의 없는 맵(전부 검정/흰색)은 구조 정보가 없어
+      // 오히려 AI가 "빈 공간"으로 오해하고 가구를 지어낸다 → 폐기하고 깊이 없이 진행
+      if (depth) {
+        const valid = await new Promise<boolean>((resolve) => {
+          const img = new Image()
+          img.onload = () => {
+            try {
+              const c = document.createElement('canvas')
+              c.width = 64
+              c.height = 36
+              const cx = c.getContext('2d', { willReadFrequently: true })!
+              cx.drawImage(img, 0, 0, 64, 36)
+              const d = cx.getImageData(0, 0, 64, 36).data
+              let min = 255
+              let max = 0
+              for (let i = 0; i < d.length; i += 4) {
+                const lum = (d[i] + d[i + 1] + d[i + 2]) / 3
+                if (lum < min) min = lum
+                if (lum > max) max = lum
+              }
+              resolve(max - min >= 24)
+            } catch { resolve(false) }
+          }
+          img.onerror = () => resolve(false)
+          img.src = depth!
+        })
+        if (!valid) {
+          console.warn('[render] 깊이맵이 균일함(정보 없음) — 폐기하고 깊이 없이 렌더')
+          depth = null
+        }
+      }
       if (depth) {
         extraImages.push(depth)
         // 명암 방향: SketchUp 안개 근사 = 밝음이 가까움 / Blender Mist = 밝음이 멂
@@ -484,15 +587,31 @@ export function RenderClassicPage() {
     }
 
     // 스포이드 재질 교체: 지정된 재질을 사용자가 고른 재질로 (1차·2차 공통)
+    // '@point:' 의사 재질(이미지 단독 모드)은 지점에 원을 그린 사본을 함께 보내 위치를 지시한다
     if (st.materialSwaps.length > 0) {
-      const lines = st.materialSwaps.map((sw) => {
-        if (sw.replacement.kind === 'library') {
-          return `- Replace every surface using the material "${sw.material}" with: ${sw.replacement.prompt}.`
+      const lines: string[] = []
+      let hasPointMarker = false
+      for (const sw of st.materialSwaps) {
+        const point = parsePointMaterial(sw.material)
+        let target = `every surface using the material "${sw.material}"`
+        if (point) {
+          const marked = await markPointOnImage(input, point.fx, point.fy)
+          if (marked) {
+            extraImages.push(marked)
+            hasPointMarker = true
+            target = `the entire continuous surface/object at the location circled in red in image ${extraImages.length + 1}`
+          } else {
+            target = `the entire continuous surface located at about ${Math.round(point.fx * 100)}% from the left and ${Math.round(point.fy * 100)}% from the top of the image`
+          }
         }
-        extraImages.push(sw.replacement.image)
-        return `- Replace every surface using the material "${sw.material}" with the material shown in image ${extraImages.length + 1} ("${sw.replacement.name}"). Match its texture, color, and finish.`
-      })
-      promptSuffix += `\n\n[MATERIAL SWAP - APPLY EXACTLY]\n${lines.join('\n')}\nAll other materials must stay unchanged.`
+        if (sw.replacement.kind === 'library') {
+          lines.push(`- Replace ${target} with: ${sw.replacement.prompt}.`)
+        } else {
+          extraImages.push(sw.replacement.image)
+          lines.push(`- Replace ${target} with the material shown in image ${extraImages.length + 1} ("${sw.replacement.name}"). Match its texture, color, and finish.`)
+        }
+      }
+      promptSuffix += `\n\n[MATERIAL SWAP - APPLY EXACTLY]\n${lines.join('\n')}\nAll other materials must stay unchanged.${hasPointMarker ? ' Never draw the red circle marker in the output.' : ''}`
     }
 
     try {
@@ -894,24 +1013,11 @@ export function RenderClassicPage() {
             imageFooter={(s.materialSwaps.length > 0 || s.sourceSelectedColors.length > 0) ? (
               <div className="flex flex-wrap gap-1.5">
                 {s.sourceSelectedColors.length > 0 && (
-                  <span
-                    className="flex items-center gap-1.5"
-                    style={{
-                      padding: '4px 10px', borderRadius: 999, fontSize: 11,
-                      background: 'rgba(8,12,12,0.82)', color: '#7df0dd',
-                      border: '1px solid #1f5952', backdropFilter: 'blur(3px)',
-                    }}
-                  >
-                    <Wand2 size={11} />
-                    선택 영역 {s.sourceSelectedColors.length}개 — 생성 시 이 부분만 변경
-                    <button
-                      title="선택 해제"
-                      onClick={() => s.set({ sourceSelectedColors: [] })}
-                      style={{ color: '#7ba8a0', display: 'flex' }}
-                    >
-                      <X size={11} />
-                    </button>
-                  </span>
+                  <RegionLayerList
+                    colors={s.sourceSelectedColors}
+                    maskMap={s.maskMap}
+                    onRemove={(color) => s.set({ sourceSelectedColors: s.sourceSelectedColors.filter((c) => c !== color) })}
+                  />
                 )}
                 {s.materialSwaps.map((sw) => (
                   <span
@@ -923,7 +1029,7 @@ export function RenderClassicPage() {
                       border: '1px solid #1f5952', backdropFilter: 'blur(3px)',
                     }}
                   >
-                    {sw.material} → {sw.replacement.name}
+                    {swapMaterialLabel(sw.material)} → {sw.replacement.name}
                     <button
                       title="교체 취소"
                       onClick={() => s.set({ materialSwaps: s.materialSwaps.filter((x) => x.material !== sw.material) })}
@@ -982,24 +1088,14 @@ export function RenderClassicPage() {
             onImagePick={s.resultTool === 'eyedropper' && !s.resultMaskView ? handleSourcePick : undefined}
             imageFooter={s.selectedColors.length > 0 && s.resultImage ? (
               <div className="flex flex-wrap gap-1.5">
-                <span
-                  className="flex items-center gap-1.5"
-                  style={{
-                    padding: '4px 10px', borderRadius: 999, fontSize: 11,
-                    background: 'rgba(8,12,12,0.82)', color: '#7df0dd',
-                    border: '1px solid #1f5952', backdropFilter: 'blur(3px)',
+                <RegionLayerList
+                  colors={s.selectedColors}
+                  maskMap={s.maskMap}
+                  onRemove={(color) => {
+                    const next = s.selectedColors.filter((c) => c !== color)
+                    s.set({ selectedColors: next, ...(next.length === 0 ? { regionMaterial: null } : {}) })
                   }}
-                >
-                  <Wand2 size={11} />
-                  선택 영역 {s.selectedColors.length}개 — 2차 생성 시 이 부분만 변경
-                  <button
-                    title="선택 해제"
-                    onClick={() => s.set({ selectedColors: [], regionMaterial: null })}
-                    style={{ color: '#7ba8a0', display: 'flex' }}
-                  >
-                    <X size={11} />
-                  </button>
-                </span>
+                />
                 {s.regionMaterial ? (
                   <span
                     className="flex items-center gap-1.5"
@@ -1177,6 +1273,66 @@ function StyleRefSlot({ image, onPick }: { image: string | null; onPick: (img: s
   )
 }
 
+function regionLabel(color: string, maskMap: { color: string; material: string }[], index: number) {
+  const exact = maskMap.find((m) => m.color.toLowerCase() === color.toLowerCase())
+  if (exact?.material) return exact.material
+
+  const r = parseInt(color.slice(1, 3), 16)
+  const g = parseInt(color.slice(3, 5), 16)
+  const b = parseInt(color.slice(5, 7), 16)
+  let best: string | null = null
+  let bestD = 60 * 60
+  for (const m of maskMap) {
+    const mr = parseInt(m.color.slice(1, 3), 16)
+    const mg = parseInt(m.color.slice(3, 5), 16)
+    const mb = parseInt(m.color.slice(5, 7), 16)
+    const d = (r - mr) ** 2 + (g - mg) ** 2 + (b - mb) ** 2
+    if (d < bestD) {
+      bestD = d
+      best = m.material
+    }
+  }
+  return best ?? `선택 영역 ${index + 1}`
+}
+
+function RegionLayerList({
+  colors,
+  maskMap,
+  onRemove,
+}: {
+  colors: string[]
+  maskMap: { color: string; material: string }[]
+  onRemove: (color: string) => void
+}) {
+  return (
+    <>
+      {colors.map((color, index) => (
+        <span
+          key={color}
+          className="flex items-center gap-1.5"
+          style={{
+            padding: '4px 9px',
+            borderRadius: 999,
+            fontSize: 11,
+            background: 'rgba(8,12,12,0.82)',
+            color: '#dffdf8',
+            border: '1px solid #1f5952',
+            backdropFilter: 'blur(3px)',
+            maxWidth: 240,
+          }}
+        >
+          <span style={{ width: 9, height: 9, borderRadius: 3, background: color, border: '1px solid rgba(255,255,255,0.6)', flex: '0 0 auto' }} />
+          <span style={{ color: '#7df0dd', fontWeight: 850, flex: '0 0 auto' }}>Layer {index + 1}</span>
+          <span className="truncate" style={{ minWidth: 0 }}>{regionLabel(color, maskMap, index)}</span>
+          <button title="이 레이어 선택 해제" onClick={() => onRemove(color)} style={{ color: '#7ba8a0', display: 'flex', flex: '0 0 auto' }}>
+            <X size={11} />
+          </button>
+        </span>
+      ))}
+    </>
+  )
+}
+
 // ── 소스 툴바 (스포이드 · 연필 · 매직) ───────────────────────────────────────
 
 function SourceToolbar({ tool, onTool }: {
@@ -1271,7 +1427,7 @@ function MaterialSwapDialog({ material, regionCount, onApply, onClose }: {
   // 2) 없으면(용량 예산으로 생략된 경우) 그 재질 하나만 브릿지에서 상세 추출
   // "A 외 2" / "A / B" 병합 라벨은 첫 재질 이름으로 조회한다
   useEffect(() => {
-    if (material === null) { setSourceLoading(false); return }
+    if (material === null || material.startsWith(POINT_MATERIAL_PREFIX)) { setSourceLoading(false); return }
     let cancelled = false
     const lookupName = material.includes(' 외 ') ? material.split(' 외 ')[0] : material.split(' / ')[0]
     void (async () => {
@@ -1343,7 +1499,7 @@ function MaterialSwapDialog({ material, regionCount, onApply, onClose }: {
         {/* 좌: 원본 재질 → 우: 교체 재질 */}
         <div className="flex items-center gap-3" style={{ padding: '16px 22px', borderBottom: '1px solid #20202a' }}>
           {material !== null ? (
-            <SwapPreviewBox title="스포이드로 선택한 재질" name={material} thumb={sourcePreview.thumb} color={sourcePreview.color} loading={sourceLoading} />
+            <SwapPreviewBox title="스포이드로 선택한 재질" name={swapMaterialLabel(material)} thumb={sourcePreview.thumb} color={sourcePreview.color} loading={sourceLoading} />
           ) : (
             <div className="flex min-w-0 flex-1 flex-col items-center gap-2">
               <div style={{ color: '#8a8a96', fontSize: 11 }}>적용 대상</div>
@@ -1936,7 +2092,7 @@ function MagicSelectOverlay({ colorsKey = 'sourceSelectedColors' }: { colorsKey?
     const cur = st[colorsKey]
     const next = cur.includes(hex) ? cur.filter((c) => c !== hex) : [...cur, hex]
     const statusText = next.length > 0
-      ? `매직: ${next.length}개 영역 선택됨 — 프롬프트 입력 후 생성하면 선택 영역만 변경됩니다`
+      ? `매직: 선택 레이어 ${next.length}개 — 프롬프트 입력 후 선택 레이어만 변경됩니다`
       : '매직: 선택 해제됨'
     if (colorsKey === 'sourceSelectedColors') st.set({ sourceSelectedColors: next, statusText })
     else st.set({ selectedColors: next, statusText })
@@ -2044,20 +2200,7 @@ function MaskSelectOverlay() {
 
   useEffect(() => { redraw(s.selectedColors, hoverColor) }, [s.selectedColors, hoverColor]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectedNames = s.selectedColors.map((c) => {
-    const exact = s.maskMap.find((m) => m.color.toLowerCase() === c.toLowerCase())
-    if (exact) return exact.material
-    // 정확 일치 실패(셰이딩 편차 등): 가장 가까운 매핑 색의 재질명
-    const r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16)
-    let best: string | null = null
-    let bestD = 60 * 60
-    for (const m of s.maskMap) {
-      const mr = parseInt(m.color.slice(1, 3), 16), mg = parseInt(m.color.slice(3, 5), 16), mb = parseInt(m.color.slice(5, 7), 16)
-      const d = (r - mr) ** 2 + (g - mg) ** 2 + (b - mb) ** 2
-      if (d < bestD) { bestD = d; best = m.material }
-    }
-    return best ?? '선택 영역'
-  })
+  const selectedNames = s.selectedColors.map((c, i) => regionLabel(c, s.maskMap, i))
 
   return (
     <>
@@ -2078,8 +2221,8 @@ function MaskSelectOverlay() {
       {/* 선택된 재질 칩 */}
       <div className="absolute left-2 top-2 flex flex-wrap gap-1" style={{ maxWidth: '80%' }}>
         {selectedNames.map((n, i) => (
-          <span key={i} className="flex items-center gap-1" style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10.5, background: 'rgba(0,201,167,0.9)', color: '#06251f', fontWeight: 700 }}>
-            {n}
+          <span key={s.selectedColors[i]} className="flex items-center gap-1" style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10.5, background: 'rgba(0,201,167,0.9)', color: '#06251f', fontWeight: 700 }}>
+            Layer {i + 1}: {n}
             <button onClick={() => {
               const st = useClassicStore.getState()
               st.set({ selectedColors: st.selectedColors.filter((c) => c !== st.selectedColors[i]) })
