@@ -115,6 +115,17 @@ function defaultSceneMeta(): SceneMeta {
   }
 }
 
+/** 브릿지(3D 툴)에서 주입된 SOURCE 노드인지 판별. 업로드/붙여넣기 노드와 구분 */
+export function isBridgeOrigin(origin: unknown): boolean {
+  return origin === 'sketchup' || origin === 'blender' || origin === 'rhino'
+}
+
+/** 연결된 툴의 표시 이름 ('SketchUp' | 'Blender' | 'Rhino'). 미연결이면 기본값 */
+export function bridgeToolLabel(): string {
+  const tool = useUIStore.getState().bridgeTool ?? 'sketchup'
+  return tool === 'sketchup' ? 'SketchUp' : tool[0].toUpperCase() + tool.slice(1)
+}
+
 function toDataUri(base64: string): string {
   if (base64.startsWith('data:')) return base64
   const mime = base64.startsWith('/9j/') ? 'image/jpeg' : 'image/png'

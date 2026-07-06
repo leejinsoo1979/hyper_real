@@ -4,7 +4,7 @@ import { useClassicStore, type ClassicModel, type ClassicSize } from '../../stat
 import { useUIStore } from '../../state/uiStore'
 import { useGraphStore } from '../../state/graphStore'
 import { useHistoryStore } from '../../state/historyStore'
-import { selectScene, requestCapture, addScene, sendCamera, fetchSourceOnce, captureMask } from '../../api/sketchupBridge'
+import { selectScene, requestCapture, addScene, sendCamera, fetchSourceOnce, captureMask, isBridgeOrigin, bridgeToolLabel } from '../../api/sketchupBridge'
 import { generateAutoPrompt, buildLightingDescription } from '../../engine/autoPrompt'
 import { renderMain } from '../../engine/adapters/mainRenderer'
 import { EditOverlay } from '../panels/EditOverlay'
@@ -163,9 +163,14 @@ export function RenderClassicPage() {
   const [viewerOpen, setViewerOpen] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const viewport = useUIStore((st) => st.sketchUpViewport)
+  const bridgeTool = useUIStore((st) => st.bridgeTool) // 라벨 반응성용 구독
+  const toolLabel = bridgeTool ? bridgeToolLabel() : 'SketchUp'
 
-  // SketchUp 미러 이미지 (브릿지가 그래프의 sketchup 소스 노드에 주입)
-  const liveNode = nodes.find((n) => n.type === 'SOURCE' && 'origin' in n.params && n.params.origin === 'sketchup')
+  // 3D 툴 미러 이미지 (브릿지가 그래프의 소스 노드에 주입 — 연결 툴에 따라 origin이 다름)
+  // 툴을 오간 경우 소스 노드가 툴별로 존재할 수 있으므로 현재 연결 툴의 노드를 우선한다
+  const liveNode =
+    nodes.find((n) => n.type === 'SOURCE' && 'origin' in n.params && n.params.origin === bridgeTool)
+    ?? nodes.find((n) => n.type === 'SOURCE' && 'origin' in n.params && isBridgeOrigin(n.params.origin))
   const liveImage = liveNode?.result?.image ?? (liveNode && 'image' in liveNode.params ? (liveNode.params as { image: string }).image : null)
   const sourceImage = s.previewOverride ?? (s.mirror ? (liveImage ?? s.frozenSource) : (s.frozenSource ?? liveImage))
 
@@ -280,7 +285,7 @@ export function RenderClassicPage() {
         return
       }
       if (Date.now() - t0 < 10_000) setTimeout(poll, 450)
-      else useClassicStore.getState().set({ sourceLoading: false, statusText: 'Convert 실패 - SketchUp 연결 확인' })
+      else useClassicStore.getState().set({ sourceLoading: false, statusText: `Convert 실패 - ${bridgeToolLabel()} 연결 확인` })
     }
     setTimeout(poll, 600)
   }, [s])
@@ -626,9 +631,9 @@ export function RenderClassicPage() {
             label="SOURCE"
             active
             image={sourceImage}
-            emptyText="SketchUp 연결 대기 중... (또는 이미지 버튼으로 불러오기)"
+            emptyText={`${toolLabel} 연결 대기 중... (또는 이미지 버튼으로 불러오기)`}
             loading={s.sourceLoading && !liveStream}
-            loadingText="SketchUp 화면 불러오는 중..."
+            loadingText={`${toolLabel} 화면 불러오는 중...`}
             video={liveStream ? videoRef : null}
             videoViewport={viewport}
             tab={tab.src}

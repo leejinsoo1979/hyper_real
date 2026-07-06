@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useUIStore } from '../../state/uiStore'
 import { useGraphStore } from '../../state/graphStore'
-import { selectScene, requestCapture, sendCamera } from '../../api/sketchupBridge'
+import { selectScene, requestCapture, sendCamera, isBridgeOrigin } from '../../api/sketchupBridge'
 
 // ---------------------------------------------------------------------------
 // Camera 페이지 — 구 나노바나나 플러그인의 카메라/씬 제어 전용 화면
@@ -56,13 +56,14 @@ function SegRow({ label, options, onPick }: { label: string; options: { v: strin
 export function CameraPage() {
   const status = useUIStore((s) => s.sketchUpStatus)
   const scenes = useUIStore((s) => s.sketchUpScenes)
+  const bridgeTool = useUIStore((s) => s.bridgeTool)
   const nodes = useGraphStore((s) => s.nodes)
   const [switching, setSwitching] = useState<string | null>(null)
 
-  // SketchUp 소스 노드의 최신 캡처 = 실시간 프리뷰
-  const sketchupNode = nodes.find(
-    (n) => n.type === 'SOURCE' && 'origin' in n.params && n.params.origin === 'sketchup',
-  )
+  // 브릿지(3D 툴) 소스 노드의 최신 캡처 = 실시간 프리뷰 (현재 연결 툴 우선)
+  const sketchupNode =
+    nodes.find((n) => n.type === 'SOURCE' && 'origin' in n.params && n.params.origin === bridgeTool)
+    ?? nodes.find((n) => n.type === 'SOURCE' && 'origin' in n.params && isBridgeOrigin(n.params.origin))
   const preview =
     sketchupNode?.result?.image ??
     (sketchupNode && 'image' in sketchupNode.params ? (sketchupNode.params as { image: string }).image : null)
