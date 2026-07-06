@@ -295,6 +295,8 @@ module NanoBanana
             capture_id_mask
           when 'load_materials'
             update_bridge_materials
+          when 'load_material'
+            update_bridge_material_entry(cmd['name'])
           end
         rescue StandardError => e
           puts "[NanoBanana] 브릿지 명령 에러(#{cmd['type']}): #{e.message}"
@@ -359,6 +361,54 @@ module NanoBanana
       puts "[NanoBanana] 브릿지: 재질 #{materials.length}개 추출 (텍스처 #{materials.count { |m| m[:texture] }}개)"
     rescue StandardError => e
       puts "[NanoBanana] 재질 추출 에러: #{e.message}"
+    end
+
+    # 재질 1개 상세 추출 (스포이드용) — 일괄 추출의 용량 예산과 무관하게
+    # 해당 재질의 실제 텍스처를 반드시 가져와 /api/materials 캐시 맨 앞에 주입한다.
+    def update_bridge_material_entry(name)
+      model = Sketchup.active_model
+      return unless model
+
+      target = name.to_s
+      m = model.materials.find { |mm| (mm.display_name.to_s.empty? ? mm.name : mm.display_name) == target } ||
+          model.materials.find { |mm| mm.name == target }
+      unless m
+        puts "[NanoBanana] 재질 상세: '#{target}' 을(를) 찾지 못함"
+        return
+      end
+
+      color = m.color
+      texture = nil
+      if m.texture
+        begin
+          ext = File.extname(m.texture.filename.to_s).downcase
+          ext = '.png' unless ['.png', '.jpg', '.jpeg'].include?(ext)
+          temp_path = File.join(Dir.tmpdir, "lumanova_material_one#{ext}")
+          File.delete(temp_path) if File.exist?(temp_path)
+          m.texture.write(temp_path)
+          if File.exist?(temp_path) && File.size(temp_path) <= 6_000_000
+            texture = Base64.strict_encode64(File.binread(temp_path))
+          end
+        rescue StandardError
+          texture = nil
+        end
+      end
+
+      list = begin
+        JSON.parse(@bridge_materials_body)['materials'] || []
+      rescue StandardError
+        []
+      end
+      list = list.reject { |e| e['name'] == target }
+      list.unshift({
+        'name' => target,
+        'color' => format('#%02x%02x%02x', color.red, color.green, color.blue),
+        'texture' => texture,
+      })
+      @bridge_materials_body = { materials: list, timestamp: Time.now.to_i }.to_json
+      puts "[NanoBanana] 브릿지: 재질 상세 추출 -> #{target} (텍스처 #{texture ? '있음' : '없음'})"
+    rescue StandardError => e
+      puts "[NanoBanana] 재질 상세 추출 에러: #{e.message}"
     end
 
     def stop_local_server

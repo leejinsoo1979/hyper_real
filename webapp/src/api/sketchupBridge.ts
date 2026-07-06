@@ -307,6 +307,23 @@ export async function getCachedSourceMaterials(): Promise<SourceMaterial[] | nul
 }
 
 /**
+ * 재질 1개를 브릿지에서 즉시 상세 추출 (스포이드용).
+ * 일괄 추출의 용량 예산과 무관하게 해당 재질의 실제 텍스처를 가져온다.
+ */
+export async function loadMaterialDetail(name: string): Promise<SourceMaterial | null> {
+  const before = (await fetchMaterialsOnce())?.timestamp ?? 0
+  if (!(await sendCommand({ type: 'load_material', name }))) return null
+  for (let i = 0; i < 25; i++) {
+    await new Promise((r) => setTimeout(r, 400))
+    const now = await fetchMaterialsOnce()
+    if (now && now.timestamp !== before) {
+      return now.materials.find((m) => m.name === name) ?? null
+    }
+  }
+  return null
+}
+
+/**
  * 연결된 3D 툴의 모델 재질을 추출해 온다. 브릿지에 load_materials 명령을 보내고
  * 캐시 timestamp가 갱신될 때까지 폴링한다 (Blender는 주기 갱신이라 명령은 무시됨).
  * null = 실패/미지원 브릿지.

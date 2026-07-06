@@ -5,7 +5,7 @@ import { materials as libraryMaterials, type MaterialAsset } from './MaterialsPa
 import { useUIStore } from '../../state/uiStore'
 import { useGraphStore } from '../../state/graphStore'
 import { useHistoryStore } from '../../state/historyStore'
-import { selectScene, requestCapture, addScene, sendCamera, fetchSourceOnce, captureMask, isBridgeOrigin, bridgeToolLabel, getCachedSourceMaterials, materialTextureUri } from '../../api/sketchupBridge'
+import { selectScene, requestCapture, addScene, sendCamera, fetchSourceOnce, captureMask, isBridgeOrigin, bridgeToolLabel, getCachedSourceMaterials, loadMaterialDetail, loadSourceMaterials, materialTextureUri } from '../../api/sketchupBridge'
 import { generateAutoPrompt, buildLightingDescription } from '../../engine/autoPrompt'
 import { renderMain } from '../../engine/adapters/mainRenderer'
 import { EditOverlay } from '../panels/EditOverlay'
@@ -193,10 +193,10 @@ export function RenderClassicPage() {
   }, [])
 
   // ── 스포이드 재질 교체 ──────────────────────────────────────────────────
-  const [pickedMaterial, setPickedMaterial] = useState<{ material: string; thumb: string | null } | null>(null)
+  const [pickedMaterial, setPickedMaterial] = useState<string | null>(null)
 
   // 소스 이미지 클릭(비율 좌표) → ID 마스크 픽셀 색 → 재질 이름
-  const handleSourcePick = useCallback(async (fx: number, fy: number, imageSrc: string) => {
+  const handleSourcePick = useCallback(async (fx: number, fy: number) => {
     const st = useClassicStore.getState()
     if (st.sourceTool !== 'eyedropper') return
 
@@ -245,41 +245,19 @@ export function RenderClassicPage() {
       return
     }
 
-    // 클릭 지점 주변 소스 이미지를 잘라 썸네일로 — 브릿지 텍스처가 없어도 항상 표시된다
-    const thumb = await new Promise<string | null>((resolve) => {
-      const src = new Image()
-      src.onload = () => {
-        try {
-          const cw = Math.round(Math.min(src.naturalWidth, src.naturalHeight) * 0.22)
-          const cx = Math.max(0, Math.min(src.naturalWidth - cw, Math.round(fx * src.naturalWidth - cw / 2)))
-          const cy = Math.max(0, Math.min(src.naturalHeight - cw, Math.round(fy * src.naturalHeight - cw / 2)))
-          const cc = document.createElement('canvas')
-          cc.width = 200
-          cc.height = 200
-          cc.getContext('2d')!.drawImage(src, cx, cy, cw, cw, 0, 0, 200, 200)
-          resolve(cc.toDataURL('image/jpeg', 0.85))
-        } catch {
-          resolve(null)
-        }
-      }
-      src.onerror = () => resolve(null)
-      src.src = imageSrc
-    })
-
-    setPickedMaterial({ material: entry.material, thumb })
+    setPickedMaterial(entry.material)
   }, [])
 
   const addSwap = useCallback((replacement: MaterialSwap['replacement']) => {
-    const material = pickedMaterial
-    if (!material) return
+    if (!pickedMaterial) return
     const st = useClassicStore.getState()
     st.set({
       materialSwaps: [
-        ...st.materialSwaps.filter((sw) => sw.material !== material.material),
-        { material: material.material, replacement },
+        ...st.materialSwaps.filter((sw) => sw.material !== pickedMaterial),
+        { material: pickedMaterial, replacement },
       ],
       sourceTool: 'none',
-      statusText: `재질 교체 지정: ${material.material} → ${replacement.name} (생성 시 적용됩니다)`,
+      statusText: `재질 교체 지정: ${pickedMaterial} → ${replacement.name} (생성 시 적용됩니다)`,
     })
     setPickedMaterial(null)
   }, [pickedMaterial])
@@ -954,12 +932,13 @@ function SourceToolbar({ tool, onTool }: {
 // ── 재질 교체 다이얼로그 (스포이드로 재질 선택 후) ───────────────────────────
 // 좌: 스포이드로 찍은 원본 재질 / 우: 사용자가 고른 교체 재질 → [적용]
 
-function SwapPreviewBox({ title, name, thumb, color, empty }: {
+function SwapPreviewBox({ title, name, thumb, color, empty, loading }: {
   title: string
   name: string | null
   thumb?: string | null
   color?: string | null
   empty?: string
+  loading?: boolean
 }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center gap-2">
@@ -973,7 +952,9 @@ function SwapPreviewBox({ title, name, thumb, color, empty }: {
         }}
       >
         {!thumb && !color && (
-          <span className="px-2 text-center" style={{ color: '#55555f', fontSize: 11, lineHeight: 1.5 }}>{empty ?? ''}</span>
+          loading
+            ? <Loader2 size={18} className="animate-spin" style={{ color: '#00c9a7' }} />
+            : <span className="px-2 text-center" style={{ color: '#55555f', fontSize: 11, lineHeight: 1.5 }}>{empty ?? ''}</span>
         )}
       </div>
       <div className="w-full truncate text-center" style={{ color: name ? '#fff' : '#55555f', fontSize: 12.5, fontWeight: 700 }}>
@@ -984,7 +965,7 @@ function SwapPreviewBox({ title, name, thumb, color, empty }: {
 }
 
 function MaterialSwapDialog({ material, onApply, onClose }: {
-  material: { material: string; thumb: string | null }
+  material: string
   onApply: (replacement: MaterialSwap['replacement']) => void
   onClose: () => void
 }) {
@@ -992,20 +973,34 @@ function MaterialSwapDialog({ material, onApply, onClose }: {
   const [replacement, setReplacement] = useState<MaterialSwap['replacement'] | null>(null)
   const [replacementPreview, setReplacementPreview] = useState<{ thumb: string | null; color: string | null }>({ thumb: null, color: null })
   const [sourcePreview, setSourcePreview] = useState<{ thumb: string | null; color: string | null }>({ thumb: null, color: null })
+  const [sourceLoading, setSourceLoading] = useState(true)
   const uploadRef = useRef<HTMLInputElement>(null)
 
-  // 스포이드로 찍은 재질의 실제 텍스처/색 (브릿지 캐시에서 — 재추출 없음)
+  // 스포이드로 찍은 재질의 "실제" 텍스처를 가져온다:
+  // 1) 일괄 추출 캐시에 텍스처가 있으면 즉시 사용
+  // 2) 없으면(용량 예산으로 생략된 경우) 그 재질 하나만 브릿지에서 상세 추출
+  // "A 외 2" / "A / B" 병합 라벨은 첫 재질 이름으로 조회한다
   useEffect(() => {
     let cancelled = false
-    void getCachedSourceMaterials().then((list) => {
-      if (cancelled || !list) return
-      const found = list.find((m) => m.name === material.material)
-      if (found) {
-        setSourcePreview({ thumb: materialTextureUri(found), color: found.color })
+    const lookupName = material.includes(' 외 ') ? material.split(' 외 ')[0] : material.split(' / ')[0]
+    void (async () => {
+      const cached = await getCachedSourceMaterials()
+      let found = cached?.find((m) => m.name === lookupName) ?? null
+      if (!found?.texture) {
+        const detail = await loadMaterialDetail(lookupName)
+        if (detail) found = detail
       }
-    })
+      // 상세 추출 미지원(구버전 브릿지) + 캐시 없음 → 전체 재질 로드로 폴백
+      if (!found) {
+        const all = await loadSourceMaterials()
+        found = all?.find((m) => m.name === lookupName) ?? null
+      }
+      if (cancelled) return
+      setSourceLoading(false)
+      if (found) setSourcePreview({ thumb: materialTextureUri(found), color: found.color })
+    })()
     return () => { cancelled = true }
-  }, [material.material])
+  }, [material])
 
   const pickLibrary = (asset: MaterialAsset) => {
     setReplacement({ kind: 'library', name: asset.name, prompt: asset.prompt })
@@ -1054,7 +1049,7 @@ function MaterialSwapDialog({ material, onApply, onClose }: {
 
         {/* 좌: 원본 재질 → 우: 교체 재질 */}
         <div className="flex items-center gap-3" style={{ padding: '16px 22px', borderBottom: '1px solid #20202a' }}>
-          <SwapPreviewBox title="스포이드로 선택한 재질" name={material.material} thumb={sourcePreview.thumb ?? material.thumb} color={sourcePreview.color} />
+          <SwapPreviewBox title="스포이드로 선택한 재질" name={material} thumb={sourcePreview.thumb} color={sourcePreview.color} loading={sourceLoading} />
           <span style={{ color: '#00c9a7', fontSize: 22, fontWeight: 800, flexShrink: 0 }}>→</span>
           <SwapPreviewBox
             title="교체할 재질"
