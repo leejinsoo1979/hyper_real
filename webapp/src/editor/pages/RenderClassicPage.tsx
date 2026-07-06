@@ -151,6 +151,9 @@ declare global {
 
 // 스포이드 커서 (핫스팟 = 촉 끝 좌하단). 흰 외곽선 + 검정 본선이라 밝고 어두운 배경 모두에서 보인다
 // 표준 커서 크기(~18px)로 렌더링 — 24px + 두꺼운 외곽선은 커서로는 과대
+// 깊이맵 연속 무효(구버전 플러그인의 검정 맵) 시 세션 내 캡처 스킵 — 렌더마다 수 초 낭비 방지
+let depthInvalidStreak = 0
+
 const EYEDROPPER_CURSOR = (() => {
   const paths = '<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/>'
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none">`
@@ -554,7 +557,7 @@ export function RenderClassicPage() {
 
     // 구조 고정: 브릿지 뷰가 입력일 때만 깊이맵 캡처 (업로드 이미지엔 미적용)
     const bridgeInput = !st.frozenSource || st.frozenFromBridge
-    if (which === 'src' && st.depthLock && bridgeInput && useUIStore.getState().sketchUpStatus === 'connected') {
+    if (which === 'src' && st.depthLock && bridgeInput && useUIStore.getState().sketchUpStatus === 'connected' && depthInvalidStreak < 2) {
       st.set({ statusText: '깊이맵 캡처 중... (구조 고정)' })
       let depth = await captureDepth()
       // 유효성 검증: 명암 변화가 거의 없는 맵(전부 검정/흰색)은 구조 정보가 없어
@@ -584,8 +587,11 @@ export function RenderClassicPage() {
           img.src = depth!
         })
         if (!valid) {
-          console.warn('[render] 깊이맵이 균일함(정보 없음) — 폐기하고 깊이 없이 렌더')
+          depthInvalidStreak += 1
+          console.warn(`[render] 깊이맵이 균일함(정보 없음) — 폐기 (연속 ${depthInvalidStreak}회${depthInvalidStreak >= 2 ? ', 이후 캡처 생략 — SketchUp 재시작 시 복구' : ''})`)
           depth = null
+        } else {
+          depthInvalidStreak = 0
         }
       }
       if (depth) {
@@ -1773,7 +1779,7 @@ function SourceDropZone({ onBrowse }: { onBrowse: () => void }) {
   )
 }
 
-function Panel({ label, labelRight, active, image, emptyText, emptyContent, loading, loadingText, video, videoViewport, imageOverlay, viewTabs, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions, onView, imageToolbar, onImagePick, imageFooter }: {
+function Panel({ label, labelRight, active, image, emptyText, emptyContent, loading, loadingText, video, videoViewport, imageOverlay, viewTabs, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions, onView, imageToolbar, onImagePick, pickCursor, imageFooter }: {
   label: string
   labelRight?: React.ReactNode
   active?: boolean
@@ -1799,8 +1805,10 @@ function Panel({ label, labelRight, active, image, emptyText, emptyContent, load
   onView?: () => void
   /** 이미지 영역 좌상단 툴바 (스포이드 등) */
   imageToolbar?: React.ReactNode
-  /** 이미지 클릭 시 이미지 내 비율 좌표(0~1)로 콜백 — 지정되면 십자 커서 */
+  /** 이미지 클릭 시 이미지 내 비율 좌표(0~1)로 콜백 — 지정되면 픽 커서 */
   onImagePick?: (fx: number, fy: number, imageSrc: string) => void
+  /** 픽 모드 커서 (기본: 스포이드). 매직툴은 crosshair 전달 */
+  pickCursor?: string
   /** 이미지 영역 하단 오버레이 (재질 교체 칩 등) */
   imageFooter?: React.ReactNode
 }) {
@@ -1845,7 +1853,14 @@ function Panel({ label, labelRight, active, image, emptyText, emptyContent, load
         ) : image && imageOverlay ? (
           // 오버레이(클릭 선택)는 이미지의 실제 표시 영역과 정확히 겹쳐야 한다
           // - 컨테이너 전체가 아니라 이미지 비율 박스 안에 이미지+캔버스를 함께 넣는다
-          <AspectFitBox src={image}>{imageOverlay}</AspectFitBox>
+          // - 오버레이가 떠 있어도 클릭 선택은 계속 가능해야 한다 (AI 매직 재선택 등)
+          <AspectFitBox
+            src={image}
+            cursor={onImagePick ? (pickCursor ?? EYEDROPPER_CURSOR) : undefined}
+            onPick={onImagePick ? (fx, fy) => onImagePick(fx, fy, image) : undefined}
+          >
+            {imageOverlay}
+          </AspectFitBox>
         ) : image ? (
           <div className="group relative flex h-full w-full items-center justify-center">
             <img
@@ -1853,7 +1868,7 @@ function Panel({ label, labelRight, active, image, emptyText, emptyContent, load
               alt=""
               className="h-full w-full object-contain"
               draggable={false}
-              style={onImagePick ? { cursor: EYEDROPPER_CURSOR } : undefined}
+              style={onImagePick ? { cursor: pickCursor ?? EYEDROPPER_CURSOR } : undefined}
               onClick={onImagePick ? (e) => {
                 // object-contain 레터박스를 제외한 이미지 내부 비율 좌표 계산
                 const el = e.currentTarget
@@ -1992,7 +2007,14 @@ function CroppedVideo({ videoRef, viewport }: {
 
 // 이미지 비율에 맞춘 컨테인 박스: 이미지와 오버레이(캔버스)가 픽셀 단위로 정확히 겹친다
 // (object-contain 이미지 위에 inset-0 캔버스를 얹으면 레터박스만큼 어긋난다)
-function AspectFitBox({ src, children }: { src: string; children: React.ReactNode }) {
+function AspectFitBox({ src, children, cursor, onPick }: {
+  src: string
+  children: React.ReactNode
+  /** 픽 모드 커서 (onPick과 함께 사용) */
+  cursor?: string
+  /** 박스 내부 클릭 → 이미지 비율 좌표 (박스 = 이미지 표시 영역과 동일) */
+  onPick?: (fx: number, fy: number) => void
+}) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null)
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
@@ -2019,7 +2041,21 @@ function AspectFitBox({ src, children }: { src: string; children: React.ReactNod
   }, [nat])
 
   return (
-    <div ref={wrapRef} className="relative" style={dims ? { width: dims.w, height: dims.h } : undefined}>
+    <div
+      ref={wrapRef}
+      className="relative"
+      style={{
+        ...(dims ? { width: dims.w, height: dims.h } : {}),
+        ...(onPick && cursor ? { cursor } : {}),
+      }}
+      onClick={onPick ? (e) => {
+        const r = e.currentTarget.getBoundingClientRect()
+        const fx = (e.clientX - r.left) / r.width
+        const fy = (e.clientY - r.top) / r.height
+        if (fx < 0 || fy < 0 || fx > 1 || fy > 1) return
+        onPick(fx, fy)
+      } : undefined}
+    >
       {dims && <img src={src} alt="" className="absolute inset-0 h-full w-full" draggable={false} />}
       {dims && children}
     </div>
