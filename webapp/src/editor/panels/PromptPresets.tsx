@@ -119,29 +119,36 @@ function PresetCard({
 }) {
   return (
     <button
-      className="flex flex-col items-center justify-center gap-1.5 rounded-lg p-2 transition-colors duration-150"
+      className="flex flex-col items-center justify-center gap-2 p-2 transition-colors duration-150"
       style={{
-        backgroundColor: '#1e1e2a',
-        border: isSelected ? '1px solid #00c9a7' : '1px solid transparent',
-        color: '#aaaaaa',
-        minHeight: 80,
+        backgroundColor: isSelected ? 'rgba(0,201,167,0.08)' : '#1c1c25',
+        border: isSelected ? '1px solid #00c9a7' : '1px solid #26262f',
+        borderRadius: 10,
+        color: isSelected ? '#00c9a7' : '#a9a9b4',
+        minHeight: 88,
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = '#2a2a36'
-        e.currentTarget.style.color = '#ffffff'
+        if (!isSelected) {
+          e.currentTarget.style.backgroundColor = '#242430'
+          e.currentTarget.style.borderColor = '#3a3a48'
+          e.currentTarget.style.color = '#ffffff'
+        }
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = '#1e1e2a'
-        e.currentTarget.style.color = isSelected ? '#ffffff' : '#aaaaaa'
+        if (!isSelected) {
+          e.currentTarget.style.backgroundColor = '#1c1c25'
+          e.currentTarget.style.borderColor = '#26262f'
+          e.currentTarget.style.color = '#a9a9b4'
+        }
       }}
       onClick={onClick}
     >
-      <div style={{ width: 40, height: 40 }} className="flex items-center justify-center">
-        {getPresetIcon(preset.id, 32)}
+      <div style={{ width: 36, height: 36 }} className="flex items-center justify-center">
+        {getPresetIcon(preset.id, 30)}
       </div>
       <span
         className="w-full truncate text-center"
-        style={{ fontSize: 11, color: '#cccccc' }}
+        style={{ fontSize: 11, color: isSelected ? '#00c9a7' : '#c5c5d0' }}
       >
         {preset.name}
       </span>
@@ -200,14 +207,14 @@ export function PromptPresets({ selectedNode }: PromptPresetsProps) {
   if (!selectedNode || selectedNode.type === 'SOURCE' || selectedNode.type === 'COMPARE') {
     return (
       <div>
-        <div className="flex items-center gap-2 px-4" style={{ height: 40 }}>
-          <ClipboardList size={16} style={{ color: '#888888' }} />
-          <span className="flex-1 text-sm" style={{ color: '#ffffff', fontWeight: 500 }}>
+        <div className="flex items-center gap-2.5 px-4" style={{ height: 46 }}>
+          <ClipboardList size={16} style={{ color: '#9a9aa6' }} />
+          <span className="flex-1" style={{ color: '#ffffff', fontSize: 13.5, fontWeight: 600 }}>
             Prompt Presets
           </span>
-          <ChevronUp size={16} style={{ color: '#888888' }} />
+          <ChevronUp size={16} style={{ color: '#71717f' }} />
         </div>
-        <div className="px-4 pb-3" style={{ color: '#555555', fontSize: 12 }}>
+        <div className="px-4 pb-4" style={{ color: '#5a5a66', fontSize: 12 }}>
           {selectedNode ? 'Not applicable for this node' : 'Select a node to see presets'}
         </div>
       </div>
@@ -216,32 +223,44 @@ export function PromptPresets({ selectedNode }: PromptPresetsProps) {
 
   return (
     <div>
-      <div className="flex w-full items-center gap-2 px-4" style={{ height: 40 }}>
-        <ClipboardList size={16} style={{ color: '#888888' }} />
-        {/* 실물 Lumanova: Prompt Presets | My Presets 탭 */}
-        {(['Prompt Presets', 'My Presets'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className="text-sm"
-            style={{
-              color: tab === t ? '#ffffff' : '#666677',
-              fontWeight: tab === t ? 600 : 400,
-              borderBottom: tab === t ? '2px solid #00c9a7' : '2px solid transparent',
-              paddingBottom: 2,
-            }}
-          >
-            {t}
-          </button>
-        ))}
-        <span className="flex-1" />
-        <button onClick={() => setCollapsed(!collapsed)}>
-          <CollapseIcon size={16} style={{ color: '#888888' }} />
+      {/* 실물 VizMaker: Prompt Presets | My Presets 2등분 셀 탭 */}
+      <div
+        className="flex w-full items-stretch"
+        style={{ height: 44, borderTop: '1px solid #222233', borderBottom: '1px solid #222233' }}
+      >
+        {(['Prompt Presets', 'My Presets'] as const).map((t, i) => {
+          const isActive = tab === t
+          return (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className="flex flex-1 items-center justify-center gap-2 transition-colors duration-150"
+              style={{
+                fontSize: 12.5,
+                color: isActive ? '#ffffff' : '#71717f',
+                fontWeight: isActive ? 600 : 400,
+                background: isActive ? '#242430' : 'transparent',
+                borderLeft: i > 0 ? '1px solid #222233' : 'none',
+              }}
+              onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = '#b8b8c4' }}
+              onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = '#71717f' }}
+            >
+              <ClipboardList size={14} />
+              {t}
+            </button>
+          )
+        })}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex items-center justify-center"
+          style={{ width: 40, borderLeft: '1px solid #222233', color: '#71717f' }}
+        >
+          <CollapseIcon size={15} />
         </button>
       </div>
 
       {!collapsed && tab === 'Prompt Presets' && (
-        <div className="grid grid-cols-3 gap-2 px-4 pb-4">
+        <div className="grid grid-cols-3 gap-2 px-4 py-4">
           {presets.map((preset) => (
             <PresetCard
               key={preset.id}
@@ -254,7 +273,7 @@ export function PromptPresets({ selectedNode }: PromptPresetsProps) {
       )}
 
       {!collapsed && tab === 'My Presets' && (
-        <div className="px-4 pb-4">
+        <div className="px-4 py-4">
           <button
             onClick={saveMyPreset}
             className="mb-2 w-full"

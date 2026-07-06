@@ -33,23 +33,23 @@ export function SketchUpScenesPanel({ selectedNode }: { selectedNode: NodeData |
   return (
     <div style={{ borderBottom: '1px solid #222233' }}>
       <button
-        className="flex w-full items-center gap-2 px-4"
-        style={{ height: 40 }}
+        className="flex w-full items-center gap-2.5 px-4"
+        style={{ height: 46 }}
         onClick={() => setCollapsed(!collapsed)}
       >
-        <Camera size={16} style={{ color: '#888888' }} />
-        <span className="flex-1 text-left text-sm" style={{ color: '#ffffff', fontWeight: 500 }}>
+        <Camera size={16} style={{ color: '#9a9aa6' }} />
+        <span className="flex-1 text-left" style={{ color: '#ffffff', fontSize: 13.5, fontWeight: 600 }}>
           SketchUp scenes
         </span>
         <RefreshCw
           size={14}
-          style={{ color: '#888888' }}
+          style={{ color: '#71717f' }}
           onClick={(e) => {
             e.stopPropagation()
             requestCapture()
           }}
         />
-        <CollapseIcon size={16} style={{ color: '#888888' }} />
+        <CollapseIcon size={16} style={{ color: '#71717f' }} />
       </button>
 
       {!collapsed && (

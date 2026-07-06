@@ -23,31 +23,71 @@ function getCurrentRenderModeValue(node: NodeData): string {
   return node.type
 }
 
-// 실물 Lumanova: 라벨 좌측 + 어두운 우측정렬 드롭다운 행
+// 실물 VizMaker: 라벨 좌측 + 우측 고정폭(176px) 드롭다운 행
 function RightAlignedRow({ label, value, options, onChange }: {
   label: string
   value: string
   options: string[]
   onChange: (v: string) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const single = options.length <= 1
+
   return (
     <div className="mb-2.5 flex items-center justify-between">
-      <span style={{ color: '#ccccdd', fontSize: 13 }}>{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{
-          width: 150, height: 32, padding: '0 10px',
-          background: '#1a1a24', border: '1px solid #2c2c3a', borderRadius: 8,
-          color: '#e6e6ee', fontSize: 12,
-        }}
-      >
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
+      <span style={{ color: '#cfcfd8', fontSize: 13 }}>{label}</span>
+      <div className="relative" style={{ width: 176 }}>
+        <button
+          className="flex w-full items-center justify-between px-3 transition-colors duration-150"
+          style={{
+            height: 38,
+            background: '#1c1c25',
+            border: '1px solid #2c2c37',
+            borderRadius: 9,
+            color: '#e6e6ee',
+            fontSize: 12.5,
+            cursor: single ? 'default' : 'pointer',
+          }}
+          onClick={() => !single && setOpen(!open)}
+          onMouseEnter={(e) => { if (!single) e.currentTarget.style.borderColor = '#3d3d4b' }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2c2c37' }}
+        >
+          <span className="truncate">{value}</span>
+          <ChevronDown size={13} style={{ color: '#71717f', flexShrink: 0 }} />
+        </button>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+            <div
+              className="absolute left-0 right-0 z-40 mt-1 overflow-hidden py-1"
+              style={{
+                background: '#1e1e28',
+                border: '1px solid #30303c',
+                borderRadius: 9,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.55)',
+              }}
+            >
+              {options.map((o) => (
+                <button
+                  key={o}
+                  className="flex w-full items-center px-3 text-left transition-colors duration-100"
+                  style={{ height: 32, color: o === value ? '#00c9a7' : '#ccccd6', fontSize: 12.5 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2a2a36')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  onClick={() => { onChange(o); setOpen(false) }}
+                >
+                  {o}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
 
+// 실물 VizMaker 행 그리드에 맞춘 라벨 좌측 + 우측 고정폭 세그먼트 컨트롤
 function SegmentedRow({
   label,
   value,
@@ -60,11 +100,19 @@ function SegmentedRow({
   onChange: (value: string) => void
 }) {
   return (
-    <div className="mb-3">
-      <div style={{ color: '#cccccc', fontSize: 13, marginBottom: 4 }}>{label}</div>
+    <div className="mb-2.5 flex items-center justify-between">
+      <span style={{ color: '#cfcfd8', fontSize: 13 }}>{label}</span>
       <div
         className="flex overflow-hidden"
-        style={{ backgroundColor: '#111118', border: '1px solid #333340', borderRadius: 6 }}
+        style={{
+          width: 176,
+          height: 34,
+          background: '#14141b',
+          border: '1px solid #2c2c37',
+          borderRadius: 9,
+          padding: 3,
+          gap: 2,
+        }}
       >
         {options.map((opt) => {
           const active = opt.value === value
@@ -72,12 +120,19 @@ function SegmentedRow({
             <button
               key={opt.value}
               onClick={() => onChange(opt.value)}
-              className="flex-1 py-1.5 transition-colors"
+              className="flex-1 transition-colors duration-150"
               style={{
-                fontSize: 12,
+                fontSize: 11.5,
+                borderRadius: 6,
                 backgroundColor: active ? '#00c9a7' : 'transparent',
-                color: active ? '#0a0a14' : '#888888',
-                fontWeight: active ? 600 : 400,
+                color: active ? '#06251f' : '#8a8a96',
+                fontWeight: active ? 700 : 500,
+              }}
+              onMouseEnter={(e) => {
+                if (!active) e.currentTarget.style.color = '#c5c5d0'
+              }}
+              onMouseLeave={(e) => {
+                if (!active) e.currentTarget.style.color = '#8a8a96'
               }}
             >
               {opt.label}
@@ -105,33 +160,36 @@ function SettingsDropdown({
 
   return (
     <div className="mb-3">
-      <div style={{ color: '#cccccc', fontSize: 13, marginBottom: 4 }}>{label}</div>
+      <div style={{ color: '#a9a9b4', fontSize: 12.5, marginBottom: 6 }}>{label}</div>
       <div className="relative">
         <button
           className="flex w-full items-center justify-between px-3 transition-colors duration-150"
           style={{
-            height: 36,
-            backgroundColor: '#1e1e2a',
-            border: '1px solid #333340',
-            borderRadius: 6,
-            color: '#cccccc',
+            height: 42,
+            backgroundColor: '#1c1c25',
+            border: '1px solid #2c2c37',
+            borderRadius: 10,
+            color: '#e6e6ee',
             fontSize: 13,
           }}
           onClick={() => setOpen(!open)}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3d3d4b' }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2c2c37' }}
         >
           <span className="truncate">{selectedLabel}</span>
-          <ChevronDown size={14} style={{ color: '#888888', flexShrink: 0 }} />
+          <ChevronDown size={14} style={{ color: '#71717f', flexShrink: 0 }} />
         </button>
 
         {open && (
           <>
             <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
             <div
-              className="absolute left-0 right-0 z-40 mt-1 overflow-hidden rounded-md py-1"
+              className="absolute left-0 right-0 z-40 mt-1 overflow-hidden py-1"
               style={{
-                backgroundColor: '#1e1e2a',
-                border: '1px solid #333340',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                backgroundColor: '#1e1e28',
+                border: '1px solid #30303c',
+                borderRadius: 10,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.55)',
               }}
             >
               {options.map((opt) => (
@@ -265,16 +323,16 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
     return (
       <div style={{ borderBottom: '1px solid #222233' }}>
         <div
-          className="flex items-center gap-2 px-4"
-          style={{ height: 40 }}
+          className="flex items-center gap-2.5 px-4"
+          style={{ height: 46 }}
         >
-          <Monitor size={16} style={{ color: '#888888' }} />
-          <span className="flex-1 text-sm" style={{ color: '#ffffff', fontWeight: 500 }}>
+          <Monitor size={16} style={{ color: '#9a9aa6' }} />
+          <span className="flex-1" style={{ color: '#ffffff', fontSize: 13.5, fontWeight: 600 }}>
             Render settings
           </span>
-          <ChevronUp size={16} style={{ color: '#888888' }} />
+          <ChevronUp size={16} style={{ color: '#71717f' }} />
         </div>
-        <div className="px-4 pb-3" style={{ color: '#555555', fontSize: 12 }}>
+        <div className="px-4 pb-4" style={{ color: '#5a5a66', fontSize: 12 }}>
           {selectedNode ? 'Not applicable for this node' : 'Select a node to configure'}
         </div>
       </div>
@@ -286,19 +344,19 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
   return (
     <div style={{ borderBottom: '1px solid #222233' }}>
       <button
-        className="flex w-full items-center gap-2 px-4"
-        style={{ height: 40 }}
+        className="flex w-full items-center gap-2.5 px-4"
+        style={{ height: 46 }}
         onClick={() => setCollapsed(!collapsed)}
       >
-        <Monitor size={16} style={{ color: '#888888' }} />
-        <span className="flex-1 text-left text-sm" style={{ color: '#ffffff', fontWeight: 500 }}>
+        <Monitor size={16} style={{ color: '#9a9aa6' }} />
+        <span className="flex-1 text-left" style={{ color: '#ffffff', fontSize: 13.5, fontWeight: 600 }}>
           Render settings
         </span>
-        <CollapseIcon size={16} style={{ color: '#888888' }} />
+        <CollapseIcon size={16} style={{ color: '#71717f' }} />
       </button>
 
       {!collapsed && (
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-4">
           {/* Render Mode dropdown (only for RENDER nodes) */}
           {selectedNode.type === 'RENDER' && (
             <>
@@ -310,19 +368,22 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
               />
 
               {/* 실물 Lumanova: Precise/Quality/Fast 칩 - 캡처/출력 해상도에 연결 */}
-              <div className="mb-3 flex gap-1.5">
+              <div className="mb-3.5 flex gap-2">
                 {([['Precise', '1920'], ['Quality', '1536'], ['Fast', '1024']] as const).map(([label, res]) => {
                   const cur = ((selectedNode.params as RenderParams).resolution ?? '1024') === res
                   return (
                     <button
                       key={res}
                       onClick={() => updateNodeParams(selectedNode.id, { resolution: res })}
+                      className="transition-colors duration-150"
                       style={{
-                        padding: '3px 12px', borderRadius: 999, fontSize: 11,
-                        border: `1px solid ${cur ? '#00c9a7' : '#333344'}`,
-                        background: cur ? 'rgba(0,201,167,0.12)' : 'transparent',
-                        color: cur ? '#00c9a7' : '#888899',
+                        padding: '5px 14px', borderRadius: 999, fontSize: 11.5, fontWeight: 600,
+                        border: `1px solid ${cur ? '#00c9a7' : '#33333f'}`,
+                        background: cur ? 'rgba(0,201,167,0.12)' : '#1c1c25',
+                        color: cur ? '#00c9a7' : '#8a8a96',
                       }}
+                      onMouseEnter={(e) => { if (!cur) e.currentTarget.style.color = '#c5c5d0' }}
+                      onMouseLeave={(e) => { if (!cur) e.currentTarget.style.color = '#8a8a96' }}
                     >
                       {label}
                     </button>
@@ -370,15 +431,15 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
           {/* Static label for non-RENDER nodes */}
           {selectedNode.type === 'MODIFIER' && (
             <div className="mb-3">
-              <div style={{ color: '#cccccc', fontSize: 13, marginBottom: 4 }}>Render Mode</div>
+              <div style={{ color: '#a9a9b4', fontSize: 12.5, marginBottom: 6 }}>Render Mode</div>
               <div
                 className="flex items-center px-3"
                 style={{
-                  height: 36,
-                  backgroundColor: '#1e1e2a',
-                  border: '1px solid #333340',
-                  borderRadius: 6,
-                  color: '#888888',
+                  height: 42,
+                  backgroundColor: '#1c1c25',
+                  border: '1px solid #2c2c37',
+                  borderRadius: 10,
+                  color: '#8a8a96',
                   fontSize: 13,
                 }}
               >
@@ -390,15 +451,15 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
           {selectedNode.type === 'UPSCALE' && (
             <>
               <div className="mb-3">
-                <div style={{ color: '#cccccc', fontSize: 13, marginBottom: 4 }}>Render Mode</div>
+                <div style={{ color: '#a9a9b4', fontSize: 12.5, marginBottom: 6 }}>Render Mode</div>
                 <div
                   className="flex items-center px-3"
                   style={{
-                    height: 36,
-                    backgroundColor: '#1e1e2a',
-                    border: '1px solid #333340',
-                    borderRadius: 6,
-                    color: '#888888',
+                    height: 42,
+                    backgroundColor: '#1c1c25',
+                    border: '1px solid #2c2c37',
+                    borderRadius: 10,
+                    color: '#8a8a96',
                     fontSize: 13,
                   }}
                 >
@@ -459,15 +520,15 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
           {selectedNode.type === 'VIDEO' && (
             <>
               <div className="mb-3">
-                <div style={{ color: '#cccccc', fontSize: 13, marginBottom: 4 }}>Render Mode</div>
+                <div style={{ color: '#a9a9b4', fontSize: 12.5, marginBottom: 6 }}>Render Mode</div>
                 <div
                   className="flex items-center px-3"
                   style={{
-                    height: 36,
-                    backgroundColor: '#1e1e2a',
-                    border: '1px solid #333340',
-                    borderRadius: 6,
-                    color: '#888888',
+                    height: 42,
+                    backgroundColor: '#1c1c25',
+                    border: '1px solid #2c2c37',
+                    borderRadius: 10,
+                    color: '#8a8a96',
                     fontSize: 13,
                   }}
                 >

@@ -479,6 +479,12 @@ function ApiKeySection({ saas }: { saas: boolean }) {
         write={setStoredApiKey}
         issueHref="https://aistudio.google.com/apikey"
         issueLabel="Google AI Studio에서 발급"
+        issueSteps={[
+          'Google AI Studio(aistudio.google.com/apikey)에 접속해 Google 계정으로 로그인',
+          '"API 키 만들기(Create API key)" 버튼 클릭 — 프로젝트가 없으면 자동 생성됩니다',
+          '생성된 AIza... 로 시작하는 키를 복사',
+          '위 입력란에 붙여넣고 저장 (무료 등급으로도 렌더링 가능)',
+        ]}
       />
       <div style={{ borderTop: '1px solid #22222a', margin: '14px 0' }} />
       <ApiKeyRow
@@ -488,6 +494,12 @@ function ApiKeySection({ saas }: { saas: boolean }) {
         write={setStoredXaiApiKey}
         issueHref="https://console.x.ai"
         issueLabel="xAI Console에서 발급"
+        issueSteps={[
+          'xAI Console(console.x.ai)에 접속해 계정 로그인(가입)',
+          '좌측 "API Keys" 메뉴에서 "Create API key" 클릭',
+          '생성된 xai-... 키를 복사 — 생성 직후 한 번만 표시되니 바로 복사하세요',
+          '위 입력란에 붙여넣고 저장',
+        ]}
       />
       <div style={{ marginTop: 10, fontSize: 11.5, color: '#71717c' }}>
         키는 이 컴퓨터(브라우저)에만 저장되며 서버로 전송되지 않습니다.
@@ -503,6 +515,7 @@ function ApiKeyRow({
   write,
   issueHref,
   issueLabel,
+  issueSteps,
 }: {
   label: string
   placeholder: string
@@ -510,10 +523,12 @@ function ApiKeyRow({
   write: (key: string) => void
   issueHref: string
   issueLabel: string
+  issueSteps?: string[]
 }) {
   const [apiKey, setApiKey] = useState(read)
   const [saved, setSaved] = useState(false)
   const [revealed, setRevealed] = useState(false)
+  const [stepsOpen, setStepsOpen] = useState(false)
 
   const handleSave = () => {
     write(apiKey.trim())
@@ -546,11 +561,32 @@ function ApiKeyRow({
           {saved ? '저장됨 ✓' : '저장'}
         </button>
       </div>
-      <div style={{ marginTop: 6, fontSize: 11.5, color: '#71717c' }}>
+      <div className="flex items-center gap-3" style={{ marginTop: 6, fontSize: 11.5, color: '#71717c' }}>
         <a href={issueHref} target="_blank" rel="noreferrer" style={{ color: '#00c9a7' }}>
-          {issueLabel}
+          {issueLabel} ↗
         </a>
+        {issueSteps && (
+          <button
+            onClick={() => setStepsOpen((v) => !v)}
+            style={{ color: '#8a8a96', fontSize: 11.5 }}
+          >
+            발급 방법 {stepsOpen ? '▲' : '▼'}
+          </button>
+        )}
       </div>
+      {issueSteps && stepsOpen && (
+        <ol
+          style={{
+            margin: '8px 0 0', padding: '10px 14px 10px 30px', borderRadius: 8,
+            background: '#101018', border: '1px solid #22222a',
+            fontSize: 11.5, color: '#9a9aa6', lineHeight: 1.9, listStyle: 'decimal',
+          }}
+        >
+          {issueSteps.map((step, i) => (
+            <li key={i}>{step}</li>
+          ))}
+        </ol>
+      )}
     </div>
   )
 }

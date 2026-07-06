@@ -250,8 +250,8 @@ export function DrawTab({ selectedNode }: DrawTabProps) {
     <div style={{ minHeight: 200 }}>
       {/* Toolbar */}
       <div
-        className="flex items-center gap-1 px-3 py-2"
-        style={{ borderBottom: '1px solid #222233' }}
+        className="flex items-center px-3"
+        style={{ height: 46, gap: 4, borderBottom: '1px solid #222233' }}
       >
         {/* Tool buttons */}
         {tools.map((tool) => {
@@ -262,21 +262,22 @@ export function DrawTab({ selectedNode }: DrawTabProps) {
               key={tool.id}
               onClick={() => setActiveTool(tool.id)}
               title={tool.label}
-              className="flex items-center justify-center rounded transition-colors duration-150"
+              className="flex flex-shrink-0 items-center justify-center transition-colors duration-150"
               style={{
                 width: 32,
                 height: 32,
+                borderRadius: 8,
                 backgroundColor: isActive ? '#00c9a7' : 'transparent',
-                color: isActive ? '#ffffff' : '#888888',
+                color: isActive ? '#06251f' : '#8a8a96',
               }}
               onMouseEnter={(e) => {
-                if (!isActive) e.currentTarget.style.backgroundColor = '#2a2a36'
+                if (!isActive) e.currentTarget.style.backgroundColor = '#26262f'
               }}
               onMouseLeave={(e) => {
                 if (!isActive) e.currentTarget.style.backgroundColor = 'transparent'
               }}
             >
-              <Icon size={16} />
+              <Icon size={15} />
             </button>
           )
         })}
@@ -285,72 +286,73 @@ export function DrawTab({ selectedNode }: DrawTabProps) {
         <button
           onClick={handleDelete}
           title="Delete all"
-          className="flex items-center justify-center rounded transition-colors duration-150"
-          style={{ width: 32, height: 32, color: '#888888' }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2a2a36')}
+          className="flex flex-shrink-0 items-center justify-center transition-colors duration-150"
+          style={{ width: 32, height: 32, borderRadius: 8, color: '#8a8a96' }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#26262f')}
           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
         >
-          <Trash2 size={16} />
+          <Trash2 size={15} />
         </button>
 
         {/* Separator */}
-        <div style={{ width: 1, height: 20, backgroundColor: '#333340', margin: '0 4px' }} />
+        <div className="flex-shrink-0" style={{ width: 1, height: 18, backgroundColor: '#2c2c37', margin: '0 6px' }} />
 
         {/* Size slider */}
-        <span style={{ color: '#888888', fontSize: 11, marginRight: 4 }}>Size:</span>
+        <span className="flex-shrink-0" style={{ color: '#8a8a96', fontSize: 11.5 }}>Size</span>
         <input
           type="range"
           min={1}
           max={80}
           value={brushSize}
           onChange={(e) => setBrushSize(Number(e.target.value))}
-          className="draw-slider"
-          style={{ width: 60, accentColor: '#00c9a7' }}
+          className="draw-slider min-w-0 flex-1"
+          style={{ accentColor: '#00c9a7', margin: '0 6px' }}
         />
 
-        {/* Separator */}
-        <div style={{ width: 1, height: 20, backgroundColor: '#333340', margin: '0 4px' }} />
-
         {/* Color dropdown */}
-        <div className="relative">
+        <div className="relative flex-shrink-0">
           <button
             onClick={() => setColorMenuOpen(!colorMenuOpen)}
-            className="flex items-center gap-1.5 rounded px-2 py-1 transition-colors duration-150"
+            className="flex items-center gap-1.5 px-2.5 transition-colors duration-150"
             style={{
-              backgroundColor: '#1e1e2a',
-              border: '1px solid #333340',
-              borderRadius: 4,
+              height: 32,
+              backgroundColor: '#1c1c25',
+              border: '1px solid #2c2c37',
+              borderRadius: 8,
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3d3d4b' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2c2c37' }}
           >
             <div
               className="rounded-full"
               style={{
-                width: 8,
-                height: 8,
+                width: 9,
+                height: 9,
                 backgroundColor: COLOR_DOTS[activeColor.label],
               }}
             />
-            <span style={{ color: '#cccccc', fontSize: 12 }}>{activeColor.label}</span>
-            <ChevronDown size={12} style={{ color: '#666666' }} />
+            <span style={{ color: '#ccccd6', fontSize: 12 }}>{activeColor.label}</span>
+            <ChevronDown size={12} style={{ color: '#71717f' }} />
           </button>
 
           {colorMenuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setColorMenuOpen(false)} />
               <div
-                className="absolute left-0 top-full z-50 mt-1 rounded py-1"
+                className="absolute right-0 top-full z-50 mt-1 py-1"
                 style={{
-                  backgroundColor: '#1e1e2a',
-                  border: '1px solid #333340',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
-                  minWidth: 100,
+                  backgroundColor: '#1e1e28',
+                  border: '1px solid #30303c',
+                  borderRadius: 9,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.55)',
+                  minWidth: 110,
                 }}
               >
                 {COLORS.map((color) => (
                   <button
                     key={color.label}
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors duration-100"
-                    style={{ color: '#cccccc', fontSize: 12 }}
+                    style={{ color: '#ccccd6', fontSize: 12 }}
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#2a2a36')}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     onClick={() => {
@@ -361,8 +363,8 @@ export function DrawTab({ selectedNode }: DrawTabProps) {
                     <div
                       className="rounded-full"
                       style={{
-                        width: 8,
-                        height: 8,
+                        width: 9,
+                        height: 9,
                         backgroundColor: COLOR_DOTS[color.label],
                       }}
                     />
