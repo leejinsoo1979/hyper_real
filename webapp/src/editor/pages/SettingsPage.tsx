@@ -505,6 +505,7 @@ function ApiKeySection({ saas }: { saas: boolean }) {
           'xAI Console(console.x.ai)에 접속해 계정 로그인(가입)',
           '좌측 "API Keys" 메뉴에서 "Create API key" 클릭',
           '생성된 xai-... 키를 복사 — 생성 직후 한 번만 표시되니 바로 복사하세요',
+          'Billing 메뉴에서 결제 수단 등록 후 크레딧 충전 (영상 생성은 유료 — 해상도에 따라 약 초당 $0.05~0.07)',
           '위 입력란에 붙여넣고 저장',
         ]}
       />

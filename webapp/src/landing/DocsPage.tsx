@@ -5,6 +5,7 @@ interface DocItem {
   h: string
   p: string
   download?: { href: string; label: string }
+  link?: { href: string; label: string }
 }
 
 const SECTIONS: { id: string; label: string; body: DocItem[] }[] = [
@@ -29,6 +30,29 @@ const SECTIONS: { id: string; label: string; body: DocItem[] }[] = [
       {
         h: '연결 확인',
         p: '플러그인이 설치된 3D 툴을 실행한 상태에서 앱을 열면 자동으로 연결됩니다. 앱 상단의 상태 점이 초록색이면 연결 완료입니다. 여러 툴이 동시에 켜져 있으면 SketchUp이 우선 연결됩니다.',
+      },
+    ],
+  },
+  {
+    id: 'apikeys', label: 'API 키 발급 · 등록',
+    body: [
+      {
+        h: '어떤 키가 필요한가요?',
+        p: '이미지 렌더링은 기본적으로 키 없이 크레딧으로 동작합니다. 본인 Gemini 키를 등록하면 크레딧 차감 없이 본인 키로 렌더링됩니다. 이미지 → 영상 생성(Grok Imagine)은 본인 xAI 키가 반드시 필요합니다.',
+      },
+      {
+        h: 'Gemini 키 발급 (이미지 렌더링 · 선택)',
+        p: '① Google AI Studio에 접속해 Google 계정으로 로그인 → ② "API 키 만들기(Create API key)" 클릭 (프로젝트가 없으면 자동 생성) → ③ AIza…로 시작하는 키 복사. 무료 등급으로도 렌더링을 시작할 수 있습니다.',
+        link: { href: 'https://aistudio.google.com/apikey', label: 'Google AI Studio 열기' },
+      },
+      {
+        h: 'xAI Grok 키 발급 (영상 생성 · 필수)',
+        p: '① xAI Console(console.x.ai)에 가입/로그인 → ② 좌측 API Keys 메뉴에서 "Create API key" 클릭 → ③ xai-…로 시작하는 키 복사 (생성 직후 한 번만 표시되니 바로 복사하세요) → ④ Billing 메뉴에서 결제 수단을 등록하고 크레딧을 충전합니다. 영상 생성 비용은 해상도에 따라 대략 초당 $0.05~0.07이며 본인 xAI 계정으로 청구됩니다.',
+        link: { href: 'https://console.x.ai', label: 'xAI Console 열기' },
+      },
+      {
+        h: '앱에 등록하기',
+        p: '앱 좌측 하단 Settings → API Keys 섹션에서 해당 입력란에 키를 붙여넣고 저장을 누르면 끝입니다. 키는 사용하는 컴퓨터(브라우저)에만 저장되고 서버로 전송되지 않으며, 컴퓨터를 바꾸면 다시 등록해야 합니다. 각 입력란 아래의 "발급 방법" 버튼으로 이 단계를 앱 안에서도 볼 수 있습니다.',
       },
     ],
   },
@@ -94,6 +118,11 @@ export function DocsPage() {
                 {b.download && (
                   <a href={b.download.href} download className="mt-3 inline-block" style={{ padding: '10px 18px', borderRadius: 9, background: TEAL, color: '#06251f', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
                     {b.download.label} ↓
+                  </a>
+                )}
+                {b.link && (
+                  <a href={b.link.href} target="_blank" rel="noreferrer" className="mt-3 inline-block" style={{ padding: '10px 18px', borderRadius: 9, border: `1px solid ${TEAL}`, color: TEAL, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                    {b.link.label} ↗
                   </a>
                 )}
               </div>
