@@ -8,6 +8,7 @@ import { useHistoryStore } from '../../state/historyStore'
 import { selectScene, requestCapture, addScene, sendCamera, fetchSourceOnce, captureMask, isBridgeOrigin, bridgeToolLabel, captureDepth, getCachedSourceMaterials, loadMaterialDetail, loadSourceMaterials, materialTextureUri } from '../../api/sketchupBridge'
 import { generateAutoPrompt, buildLightingDescription } from '../../engine/autoPrompt'
 import { renderMain } from '../../engine/adapters/mainRenderer'
+import { maskToHighlightOverlay, segmentObjectAtPoint } from '../../engine/segmentPoint'
 import { EditOverlay } from '../panels/EditOverlay'
 import { ImageLightbox } from '../panels/ImageLightbox'
 import type { NodeData } from '../../types/node'
@@ -245,6 +246,32 @@ export function RenderClassicPage() {
   // ── 스포이드 재질 교체 ──────────────────────────────────────────────────
   const [pickedMaterial, setPickedMaterial] = useState<string | null>(null)
   const [regionPickOpen, setRegionPickOpen] = useState(false)
+
+  // 업로드 이미지 매직툴: 클릭 지점의 객체 영역을 Gemini 세그멘테이션으로 선택
+  const handleAiMagicPick = useCallback(async (fx: number, fy: number) => {
+    const st = useClassicStore.getState()
+    if (st.sourceTool !== 'magic' || st.aiMagicBusy) return
+    const image = st.previewOverride ?? st.frozenSource
+    if (!image) return
+    st.set({ aiMagicBusy: true, statusText: '매직: AI가 클릭한 객체 영역을 인식하는 중...' })
+    try {
+      const seg = await segmentObjectAtPoint(image, fx, fy)
+      if (!seg) {
+        useClassicStore.getState().set({ aiMagicBusy: false, statusText: '매직: 영역을 인식하지 못했습니다 — 객체 중앙을 다시 클릭해보세요' })
+        return
+      }
+      const overlay = await maskToHighlightOverlay(seg.mask)
+      useClassicStore.getState().set({
+        aiMagicBusy: false,
+        aiSelMask: seg.mask,
+        aiSelOverlay: overlay,
+        aiSelLabel: seg.label,
+        statusText: `매직: "${seg.label}" 영역 선택됨 — 프롬프트 입력 후 생성하면 이 영역만 변경됩니다`,
+      })
+    } catch (err) {
+      useClassicStore.getState().set({ aiMagicBusy: false, statusText: `매직 영역 인식 실패: ${err instanceof Error ? err.message : err}` })
+    }
+  }, [])
 
   // 소스 이미지 클릭(비율 좌표) → ID 마스크 픽셀 색 → 재질 이름
   // 업로드 이미지/브릿지 미연결이면 좌표 기반 지점 선택으로 폴백 (마스크 불필요)
@@ -501,6 +528,9 @@ export function RenderClassicPage() {
     } else if (which === 'src' && st.maskUri && st.sourceSelectedColors.length > 0) {
       // 매직툴 선택: 1차 생성도 선택 영역만 편집 (영역 밖은 원본 픽셀 유지)
       selMask = await buildSelectionMask(st.maskUri, st.sourceSelectedColors)
+    } else if (which === 'src' && st.aiSelMask) {
+      // 업로드 이미지 매직툴: Gemini 세그멘테이션 마스크 (동일 파이프라인)
+      selMask = st.aiSelMask
     }
     st.set({
       rendering: true,
@@ -641,7 +671,7 @@ export function RenderClassicPage() {
           ? '선택 부위만 적용 완료 (나머지 영역은 원본 유지)'
           : '렌더링 완료 - RESULT의 [마스크 패스] 탭에서 부위를 선택할 수 있습니다',
         // 마스크 적용 렌더가 끝나면 선택 소진 (다음 렌더에 의도치 않게 재적용 방지)
-        ...(selMask ? { selectedColors: [], regionMaterial: null } : {}),
+        ...(selMask ? { selectedColors: [], regionMaterial: null, aiSelMask: null, aiSelOverlay: null, aiSelLabel: null } : {}),
       })
       saveClassicRenderHistory({
         sourceImage: input,
@@ -996,22 +1026,69 @@ export function RenderClassicPage() {
                       : 'Ready',
                   })
                   if (t !== 'eyedropper') setPickedMaterial(null)
-                  // 매직툴은 재질 ID 마스크가 필요 — 없으면 즉시 캡처
+                  // 매직툴: 브릿지 뷰면 재질 ID 마스크 캡처, 업로드/미연결이면 AI 세그멘테이션 모드
                   if (t === 'magic' && !useClassicStore.getState().maskUri) {
+                    const cur = useClassicStore.getState()
+                    const uploaded = Boolean(cur.frozenSource) && !cur.frozenFromBridge
+                    if (uploaded || useUIStore.getState().sketchUpStatus !== 'connected') {
+                      s.set({ statusText: '매직: 변경할 객체를 클릭하세요 (AI가 영역을 인식합니다)' })
+                      return
+                    }
                     s.set({ statusText: '매직: 재질 마스크 캡처 중...' })
                     void captureMask().then((m) => {
                       useClassicStore.getState().set(m
                         ? { maskUri: m.uri, maskMap: m.map, statusText: '매직: 영역에 마우스를 올리면 테두리가 표시되고, 클릭하면 선택됩니다' }
-                        : { statusText: '재질 마스크 캡처 실패 - 3D 툴 연결을 확인하세요', sourceTool: 'none' })
+                        : { statusText: '매직: 변경할 객체를 클릭하세요 (AI가 영역을 인식합니다)' })
                     })
                   }
                 }}
               />
             }
-            imageOverlay={s.sourceTool === 'magic' && s.maskUri ? <MagicSelectOverlay /> : undefined}
-            onImagePick={s.sourceTool === 'eyedropper' ? handleSourcePick : undefined}
-            imageFooter={(s.materialSwaps.length > 0 || s.sourceSelectedColors.length > 0) ? (
+            imageOverlay={
+              s.sourceTool === 'magic' && s.maskUri ? <MagicSelectOverlay />
+              : s.sourceTool === 'magic' && s.aiSelOverlay ? <img src={s.aiSelOverlay} alt="" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
+              : undefined
+            }
+            onImagePick={
+              s.sourceTool === 'eyedropper' ? handleSourcePick
+              : s.sourceTool === 'magic' && !s.maskUri ? handleAiMagicPick
+              : undefined
+            }
+            imageFooter={(s.materialSwaps.length > 0 || s.sourceSelectedColors.length > 0 || s.aiSelMask || s.aiMagicBusy) ? (
               <div className="flex flex-wrap gap-1.5">
+                {s.aiMagicBusy && (
+                  <span
+                    className="flex items-center gap-1.5"
+                    style={{
+                      padding: '4px 10px', borderRadius: 999, fontSize: 11,
+                      background: 'rgba(8,12,12,0.82)', color: '#9adcd2',
+                      border: '1px solid #1f5952', backdropFilter: 'blur(3px)',
+                    }}
+                  >
+                    <Wand2 size={11} className="animate-pulse" />
+                    AI 영역 인식 중...
+                  </span>
+                )}
+                {s.aiSelMask && (
+                  <span
+                    className="flex items-center gap-1.5"
+                    style={{
+                      padding: '4px 10px', borderRadius: 999, fontSize: 11,
+                      background: 'rgba(8,12,12,0.82)', color: '#7df0dd',
+                      border: '1px solid #1f5952', backdropFilter: 'blur(3px)',
+                    }}
+                  >
+                    <Wand2 size={11} />
+                    AI 선택: {s.aiSelLabel ?? '영역'} — 생성 시 이 부분만 변경
+                    <button
+                      title="선택 해제"
+                      onClick={() => s.set({ aiSelMask: null, aiSelOverlay: null, aiSelLabel: null })}
+                      style={{ color: '#7ba8a0', display: 'flex' }}
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                )}
                 {s.sourceSelectedColors.length > 0 && (
                   <RegionLayerList
                     colors={s.sourceSelectedColors}

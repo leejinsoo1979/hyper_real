@@ -51,6 +51,14 @@ interface ClassicState {
   materialSwaps: MaterialSwap[]
   /** 매직툴로 선택한 재질 영역(마스크 색). 있으면 1차 생성이 이 영역만 편집 */
   sourceSelectedColors: string[]
+  /** 업로드 이미지 AI 매직 선택 처리 중 */
+  aiMagicBusy: boolean
+  /** 업로드 이미지 매직툴: AI(Gemini) 세그멘테이션 선택 마스크 (흰색=편집 영역) */
+  aiSelMask: string | null
+  /** aiSelMask의 화면 표시용 하이라이트 오버레이 PNG */
+  aiSelOverlay: string | null
+  /** aiSelMask 객체 라벨 (표시용) */
+  aiSelLabel: string | null
 
   /** 구조 고정: 렌더 시 깊이맵을 함께 보내 형상·카메라를 강제 유지 */
   depthLock: boolean
@@ -101,6 +109,10 @@ export const useClassicStore = create<ClassicState>((set) => ({
   sourceTool: 'none',
   materialSwaps: [],
   sourceSelectedColors: [],
+  aiMagicBusy: false,
+  aiSelMask: null,
+  aiSelOverlay: null,
+  aiSelLabel: null,
 
   depthLock: true,
   frozenFromBridge: false,

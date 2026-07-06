@@ -282,7 +282,7 @@ export function AdminPage() {
   return (
     <div style={{ minHeight: '100vh', background: BG, color: TEXT, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       <div className="flex min-h-screen">
-        <aside style={{ width: 260, borderRight: `1px solid ${LINE}`, background: '#0b0c11', padding: 22 }}>
+        <aside style={{ position: 'sticky', top: 0, alignSelf: 'flex-start', minHeight: '100vh', width: 260, borderRight: `1px solid ${LINE}`, background: '#0b0c11', padding: 22 }}>
           <button onClick={() => { window.location.href = '/' }} className="flex items-center gap-2.5" style={{ background: 'none' }}>
             <img src="/landing/logo-circle.png" alt="" width={28} height={28} />
             <span style={{ fontSize: 18, fontWeight: 850 }}>Lumanova</span>
@@ -322,7 +322,7 @@ export function AdminPage() {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1" style={{ padding: '28px 34px 34px' }}>
+        <main className="min-w-0 flex-1" style={{ padding: '28px 34px 56px' }}>
           <div className="flex items-start justify-between gap-6">
             <div>
               <h1 style={{ fontSize: 30, fontWeight: 900, letterSpacing: 0 }}>Operations</h1>

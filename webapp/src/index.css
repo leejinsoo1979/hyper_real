@@ -27,10 +27,13 @@ body,
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 랜딩 페이지: 세로 스크롤 허용 (에디터용 100vh/overflow:hidden 해제) */
+/* 랜딩/관리자 페이지: 세로 스크롤 허용 (에디터용 100vh/overflow:hidden 해제) */
 html.landing,
 html.landing body,
-html.landing #root {
+html.landing #root,
+html.admin-page,
+html.admin-page body,
+html.admin-page #root {
   height: auto;
   min-height: 100%;
   overflow-x: hidden;
@@ -156,5 +159,69 @@ html.landing #root {
   }
   to {
     stroke-dashoffset: 0;
+  }
+}
+
+/* Node card status effects */
+.lumanova-node-ring {
+  border: 1px solid rgba(0, 201, 167, 0.34);
+  box-shadow:
+    0 0 0 1px rgba(0, 201, 167, 0.08),
+    0 0 24px rgba(0, 201, 167, 0.16);
+}
+
+.lumanova-node-ring--running {
+  border-color: rgba(0, 240, 200, 0.72);
+  animation: lumanova-node-ring-pulse 1.65s ease-in-out infinite;
+}
+
+.lumanova-node-scan {
+  background:
+    linear-gradient(
+      115deg,
+      transparent 0%,
+      transparent 38%,
+      rgba(132, 255, 235, 0.13) 45%,
+      rgba(0, 240, 200, 0.24) 50%,
+      rgba(132, 255, 235, 0.13) 55%,
+      transparent 62%,
+      transparent 100%
+    );
+  background-size: 220% 100%;
+  mix-blend-mode: screen;
+  animation: lumanova-node-scan 1.8s ease-in-out infinite;
+}
+
+@keyframes lumanova-node-ring-pulse {
+  0%,
+  100% {
+    opacity: 0.54;
+    box-shadow:
+      0 0 0 1px rgba(0, 201, 167, 0.08),
+      0 0 18px rgba(0, 201, 167, 0.20);
+  }
+  50% {
+    opacity: 1;
+    box-shadow:
+      0 0 0 3px rgba(0, 240, 200, 0.13),
+      0 0 34px rgba(0, 240, 200, 0.38),
+      0 0 62px rgba(0, 201, 167, 0.16);
+  }
+}
+
+@keyframes lumanova-node-scan {
+  0% {
+    background-position: 130% 0;
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  62% {
+    opacity: 1;
+  }
+  100% {
+    background-position: -130% 0;
+    opacity: 0;
   }
 }

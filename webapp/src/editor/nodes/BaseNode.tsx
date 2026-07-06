@@ -30,10 +30,42 @@ interface BaseNodeProps {
 
 function frameBorder(status: NodeStatus, selected: boolean): string {
   if (selected) return '2px solid #00c9a7'
-  if (status === 'error') return '1px solid #ff4444'
-  if (status === 'running') return '1px solid #00c9a7'
-  if (status === 'queued') return '1px solid #f0ad4e'
+  if (status === 'error') return '1px solid #ff5f6f'
+  if (status === 'running') return '1px solid rgba(0, 240, 200, 0.92)'
+  if (status === 'queued') return '1px solid rgba(240, 173, 78, 0.86)'
+  if (status === 'done') return '1px solid rgba(0, 201, 167, 0.46)'
   return '1px solid #2a2a32'
+}
+
+function frameShadow(status: NodeStatus, selected: boolean): string {
+  if (selected) {
+    return [
+      '0 0 0 4px rgba(0,201,167,0.13)',
+      '0 0 28px rgba(0,201,167,0.18)',
+      '0 12px 28px rgba(0,0,0,0.55)',
+    ].join(', ')
+  }
+  if (status === 'running') {
+    return [
+      '0 0 0 1px rgba(0,240,200,0.22)',
+      '0 0 24px rgba(0,201,167,0.30)',
+      '0 12px 30px rgba(0,0,0,0.58)',
+    ].join(', ')
+  }
+  if (status === 'done') {
+    return [
+      '0 0 0 1px rgba(0,201,167,0.10)',
+      '0 0 18px rgba(0,201,167,0.12)',
+      '0 8px 20px rgba(0,0,0,0.50)',
+    ].join(', ')
+  }
+  if (status === 'error') {
+    return '0 0 0 3px rgba(255,95,111,0.10), 0 10px 24px rgba(0,0,0,0.52)'
+  }
+  if (status === 'queued') {
+    return '0 0 0 3px rgba(240,173,78,0.10), 0 8px 20px rgba(0,0,0,0.48)'
+  }
+  return '0 4px 14px rgba(0,0,0,0.45)'
 }
 
 // 실행 경과 시간 (status가 running인 동안 1초마다 증가)
@@ -75,9 +107,25 @@ export const BaseNode = memo(function BaseNode({
   error,
 }: BaseNodeProps) {
   const isBlocked = status === 'blocked'
+  const isRunning = status === 'running'
+  const isDone = status === 'done'
 
   return (
     <div className="relative" style={{ width: CARD_W, opacity: isBlocked ? 0.45 : 1, transition: 'opacity 300ms' }}>
+      {(isRunning || isDone || selected) && (
+        <div
+          className={isRunning ? 'lumanova-node-ring lumanova-node-ring--running' : 'lumanova-node-ring'}
+          style={{
+            position: 'absolute',
+            top: -4,
+            left: -4,
+            width: CARD_W + 8,
+            height: IMG_H + 8,
+            borderRadius: 14,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
       {hasInput && (
         <Handle type="target" position={Position.Left} id={inputPortName} style={{ ...portStyle, top: IMG_H / 2 }} />
       )}
@@ -94,10 +142,21 @@ export const BaseNode = memo(function BaseNode({
           borderRadius: 10,
           background: '#15151d',
           border: frameBorder(status, selected),
-          boxShadow: selected ? '0 0 0 4px rgba(0,201,167,0.12), 0 6px 18px rgba(0,0,0,0.5)' : '0 4px 14px rgba(0,0,0,0.45)',
-          transition: 'border-color 200ms, box-shadow 200ms',
+          boxShadow: frameShadow(status, selected),
+          transition: 'border-color 200ms, box-shadow 200ms, transform 200ms',
         }}
       >
+        {isRunning && (
+          <div
+            className="lumanova-node-scan"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              zIndex: 2,
+            }}
+          />
+        )}
         {thumbnail ? (
           <img src={thumbnail} alt="" className="h-full w-full object-cover" draggable={false} />
         ) : (

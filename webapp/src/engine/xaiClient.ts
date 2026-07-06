@@ -60,6 +60,8 @@ export interface GrokVideoOptions {
   image: string
   prompt: string
   duration: number
+  /** 출력 해상도. xAI 기본값이 480p라 지정하지 않으면 화질이 크게 떨어진다 */
+  resolution?: '480p' | '720p' | '1080p'
 }
 
 function buildVideoPrompt(prompt: string): string {
@@ -104,6 +106,9 @@ export async function generateGrokVideo(opts: GrokVideoOptions): Promise<string>
       prompt: buildVideoPrompt(opts.prompt),
       image: { url: toImageUrl(opts.image) },
       duration: opts.duration,
+      // 미지정 시 xAI 기본값이 480p — 1080p는 image-to-video에서 video-1.5만 지원
+      resolution: opts.resolution ?? '1080p',
+      aspect_ratio: '16:9',
     }),
   })
   if (!startRes.ok) {

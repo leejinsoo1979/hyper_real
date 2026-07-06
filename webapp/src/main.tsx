@@ -18,8 +18,8 @@ const isElectron = Boolean((window as unknown as { vizmakerNative?: unknown }).v
 const isAdmin = path === '/admin' || path.startsWith('/admin/')
 const isApp = isElectron || path === '/app' || path.startsWith('/app/')
 
-// 랜딩/서브 페이지는 세로 스크롤이 필요하므로 에디터용 100vh/overflow:hidden을 해제
-if (!isApp && !isAdmin) document.documentElement.classList.add('landing')
+// 랜딩/서브/관리자 페이지는 세로 스크롤이 필요하므로 에디터용 100vh/overflow:hidden을 해제
+if (!isApp) document.documentElement.classList.add(isAdmin ? 'admin-page' : 'landing')
 
 function PublicPage() {
   switch (path) {

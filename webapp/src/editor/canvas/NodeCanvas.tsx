@@ -22,7 +22,7 @@ import {
   type EdgeTypes,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { FolderOpen, Hand, ImageIcon, MousePointer2 } from 'lucide-react'
+import { Clapperboard, FolderOpen, Hand, ImageIcon, Loader2, MousePointer2 } from 'lucide-react'
 import { v4 as uuid } from 'uuid'
 import { SourceNode } from '../nodes/SourceNode'
 import { RenderNode } from '../nodes/RenderNode'
@@ -35,6 +35,7 @@ import { MediaPreviewModal, type MediaPreviewState } from '../panels/MediaPrevie
 import { useGraphStore } from '../../state/graphStore'
 import { useUIStore } from '../../state/uiStore'
 import { executePipeline } from '../../engine'
+import { generateCrossfadeVideo } from '../../engine/transitionVideo'
 import { useExecutionStore } from '../../state/executionStore'
 import type { NodeType } from '../../types/node'
 import type { EdgeData } from '../../types/graph'
@@ -268,6 +269,46 @@ function NodeCanvasInner() {
 
   // 캔버스 툴: select = 드래그로 박스(마퀴) 다중 선택 / pan = 드래그로 화면 이동
   const [canvasTool, setCanvasTool] = useState<'select' | 'pan'>('select')
+
+  // ── 소스→결과 오버레이 영상 (선택한 2개 노드의 이미지를 크로스페이드) ──
+  const [transitionBusy, setTransitionBusy] = useState(false)
+
+  const nodeImage = useCallback((id: string): string | null => {
+    const n = useGraphStore.getState().nodes.find((x) => x.id === id)
+    if (!n) return null
+    return n.result?.image ?? ('image' in n.params ? ((n.params as { image?: string }).image ?? null) : null)
+  }, [])
+
+  const transitionPair = useMemo(() => {
+    if (selectedNodeIds.length !== 2) return null
+    const [x, y] = selectedNodeIds
+    if (!nodeImage(x) || !nodeImage(y)) return null
+    // 엣지 방향(업스트림→다운스트림) 우선, 없으면 좌→우 배치 순
+    if (edges.some((e) => e.from === x && e.to === y)) return [x, y] as const
+    if (edges.some((e) => e.from === y && e.to === x)) return [y, x] as const
+    const nx = nodes.find((n) => n.id === x)
+    const ny = nodes.find((n) => n.id === y)
+    if (!nx || !ny) return null
+    return nx.position.x <= ny.position.x ? ([x, y] as const) : ([y, x] as const)
+  }, [selectedNodeIds, edges, nodes, nodeImage])
+
+  const handleTransitionVideo = useCallback(async () => {
+    if (!transitionPair || transitionBusy) return
+    const [fromId, toId] = transitionPair
+    const imgA = nodeImage(fromId)
+    const imgB = nodeImage(toId)
+    if (!imgA || !imgB) return
+    setTransitionBusy(true)
+    try {
+      const blob = await generateCrossfadeVideo(imgA, imgB)
+      const url = URL.createObjectURL(blob)
+      setMediaPreview({ kind: 'video', src: url, poster: imgB, title: '소스 → 결과 오버레이 영상' })
+    } catch (err) {
+      console.error('[Lumanova] 오버레이 영상 생성 실패:', err)
+    } finally {
+      setTransitionBusy(false)
+    }
+  }, [transitionPair, transitionBusy, nodeImage])
 
   // Convert graphStore nodes to React Flow nodes
   const rfNodes: RFNode[] = useMemo(
@@ -791,6 +832,24 @@ function NodeCanvasInner() {
             >
               {selectedNodeIds.length}개 선택됨
             </span>
+          )}
+          {transitionPair && (
+            <button
+              onClick={handleTransitionVideo}
+              disabled={transitionBusy}
+              className="flex items-center gap-1.5"
+              title="선택한 두 노드의 이미지를 소스→결과로 자연스럽게 디졸브하는 영상을 만듭니다 (로컬 생성, API 미사용)"
+              style={{
+                padding: '5px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: 750, whiteSpace: 'nowrap',
+                background: transitionBusy ? '#1e1e28' : '#00c9a7',
+                color: transitionBusy ? '#8a8a96' : '#06251f',
+                border: '1px solid rgba(0,201,167,.45)',
+                cursor: transitionBusy ? 'wait' : 'pointer',
+              }}
+            >
+              {transitionBusy ? <Loader2 size={12} className="animate-spin" /> : <Clapperboard size={12} />}
+              {transitionBusy ? '영상 생성 중...' : '오버레이 영상'}
+            </button>
           )}
         </div>
       )}
