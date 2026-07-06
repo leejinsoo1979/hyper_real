@@ -8,6 +8,8 @@ interface GraphState {
   nodes: NodeData[]
   edges: EdgeData[]
   selectedNodeId: string | null
+  /** 마퀴/Shift 다중 선택. selectedNodeId는 항상 이 중 마지막(주 선택) */
+  selectedNodeIds: string[]
 
   addNode: (node: NodeData) => void
   removeNode: (nodeId: string) => void
@@ -19,6 +21,7 @@ interface GraphState {
   addEdge: (edge: EdgeData) => void
   removeEdge: (edgeId: string) => void
   selectNode: (nodeId: string | null) => void
+  setSelectedNodes: (nodeIds: string[]) => void
   clearAll: () => void
 
   createSourceNode: (image: string, origin: 'upload' | 'paste' | 'sketchup' | 'blender' | 'rhino', position: { x: number; y: number }, meta?: { sceneMeta: SceneMeta; cameraLocked: boolean }) => string
@@ -40,7 +43,12 @@ function getDefaultParams(type: NodeType): NodeParams {
     case 'UPSCALE':
       return { scale: 2 as const, optimizedFor: 'standard' as const, creativity: 0, detailStrength: 0, similarity: 0, promptStrength: 0, prompt: 'Upscale' }
     case 'VIDEO':
-      return { engine: 'grok' as const, duration: 5 as const, prompt: 'Move forward', endFrameImage: null }
+      return {
+        engine: 'grok' as const,
+        duration: 5 as const,
+        prompt: 'Create a restrained architectural walkthrough: a slow forward dolly into the space with subtle handheld stabilization, natural parallax on furniture and walls, realistic interior lighting, and no changes to layout, materials, objects, or camera height.',
+        endFrameImage: null,
+      }
     case 'COMPARE':
       return { mode: 'slider' as const }
   }
@@ -70,6 +78,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,
+  selectedNodeIds: [],
 
   addNode: (node) => {
     saveUndo()
@@ -82,6 +91,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       nodes: s.nodes.filter((n) => n.id !== nodeId),
       edges: s.edges.filter((e) => e.from !== nodeId && e.to !== nodeId),
       selectedNodeId: s.selectedNodeId === nodeId ? null : s.selectedNodeId,
+      selectedNodeIds: s.selectedNodeIds.filter((id) => id !== nodeId),
     }))
   },
 
@@ -131,7 +141,12 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     set((s) => ({ edges: s.edges.filter((e) => e.id !== edgeId) }))
   },
 
-  selectNode: (nodeId) => set({ selectedNodeId: nodeId }),
+  selectNode: (nodeId) => set({ selectedNodeId: nodeId, selectedNodeIds: nodeId ? [nodeId] : [] }),
+
+  setSelectedNodes: (nodeIds) => set({
+    selectedNodeIds: nodeIds,
+    selectedNodeId: nodeIds.length > 0 ? nodeIds[nodeIds.length - 1] : null,
+  }),
 
   clearAll: () => {
     saveUndo()

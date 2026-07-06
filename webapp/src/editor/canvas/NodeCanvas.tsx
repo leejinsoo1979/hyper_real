@@ -18,11 +18,12 @@ import {
   ReactFlowProvider,
   BaseEdge,
   getBezierPath,
+  SelectionMode,
   type EdgeProps,
   type EdgeTypes,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { FolderOpen, ImageIcon } from 'lucide-react'
+import { FolderOpen, Hand, ImageIcon, MousePointer2 } from 'lucide-react'
 import { v4 as uuid } from 'uuid'
 import { SourceNode } from '../nodes/SourceNode'
 import { RenderNode } from '../nodes/RenderNode'
@@ -31,6 +32,7 @@ import { UpscaleNode } from '../nodes/UpscaleNode'
 import { VideoNode } from '../nodes/VideoNode'
 import { CompareNode } from '../nodes/CompareNode'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { MediaPreviewModal, type MediaPreviewState } from '../panels/MediaPreviewModal'
 import { useGraphStore } from '../../state/graphStore'
 import { useUIStore } from '../../state/uiStore'
 import { executePipeline } from '../../engine'
@@ -236,6 +238,8 @@ function NodeCanvasInner() {
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId)
   const selectNode = useGraphStore((s) => s.selectNode)
   const updateNodePosition = useGraphStore((s) => s.updateNodePosition)
+  const selectedNodeIds = useGraphStore((s) => s.selectedNodeIds)
+  const setSelectedNodes = useGraphStore((s) => s.setSelectedNodes)
   const addEdge = useGraphStore((s) => s.addEdge)
   const createSourceNode = useGraphStore((s) => s.createSourceNode)
   const createNode = useGraphStore((s) => s.createNode)
@@ -261,6 +265,11 @@ function NodeCanvasInner() {
     items: [],
   })
 
+  const [mediaPreview, setMediaPreview] = useState<MediaPreviewState>(null)
+
+  // 캔버스 툴: select = 드래그로 박스(마퀴) 다중 선택 / pan = 드래그로 화면 이동
+  const [canvasTool, setCanvasTool] = useState<'select' | 'pan'>('select')
+
   // Convert graphStore nodes to React Flow nodes
   const rfNodes: RFNode[] = useMemo(
     () =>
@@ -268,12 +277,34 @@ function NodeCanvasInner() {
         id: n.id,
         type: n.type,
         position: n.position,
-        selected: n.id === selectedNodeId,
+        selected: n.id === selectedNodeId || selectedNodeIds.includes(n.id),
         data: {
           status: n.status,
           params: n.params,
           resultImage: n.result?.image ?? null,
+          resultVideo: n.result?.video ?? null,
           error: n.result?.error ?? null,
+          onOpenPreview: () => {
+            if (n.result?.video && n.result.video !== 'mock-video-url') {
+              setMediaPreview({
+                kind: 'video',
+                src: n.result.video,
+                poster: n.result.image ?? null,
+                title: 'Image to video',
+              })
+              return
+            }
+            const image =
+              n.result?.image ??
+              (n.type === 'SOURCE' && 'image' in n.params ? n.params.image : null)
+            if (image) {
+              setMediaPreview({
+                kind: 'image',
+                src: image,
+                title: n.type === 'SOURCE' ? 'Source' : n.type,
+              })
+            }
+          },
         },
       })),
     [nodes, selectedNodeId],
@@ -317,6 +348,16 @@ function NodeCanvasInner() {
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
+      // 마퀴/Shift 선택: React Flow가 보내는 select 변경을 스토어에 반영
+      const selectChanges = changes.filter((c) => c.type === 'select')
+      if (selectChanges.length > 0) {
+        const next = new Set(useGraphStore.getState().selectedNodeIds)
+        for (const change of selectChanges) {
+          if (change.selected) next.add(change.id)
+          else next.delete(change.id)
+        }
+        setSelectedNodes([...next])
+      }
       for (const change of changes) {
         if (change.type === 'position' && change.position && change.id) {
           updateNodePosition(change.id, change.position)
@@ -327,7 +368,7 @@ function NodeCanvasInner() {
       }
       void applyNodeChanges(changes, rfNodes)
     },
-    [updateNodePosition, removeNode, rfNodes],
+    [updateNodePosition, removeNode, setSelectedNodes, rfNodes],
   )
 
   const onEdgesChange: OnEdgesChange = useCallback(
@@ -540,9 +581,10 @@ function NodeCanvasInner() {
     [clearAll, updateNodePosition, reactFlowInstance, addNodeAt],
   )
 
-  // Node selection
+  // Node selection (Shift 클릭은 React Flow의 다중 선택에 맡긴다)
   const onNodeClick = useCallback(
-    (_event: React.MouseEvent, node: RFNode) => {
+    (event: React.MouseEvent, node: RFNode) => {
+      if (event.shiftKey) return
       selectNode(node.id)
     },
     [selectNode],
@@ -690,6 +732,13 @@ function NodeCanvasInner() {
           style: { stroke: '#3a3a44', strokeWidth: 1.5 },
         }}
         deleteKeyCode="Delete"
+        // 선택 툴: 빈 캔버스 드래그 = 박스 선택 (팬은 휠클릭/우클릭 드래그)
+        // 이동 툴: 드래그 = 팬
+        panOnDrag={canvasTool === 'pan' ? true : [1, 2]}
+        selectionOnDrag={canvasTool === 'select'}
+        selectionMode={SelectionMode.Partial}
+        multiSelectionKeyCode="Shift"
+        selectNodesOnDrag={false}
       >
         {/* 실물 Lumanova: 무광 검정 캔버스 (그리드 없음) */}
         <Background variant={BackgroundVariant.Dots} gap={9999} size={0.01} color="#0b0b0f" />
@@ -703,6 +752,40 @@ function NodeCanvasInner() {
         <span style={{ fontSize: 130, fontWeight: 800, color: 'rgba(255,255,255,0.025)', letterSpacing: 2 }}>
           Lumanova
         </span>
+      </div>
+
+      {/* 좌하단 캔버스 툴바: 선택(마퀴) / 이동(팬) — VizMaker 동일 위치 */}
+      <div
+        className="absolute flex items-center gap-1"
+        style={{
+          left: 14, bottom: 14, zIndex: 20, padding: 4,
+          borderRadius: 10, background: '#16161e', border: '1px solid #26262f',
+          boxShadow: '0 6px 18px rgba(0,0,0,.35)',
+        }}
+      >
+        {([
+          { key: 'select', icon: <MousePointer2 size={16} />, title: '선택 — 드래그로 여러 노드를 박스 선택 (Shift 클릭 추가)' },
+          { key: 'pan', icon: <Hand size={16} />, title: '이동 — 드래그로 캔버스 이동' },
+        ] as const).map((t) => (
+          <button
+            key={t.key}
+            title={t.title}
+            onClick={() => setCanvasTool(t.key)}
+            className="flex items-center justify-center rounded-md"
+            style={{
+              width: 34, height: 34,
+              background: canvasTool === t.key ? '#00c9a7' : 'transparent',
+              color: canvasTool === t.key ? '#06251f' : '#9a9aa6',
+            }}
+          >
+            {t.icon}
+          </button>
+        ))}
+        {selectedNodeIds.length > 1 && (
+          <span style={{ padding: '0 10px', fontSize: 11.5, color: '#35e5cf', whiteSpace: 'nowrap' }}>
+            {selectedNodeIds.length}개 선택됨
+          </span>
+        )}
       </div>
 
       {/* Empty state overlay */}
@@ -811,6 +894,10 @@ function NodeCanvasInner() {
           items={contextMenu.items}
           onClose={closeContextMenu}
         />
+      )}
+
+      {mediaPreview && (
+        <MediaPreviewModal media={mediaPreview} onClose={() => setMediaPreview(null)} />
       )}
     </div>
   )

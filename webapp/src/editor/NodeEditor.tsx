@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from 'react'
+import { v4 as uuid } from 'uuid'
 import { LeftSidebar } from './sidebar/LeftSidebar'
 import { NodeCanvas } from './canvas/NodeCanvas'
 import { InspectorPanel } from './panels/InspectorPanel'
@@ -89,7 +90,31 @@ export function NodeEditor() {
   const makeDisabled = isRunning || noNodeSelected
 
   const handleMake = useCallback(async () => {
-    if (!selectedNodeId || isRunning) return
+    if (isRunning) return
+
+    // 그룹 소스 생성: 2개 이상 선택 시 선택 노드들을 전부 입력으로 하는
+    // RENDER 노드를 만들어 실행한다 (왼쪽 노드가 기본 이미지, 나머지는 참조)
+    const g = useGraphStore.getState()
+    if (g.selectedNodeIds.length >= 2) {
+      const selected = g.nodes
+        .filter((n) => g.selectedNodeIds.includes(n.id) && n.type !== 'COMPARE')
+        .sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y)
+      if (selected.length >= 2) {
+        const maxX = Math.max(...selected.map((n) => n.position.x))
+        const avgY = selected.reduce((sum, n) => sum + n.position.y, 0) / selected.length
+        const newId = g.createNode('RENDER', { x: maxX + 340, y: avgY })
+        const prompt = useUIStore.getState().promptText.trim()
+        if (prompt) g.updateNodeParams(newId, { prompt })
+        for (const n of selected) {
+          g.addEdge({ id: uuid(), from: n.id, fromPort: 'image', to: newId, toPort: 'image' })
+        }
+        g.selectNode(newId)
+        await executePipeline(newId)
+        return
+      }
+    }
+
+    if (!selectedNodeId) return
     await executePipeline(selectedNodeId)
   }, [selectedNodeId, isRunning])
 
