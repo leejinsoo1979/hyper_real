@@ -217,3 +217,8 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     return nodes.filter((n) => visited.has(n.id))
   },
 }))
+
+// 개발 모드 전용: E2E 테스트에서 스토어 조작용 (프로덕션 번들엔 미포함)
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as { __graphStore?: typeof useGraphStore }).__graphStore = useGraphStore
+}

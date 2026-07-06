@@ -1,16 +1,35 @@
 import { useCallback, useRef, useState } from 'react'
 import { useUIStore } from '../../state/uiStore'
 import { useGraphStore } from '../../state/graphStore'
+import type { NodeData } from '../../types/node'
+import type { EdgeData } from '../../types/graph'
 
-export function CompareTab() {
+/** 노드의 입력 이미지 = 업스트림 노드의 결과 (SOURCE면 params.image). 없으면 null */
+export function getNodeInputImage(
+  node: NodeData | null,
+  nodes: NodeData[],
+  edges: EdgeData[],
+): string | null {
+  if (!node) return null
+  const inEdge = edges.find((e) => e.to === node.id)
+  if (!inEdge) return null
+  const upstream = nodes.find((n) => n.id === inEdge.from)
+  if (!upstream) return null
+  return upstream.result?.image
+    ?? ('image' in upstream.params ? ((upstream.params as { image?: string }).image ?? null) : null)
+}
+
+export function CompareTab({ selectedNode }: { selectedNode: NodeData | null }) {
   const compareANodeId = useUIStore((s) => s.compareANodeId)
   const compareBNodeId = useUIStore((s) => s.compareBNodeId)
   const nodes = useGraphStore((s) => s.nodes)
+  const edges = useGraphStore((s) => s.edges)
 
   const nodeA = compareANodeId ? nodes.find((n) => n.id === compareANodeId) : null
   const nodeB = compareBNodeId ? nodes.find((n) => n.id === compareBNodeId) : null
-  const imageA = nodeA?.result?.image ?? null
-  const imageB = nodeB?.result?.image ?? null
+  // 우클릭 지정(A/B)이 없으면 선택 노드의 입력↔결과를 자동으로 비교한다
+  const imageA = nodeA?.result?.image ?? getNodeInputImage(selectedNode, nodes, edges)
+  const imageB = nodeB?.result?.image ?? selectedNode?.result?.image ?? null
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [sliderX, setSliderX] = useState(0.5)
@@ -34,12 +53,12 @@ export function CompareTab() {
   if (!imageA && !imageB) {
     return (
       <div
-        className="flex flex-col items-center justify-center gap-2"
+        className="flex flex-col items-center justify-center gap-2 px-4 text-center"
         style={{ minHeight: 200, color: '#555555', fontSize: 13 }}
       >
-        <span>Assign images with node right-click</span>
+        <span>렌더된 노드를 선택하면 입력↔결과를 자동 비교합니다</span>
         <span style={{ fontSize: 11, color: '#444444' }}>
-          Compare A / Compare B
+          다른 노드끼리 비교: 노드 우클릭 → Compare A / Compare B
         </span>
       </div>
     )
