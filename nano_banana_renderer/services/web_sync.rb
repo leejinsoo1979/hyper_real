@@ -388,13 +388,15 @@ module NanoBanana
           far = d if d > far
         end
 
-        { 'RenderMode' => 1,                 # 히든라인: 면 전부 흰색
+        # 주의: 히든라인 모드는 면을 '배경색'으로 칠한다 → 배경이 검정이면 전부 검정.
+        # 배경 흰색 + 검정 안개 = 가까움 밝음 / 멂 어두움 (배경은 흰색으로 남는 한계 있음)
+        { 'RenderMode' => 1,
           'EdgeDisplayMode' => 0,
           'DrawSilhouettes' => false,
           'DisplayShadows' => false,
           'ModelTransparency' => false,
           'DrawHorizon' => false, 'DrawGround' => false, 'DrawSky' => false,
-          'BackgroundColor' => Sketchup::Color.new(0, 0, 0),
+          'BackgroundColor' => Sketchup::Color.new(255, 255, 255),
           'DisplayFog' => true,
           'FogUseSkyColor' => false,
           'FogColor' => Sketchup::Color.new(0, 0, 0),
