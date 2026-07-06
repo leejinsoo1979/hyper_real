@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import { Box, Building2, Check, Cpu, Download, Folder, Network, X } from 'lucide-react'
+import { Check, Cpu, Download, Folder, Network, X } from 'lucide-react'
+import logo3dsMax from '../../assets/plugin-logos/3dsmax.png'
+import logoRevit from '../../assets/plugin-logos/revit.png'
+import logoSketchUp from '../../assets/plugin-logos/sketchup.png'
+import logoArchicad from '../../assets/plugin-logos/archicad.png'
+import logoRhino from '../../assets/plugin-logos/rhino.png'
+import logoUnreal from '../../assets/plugin-logos/unreal.png'
+import logoBlender from '../../assets/plugin-logos/blender.png'
 import { getStoredApiKey, setStoredApiKey } from '../../engine/geminiClient'
 import { saasMode } from '../../api/lumanovaApi'
 import { useUIStore } from '../../state/uiStore'
@@ -45,75 +52,79 @@ const pluginFamilies: PluginFamily[] = [
   {
     key: 'max',
     name: '3ds Max',
-    icon: <PluginBadge label="3" sub="MAX" color="#45bde8" />,
+    icon: <PluginLogo src={logo3dsMax} name="3ds Max" />,
     versions: ['2021', '2022', '2023', '2024', '2025', '2026', '2027'],
     availableVersions: [],
   },
   {
     key: 'revit',
     name: 'Revit',
-    icon: <PluginBadge label="R" sub="RVT" color="#4d77ff" />,
+    icon: <PluginLogo src={logoRevit} name="Revit" />,
     versions: ['2022', '2023', '2024', '2025', '2026'],
     availableVersions: [],
   },
   {
     key: 'sketchup',
     name: 'SketchUp',
-    icon: <Box size={35} strokeWidth={2.2} color="#0087c8" />,
+    icon: <PluginLogo src={logoSketchUp} name="SketchUp" />,
     versions: ['2022', '2023', '2024', '2025', '2026'],
     availableVersions: ['2022', '2023', '2024', '2025'],
   },
   {
     key: 'archicad',
     name: 'Archicad',
-    icon: <Building2 size={35} strokeWidth={2.2} color="#14bde6" />,
+    icon: <PluginLogo src={logoArchicad} name="Archicad" />,
     versions: ['26', '27', '28', '29'],
     availableVersions: [],
   },
   {
     key: 'rhino',
     name: 'Rhino',
-    icon: <PluginBadge label="Rh" sub="" color="#f6f6ff" darkText />,
+    icon: <PluginLogo src={logoRhino} name="Rhino" />,
     versions: ['6.0', '7.0', '8.0'],
-    availableVersions: [],
+    availableVersions: ['8.0'],
   },
   {
     key: 'unreal',
     name: 'Unreal Engine',
-    icon: <PluginBadge label="U" sub="" color="#f8f8ff" darkText />,
+    icon: <PluginLogo src={logoUnreal} name="Unreal Engine" />,
     versions: ['5.5', '5.6', '5.7'],
     availableVersions: [],
   },
   {
     key: 'blender',
     name: 'Blender',
-    icon: <PluginBadge label="B" sub="" color="#f28c1b" />,
+    icon: <PluginLogo src={logoBlender} name="Blender" />,
     versions: ['4.2', '4.3', '4.4', '4.5', '5.0', '5.1'],
-    availableVersions: [],
+    availableVersions: ['4.2', '4.3', '4.4', '4.5'],
   },
 ]
 
-function PluginBadge({ label, sub, color, darkText = false }: { label: string; sub: string; color: string; darkText?: boolean }) {
-  return (
-    <span
-      className="flex items-center justify-center"
-      style={{
-        width: 35,
-        height: 35,
-        borderRadius: 8,
-        background: color,
-        color: darkText ? '#15151c' : '#ffffff',
-        fontWeight: 900,
-        fontSize: sub ? 18 : 17,
-        boxShadow: `0 8px 24px ${color}22`,
-      }}
-    >
-      <span className="flex flex-col items-center leading-none">
-        <span>{label}</span>
-        {sub && <span style={{ fontSize: 6, marginTop: 1, letterSpacing: 0 }}>{sub}</span>}
-      </span>
-    </span>
-  )
+// 설치(다운로드) 파일: SketchUp은 rbz(API 패키징), Blender/Rhino는 정적 파일
+const PLUGIN_DOWNLOADS: Partial<Record<PluginKey, { url: string; filename: string }>> = {
+  sketchup: { url: '/api/download-rbz', filename: 'Lumanova_v1.0.5.rbz' },
+  blender: { url: '/downloads/lumanova_bridge.py', filename: 'lumanova_bridge.py' },
+  rhino: { url: '/downloads/lumanova_bridge_rhino.py', filename: 'lumanova_bridge_rhino.py' },
+}
+
+function downloadPluginFiles(keys: PluginKey[]) {
+  keys.forEach((key, i) => {
+    const item = PLUGIN_DOWNLOADS[key]
+    if (!item) return
+    // 다중 다운로드: 브라우저가 연속 클릭을 무시하지 않도록 간격을 둔다
+    setTimeout(() => {
+      const a = document.createElement('a')
+      a.href = item.url
+      a.download = item.filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    }, i * 600)
+  })
+}
+
+function PluginLogo({ src, name }: { src: string; name: string }) {
+  return <img src={src} alt={name} width={35} height={35} style={{ objectFit: 'contain' }} draggable={false} />
 }
 
 function readPluginSelections(): Record<string, boolean> {
@@ -184,15 +195,15 @@ function InstallPluginsModal({ onClose }: { onClose: () => void }) {
     persistPluginSelections(next)
   }
 
-  const selectedSketchUp = pluginFamilies
-    .find((family) => family.key === 'sketchup')!
-    .versions.some((version) => selections[`sketchup:${version}`])
-
   const handleInstall = () => {
     persistPluginSelections(selections)
-    if (selectedSketchUp) {
-      window.location.href = '/api/download-rbz'
-    }
+    // 버전 하나라도 체크된(그리고 설치 파일이 있는) 툴의 플러그인을 내려받는다
+    const selectedKeys = pluginFamilies
+      .filter((family) =>
+        PLUGIN_DOWNLOADS[family.key]
+        && family.availableVersions.some((version) => selections[`${family.key}:${version}`]))
+      .map((family) => family.key)
+    downloadPluginFiles(selectedKeys)
     onClose()
   }
 
@@ -304,10 +315,18 @@ function InstallPluginsModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+const TOOL_LABELS: Record<string, string> = {
+  sketchup: 'SketchUp',
+  blender: 'Blender',
+  rhino: 'Rhino',
+}
+
 export function SettingsPage() {
   const saas = saasMode()
   const status = useUIStore((s) => s.sketchUpStatus)
+  const bridgeTool = useUIStore((s) => s.bridgeTool)
   const [pluginsOpen, setPluginsOpen] = useState(false)
+  const connectedToolLabel = bridgeTool ? (TOOL_LABELS[bridgeTool] ?? bridgeTool) : null
 
   return (
     <div className="flex-1 overflow-y-auto" style={{ background: '#0d0d11', padding: '36px 48px' }}>
@@ -362,49 +381,50 @@ export function SettingsPage() {
         </div>
       </Section>
 
-      <Section title="SketchUp 연동">
+      <Section title="3D 툴 연동">
         <Row
           label="연결 상태"
           value={
             <span style={{ color: status === 'connected' ? '#4cd6a8' : '#ff7777' }}>
-              {status === 'connected' ? '● 연결됨' : '○ 연결 안 됨'}
+              {status === 'connected'
+                ? `● 연결됨${connectedToolLabel ? ` — ${connectedToolLabel}` : ''}`
+                : '○ 연결 안 됨'}
             </span>
           }
         />
-        <Row label="플러그인" value="Lumanova SketchUp Plugin v1.0.5" />
+        <Row label="지원 툴" value="SketchUp · Blender · Rhino" />
         <div style={{ marginTop: 8, fontSize: 11.5, color: '#71717c', lineHeight: 1.6 }}>
-          SketchUp을 실행하면 자동으로 연결됩니다. 연결이 안 되면 SketchUp을 재시작하세요.
+          플러그인이 설치된 3D 툴을 실행하면 자동으로 연결됩니다 (SketchUp 9876 · Blender 9877 · Rhino 9878).
+          여러 툴이 동시에 켜져 있으면 SketchUp이 우선 연결됩니다.
         </div>
       </Section>
 
       <Section title="플러그인">
-        <div className="flex items-center justify-between">
-          <div>
-            <div style={{ color: '#e6e6ee', fontSize: 13, fontWeight: 600 }}>SketchUp</div>
-            <div style={{ marginTop: 3, fontSize: 11.5, color: '#71717c' }}>
-              SketchUp 2021~2025 지원 · 설치: 창 → Extension Manager → Install Extension → 받은 rbz 선택 → SketchUp 재시작
-            </div>
-          </div>
-          <a
-            href="/api/download-rbz"
-            download
-            className="flex items-center"
-            style={{
-              height: 36, padding: '0 18px', borderRadius: 8, fontSize: 12.5, fontWeight: 700,
-              background: '#00c9a7', color: '#06251f', textDecoration: 'none', flexShrink: 0,
-            }}
-          >
-            <Download size={14} className="mr-1.5" />
-            SketchUp 다운로드
-          </a>
-        </div>
+        <PluginDownloadRow
+          name="SketchUp"
+          hint="SketchUp 2021~2025 지원 · 설치: 창 → Extension Manager → Install Extension → 받은 rbz 선택 → SketchUp 재시작"
+          href="/api/download-rbz"
+          label="SketchUp 다운로드"
+        />
+        <PluginDownloadRow
+          name="Blender"
+          hint="Blender 4.2~4.5 지원 · 설치: Edit → Preferences → Add-ons → Install from Disk → 받은 py 선택 → 체크 활성화"
+          href="/downloads/lumanova_bridge.py"
+          label="Blender 다운로드"
+        />
+        <PluginDownloadRow
+          name="Rhino (실험적)"
+          hint="Rhino 8 지원 · 실행: 명령줄에 ScriptEditor 입력 → 받은 py 열기 → 실행 (Rhino를 닫을 때까지 유지)"
+          href="/downloads/lumanova_bridge_rhino.py"
+          label="Rhino 다운로드"
+        />
         <div className="mt-3 flex flex-wrap gap-1.5" style={{ borderTop: '1px solid #22222a', paddingTop: 12 }}>
-          {['SketchUp 2022', 'SketchUp 2023', 'SketchUp 2024', 'SketchUp 2025'].map((n) => (
+          {['SketchUp 2022~2025', 'Blender 4.2~4.5', 'Rhino 8'].map((n) => (
             <span key={n} style={{ padding: '3px 10px', borderRadius: 999, fontSize: 10.5, background: '#122a28', color: '#35e5cf', border: '1px solid #1f5952' }}>
               {n} 지원
             </span>
           ))}
-          {['Rhino', 'Blender', '3ds Max', 'Revit', 'Archicad', 'Unreal Engine'].map((n) => (
+          {['3ds Max', 'Revit', 'Archicad', 'Unreal Engine'].map((n) => (
             <span key={n} style={{ padding: '3px 10px', borderRadius: 999, fontSize: 10.5, background: '#1e1e26', color: '#686875', border: '1px solid #2a2a34' }}>
               {n} 준비 중
             </span>
@@ -421,6 +441,29 @@ export function SettingsPage() {
       </Section>
 
       {pluginsOpen && <InstallPluginsModal onClose={() => setPluginsOpen(false)} />}
+    </div>
+  )
+}
+
+function PluginDownloadRow({ name, hint, href, label }: { name: string; hint: string; href: string; label: string }) {
+  return (
+    <div className="flex items-center justify-between" style={{ padding: '7px 0' }}>
+      <div style={{ paddingRight: 16 }}>
+        <div style={{ color: '#e6e6ee', fontSize: 13, fontWeight: 600 }}>{name}</div>
+        <div style={{ marginTop: 3, fontSize: 11.5, color: '#71717c' }}>{hint}</div>
+      </div>
+      <a
+        href={href}
+        download
+        className="flex items-center"
+        style={{
+          height: 36, padding: '0 18px', borderRadius: 8, fontSize: 12.5, fontWeight: 700,
+          background: '#00c9a7', color: '#06251f', textDecoration: 'none', flexShrink: 0,
+        }}
+      >
+        <Download size={14} className="mr-1.5" />
+        {label}
+      </a>
     </div>
   )
 }

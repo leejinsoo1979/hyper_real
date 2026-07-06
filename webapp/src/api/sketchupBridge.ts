@@ -47,10 +47,11 @@ export interface CapturePayload {
 // Ruby WEBrick server response types (actual API at localhost:9876)
 // ---------------------------------------------------------------------------
 
-/** GET /api/ping → { status: 'ok', app: 'BananaShow', ip: string, port: number } */
+/** GET /api/ping → { status: 'ok', app: 'Lumanova Bridge', tool?, ip, port } */
 interface PingResponse {
   status: string
   app?: string
+  tool?: string
   ip?: string
   port?: number
 }
@@ -77,9 +78,18 @@ interface ScenesResponse {
 // Config
 // ---------------------------------------------------------------------------
 
-const BRIDGE_BASE_URL = 'http://localhost:9876'
+// 툴별 고정 포트. 웹앱은 모든 포트를 스캔해 살아있는 브릿지에 붙는다.
+// 여러 툴이 동시에 켜져 있으면 먼저 응답한(목록 순) 브릿지가 연결된다.
+const BRIDGE_PORTS = [9876, 9877, 9878] // SketchUp / Blender / Rhino
 const POLL_INTERVAL_MS = 2000
 const REQUEST_TIMEOUT_MS = 3500
+
+/** 현재 연결된 브릿지 주소. 연결 전이나 끊긴 뒤에는 재스캔한다. */
+let bridgeBaseUrl: string | null = null
+
+function bridgeUrl(path: string): string {
+  return `${bridgeBaseUrl ?? `http://localhost:${BRIDGE_PORTS[0]}`}${path}`
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -125,19 +135,42 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 /** Track previous source base64 to detect actual image changes */
 let lastSourceHash: string | null = null
 
+async function pingPort(port: number): Promise<PingResponse | null> {
+  try {
+    const res = await fetchWithTimeout(`http://localhost:${port}/api/ping`)
+    if (!res.ok) return null
+    const data: PingResponse = await res.json()
+    return data.status === 'ok' ? data : null
+  } catch {
+    return null
+  }
+}
+
 /**
- * Ping the Ruby WEBrick server.
- * Ruby endpoint: GET /api/ping → { status: 'ok', ... }
+ * 연결 확인 + 브릿지 자동 탐색.
+ * 연결돼 있으면 그 브릿지만 ping, 끊겨 있으면 전체 포트를 동시에 스캔한다.
  */
 async function ping(): Promise<boolean> {
-  try {
-    const res = await fetchWithTimeout(`${BRIDGE_BASE_URL}/api/ping`)
-    if (!res.ok) return false
-    const data: PingResponse = await res.json()
-    return data.status === 'ok'
-  } catch {
+  const ui = useUIStore.getState()
+
+  if (bridgeBaseUrl) {
+    const current = await pingPort(Number(new URL(bridgeBaseUrl).port))
+    if (current) return true
+    bridgeBaseUrl = null // 끊김 — 다음 스캔에서 다른 툴로 넘어갈 수 있게
+  }
+
+  const results = await Promise.all(BRIDGE_PORTS.map((port) => pingPort(port)))
+  const idx = results.findIndex(Boolean)
+  if (idx < 0) {
+    ui.setBridgeTool(null)
     return false
   }
+  const found = results[idx]!
+  bridgeBaseUrl = `http://localhost:${BRIDGE_PORTS[idx]}`
+  // 구버전 SketchUp 브릿지는 tool 필드가 없다 → sketchup으로 간주
+  ui.setBridgeTool(found.tool ?? 'sketchup')
+  lastSourceHash = null // 새 브릿지의 첫 캡처를 즉시 반영
+  return true
 }
 
 /**
@@ -147,7 +180,7 @@ async function ping(): Promise<boolean> {
  */
 async function fetchCapture(): Promise<string | null> {
   try {
-    const res = await fetchWithTimeout(`${BRIDGE_BASE_URL}/api/data`)
+    const res = await fetchWithTimeout(bridgeUrl('/api/data'))
     if (!res.ok) return null
 
     const data: DataResponse = await res.json()
@@ -169,7 +202,7 @@ async function fetchCapture(): Promise<string | null> {
 /** 현재 소스 이미지를 1회 직접 조회 (dedup 캐시 무시). Convert 완료 감지용. */
 export async function fetchSourceOnce(): Promise<{ uri: string; sig: string } | null> {
   try {
-    const res = await fetchWithTimeout(`${BRIDGE_BASE_URL}/api/data`)
+    const res = await fetchWithTimeout(bridgeUrl('/api/data'))
     if (!res.ok) return null
     const data: DataResponse = await res.json()
     if (!data.source) return null
@@ -183,7 +216,7 @@ export async function fetchSourceOnce(): Promise<{ uri: string; sig: string } | 
 async function syncApiKeyFromBridge(): Promise<void> {
   if (getStoredApiKey()) return // 이미 있으면 유지
   try {
-    const res = await fetchWithTimeout(`${BRIDGE_BASE_URL}/api/apikey`)
+    const res = await fetchWithTimeout(bridgeUrl('/api/apikey'))
     if (!res.ok) return
     const data: { apiKey?: string } = await res.json()
     if (data.apiKey && data.apiKey.trim().length > 0) {
@@ -198,7 +231,7 @@ async function syncApiKeyFromBridge(): Promise<void> {
 /** SketchUp의 저장된 씬 목록 조회. null = 일시적 실패 (기존 목록 유지해야 함). */
 export async function getScenes(): Promise<SketchUpScene[] | null> {
   try {
-    const res = await fetchWithTimeout(`${BRIDGE_BASE_URL}/api/scenes`)
+    const res = await fetchWithTimeout(bridgeUrl('/api/scenes'))
     if (!res.ok) return null
     const data: ScenesResponse = await res.json()
     return data.scenes ?? []
@@ -213,7 +246,7 @@ async function sendCommand(cmd: Record<string, unknown>): Promise<boolean> {
     // Content-Type: text/plain = CORS 단순 요청 -> OPTIONS 프리플라이트가 발생하지 않음.
     // (WEBrick ProcHandler가 OPTIONS를 405로 응답하는 문제를 브라우저에서 원천 회피.
     //  Ruby 쪽은 req.body를 JSON.parse 하므로 Content-Type과 무관하게 동작)
-    const res = await fetchWithTimeout(`${BRIDGE_BASE_URL}/api/command`, {
+    const res = await fetchWithTimeout(bridgeUrl('/api/command'), {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(cmd),
@@ -378,7 +411,7 @@ async function vivifyMask(
 
 async function fetchMaskOnce(): Promise<{ mask: string; map: { color: string; material: string }[]; timestamp: number } | null> {
   try {
-    const res = await fetchWithTimeout(`${BRIDGE_BASE_URL}/api/mask`)
+    const res = await fetchWithTimeout(bridgeUrl('/api/mask'))
     if (!res.ok) return null
     const j = await res.json()
     if (!j.mask) return null
@@ -398,7 +431,7 @@ export async function pushResult(
   imageBase64: string,
 ): Promise<boolean> {
   try {
-    const res = await fetchWithTimeout(`${BRIDGE_BASE_URL}/api/result`, {
+    const res = await fetchWithTimeout(bridgeUrl('/api/result'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

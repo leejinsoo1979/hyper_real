@@ -21,6 +21,8 @@ interface UIState {
   sketchUpStatus: ConnectionStatus
   sketchUpScenes: SketchUpSceneInfo[]
   sketchUpViewport: { w: number; h: number; sf: number; title?: string | null } | null
+  /** 연결된 브릿지의 툴 종류 (sketchup | blender | rhino). 미연결이면 null */
+  bridgeTool: string | null
 
   setActiveSidebarItem: (item: SidebarItem) => void
   setActiveTab: (tab: InspectorTab) => void
@@ -34,6 +36,7 @@ interface UIState {
   setSketchUpStatus: (status: ConnectionStatus) => void
   setSketchUpScenes: (scenes: SketchUpSceneInfo[]) => void
   setSketchUpViewport: (vp: { w: number; h: number; sf: number; title?: string | null } | null) => void
+  setBridgeTool: (tool: string | null) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -48,6 +51,7 @@ export const useUIStore = create<UIState>((set) => ({
   sketchUpStatus: 'disconnected',
   sketchUpScenes: [],
   sketchUpViewport: null,
+  bridgeTool: null,
 
   setActiveSidebarItem: (item) => set({ activeSidebarItem: item, materialLibraryOpen: false }),
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -61,4 +65,5 @@ export const useUIStore = create<UIState>((set) => ({
   setSketchUpStatus: (status) => set({ sketchUpStatus: status }),
   setSketchUpScenes: (scenes) => set({ sketchUpScenes: scenes }),
   setSketchUpViewport: (vp) => set({ sketchUpViewport: vp }),
+  setBridgeTool: (tool) => set({ bridgeTool: tool }),
 }))

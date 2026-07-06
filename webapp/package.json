@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "sync-plugins": "cp ../plugins/blender/lumanova_bridge.py ../plugins/rhino/lumanova_bridge_rhino.py public/downloads/",
+    "build": "npm run sync-plugins && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "app:dev": "sh -c 'vite & VITE_PID=$!; sleep 3; VITE_DEV_SERVER_URL=http://localhost:5173 electron .; kill $VITE_PID'",
