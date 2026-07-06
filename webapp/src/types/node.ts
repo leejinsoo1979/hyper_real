@@ -43,6 +43,7 @@ export interface RenderParams {
 
 export interface ModifierParams {
   prompt: string
+  negativePrompt: string
   presetId: string | null
   mask: string | null
   maskLayers: MaskLayer[]

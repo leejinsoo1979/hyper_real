@@ -1,10 +1,10 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { ClipboardList, ChevronUp, ChevronDown } from 'lucide-react'
 import {
-  Snowflake, Leaf, Sun, Moon, Users, Car, Flower2, Sprout, TreePine,
+  Snowflake, Leaf, Sun, Moon, UserRound, Users, Car, Flower2, Sprout, TreePine,
   Search, Link,
 } from 'lucide-react'
-import type { NodeData } from '../../types/node'
+import type { NodeData, NodeParams } from '../../types/node'
 import type { PromptPreset } from '../../types/preset'
 import { getPresetsForNodeType } from '../../presets'
 import { useUIStore } from '../../state/uiStore'
@@ -72,6 +72,8 @@ function getPresetIcon(presetId: string, size: number): ReactNode {
       return <Moon size={size * 0.6} style={{ display: 'inline', marginRight: 2 }} />
     case 'add-people':
       return <Users size={size} />
+    case 'add-single-person':
+      return <UserRound size={size} />
     case 'add-blurred-people':
       return <AddBlurredPeopleIcon className={cls} {...style} />
     case 'add-blurred-cars':
@@ -251,10 +253,12 @@ export function PromptPresets({ selectedNode }: PromptPresetsProps) {
       setPromptText(preset.basePrompt)
       // Update node params with preset prompt and presetId
       if ('prompt' in selectedNode.params) {
-        updateNodeParams(selectedNode.id, {
+        const nextParams: { prompt: string; presetId: string; negativePrompt?: string } = {
           prompt: preset.basePrompt,
           presetId: preset.id,
-        })
+        }
+        if ('negativePrompt' in selectedNode.params) nextParams.negativePrompt = preset.negativePrompt
+        updateNodeParams(selectedNode.id, nextParams as Partial<NodeParams>)
       }
     },
     [selectedNode, setPromptText, updateNodeParams],

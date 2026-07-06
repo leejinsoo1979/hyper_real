@@ -39,7 +39,7 @@ function getDefaultParams(type: NodeType): NodeParams {
     case 'RENDER':
       return { engine: 'experimental-interior', prompt: 'Create photorealistic image', negativePrompt: '', presetId: null, seed: null, resolution: '1024', timePreset: 'day' as const, lightsOn: true }
     case 'MODIFIER':
-      return { prompt: '', presetId: null, mask: null, maskLayers: [] }
+      return { prompt: '', negativePrompt: '', presetId: null, mask: null, maskLayers: [] }
     case 'UPSCALE':
       return { scale: 2 as const, optimizedFor: 'standard' as const, creativity: 0, detailStrength: 0, similarity: 0, promptStrength: 0, prompt: 'Upscale' }
     case 'VIDEO':

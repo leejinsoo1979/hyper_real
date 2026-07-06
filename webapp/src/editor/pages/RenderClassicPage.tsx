@@ -1053,14 +1053,15 @@ export function RenderClassicPage() {
             imageOverlay={
               s.aiMagicBusy ? <AiScanOverlay />
               : s.sourceTool === 'magic' && s.maskUri ? <MagicSelectOverlay />
-              : s.sourceTool === 'magic' && s.aiSelOverlay ? <img src={s.aiSelOverlay} alt="" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
+              : s.sourceTool === 'magic' && s.aiSelOverlay ? <img src={s.aiSelOverlay} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" draggable={false} />
               : undefined
             }
             onImagePick={
               s.sourceTool === 'eyedropper' ? handleSourcePick
-              : s.sourceTool === 'magic' && !s.maskUri ? handleAiMagicPick
+              : s.sourceTool === 'magic' && !s.maskUri && !s.aiMagicBusy ? handleAiMagicPick
               : undefined
             }
+            pickCursor={s.sourceTool === 'magic' ? 'crosshair' : undefined}
             imageFooter={(s.materialSwaps.length > 0 || s.sourceSelectedColors.length > 0 || s.aiSelMask || s.aiMagicBusy) ? (
               <div className="flex flex-wrap gap-1.5">
                 {s.aiMagicBusy && (

@@ -208,7 +208,7 @@ async function executeNode(node: NodeData): Promise<void> {
           image: inputImage ?? '',
           prompt: params.prompt,
           systemPrompt: '',
-          negativePrompt: '',
+          negativePrompt: params.negativePrompt ?? '',
           mask: params.mask,
           maskLayers: params.maskLayers,
           materialReferences: params.materialReferences,

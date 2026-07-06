@@ -209,6 +209,18 @@ export const PRESETS: PromptPreset[] = [
     forbiddenChanges: 'Do NOT alter architecture or furniture.',
   },
   {
+    id: 'add-single-person',
+    name: 'Single person',
+    icon: 'add-single-person',
+    category: 'modifier',
+    applicableNodeTypes: ['MODIFIER'],
+    mergeMode: 'replace',
+    basePrompt: 'Add exactly one single person only inside the selected area. One adult person, natural scale, full body visible if the selected area allows it, standing or walking naturally with realistic posture. Match the original camera perspective, room lighting, shadows, color temperature, and scene scale. Do not place any person outside the selected area. Preserve the original architecture, furniture, materials, camera angle, and composition.',
+    negativePrompt: 'multiple people, crowd, group, extra person, duplicate person, duplicated body, extra arms, extra legs, extra head, background people, reflected people, mannequins, cartoon person, oversized person, floating person, deformed anatomy',
+    visualConstraints: 'Use a tight mask for the exact position. Generate one person only, matched to scene scale and lighting.',
+    forbiddenChanges: 'Do NOT add more than one person. Do NOT change architecture, furniture, materials, or camera angle.',
+  },
+  {
     id: 'add-blurred-people',
     name: 'Add blurred people',
     icon: 'add-blurred-people',
