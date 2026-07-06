@@ -103,7 +103,6 @@ const pluginFamilies: PluginFamily[] = [
 
 // 설치(다운로드) 파일: SketchUp은 rbz(API 패키징), Blender/Rhino는 정적 파일
 const PLUGIN_DOWNLOADS: Partial<Record<PluginKey, { url: string; filename: string }>> = {
-  sketchup: { url: '/api/download-rbz', filename: 'Lumanova_v1.0.5.rbz' },
   blender: { url: '/downloads/lumanova_bridge.py', filename: 'lumanova_bridge.py' },
   rhino: { url: '/downloads/lumanova_bridge_rhino.py', filename: 'lumanova_bridge_rhino.py' },
 }
@@ -401,12 +400,6 @@ export function SettingsPage() {
       </Section>
 
       <Section title="플러그인">
-        <PluginDownloadRow
-          name="SketchUp"
-          hint="SketchUp 2021~2025 지원 · 설치: 창 → Extension Manager → Install Extension → 받은 rbz 선택 → SketchUp 재시작"
-          href="/api/download-rbz"
-          label="SketchUp 다운로드"
-        />
         <PluginDownloadRow
           name="Blender"
           hint="Blender 4.2~4.5 지원 · 설치: Edit → Preferences → Add-ons → Install from Disk → 받은 py 선택 → 체크 활성화"

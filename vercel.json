@@ -14,8 +14,7 @@
   "functions": {
     "api/*.js": {
       "memory": 512,
-      "maxDuration": 120,
-      "includeFiles": "webapp/public/downloads/Lumanova_v1.0.5.rbz"
+      "maxDuration": 120
     }
   }
 }

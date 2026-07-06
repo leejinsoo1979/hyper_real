@@ -195,7 +195,7 @@ export function SupportPage() {
       <Section title="문의 채널">
         <div className="flex flex-col gap-3">
           <ContactRow label="이메일" value="sbbc212@gmail.com" href="mailto:sbbc212@gmail.com" />
-          <ContactRow label="플러그인 다운로드" value="Lumanova SketchUp 플러그인 (.rbz)" href="/downloads/Lumanova_v1.0.5.rbz" download />
+          <ContactRow label="Blender 플러그인" value="lumanova_bridge.py" href="/downloads/lumanova_bridge.py" download />
         </div>
         <p style={{ marginTop: 14, fontSize: 11.5, color: '#6a6a74', lineHeight: 1.6 }}>
           문의 시 앱 버전(1.0.5)과 SketchUp 버전, 스크린샷을 함께 보내주시면 더 빠르게 도와드릴 수 있습니다.

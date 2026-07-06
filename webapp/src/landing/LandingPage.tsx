@@ -66,12 +66,11 @@ function Hero() {
             Get start <span style={{ fontSize: 17 }}>→</span>
           </button>
           <a
-            href="/api/download-rbz"
-            download
+            href="/docs"
             className="flex items-center gap-2"
             style={{ padding: '16px 28px', borderRadius: 999, border: '1px solid #333', color: '#e6e6ee', fontSize: 15, fontWeight: 600, textDecoration: 'none' }}
           >
-            앱 다운로드 <span style={{ fontSize: 14 }}>↓</span>
+            설치 가이드 <span style={{ fontSize: 14 }}>→</span>
           </a>
         </div>
         <div className="flex items-center gap-2.5" style={{ marginTop: 56, color: '#7a7a86', fontSize: 13 }}>

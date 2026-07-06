@@ -73,7 +73,7 @@ export function Footer() {
         <div className="flex flex-wrap gap-14" style={{ fontSize: 13.5 }}>
           {[
             { h: 'Product', items: [['Features', '/features'], ['Gallery', '/gallery'], ['Pricing', '/pricing']] },
-            { h: 'Resources', items: [['Docs', '/docs'], ['SketchUp 플러그인', '/api/download-rbz'], ['Discord', '#']] },
+            { h: 'Resources', items: [['Docs', '/docs'], ['Blender 플러그인', '/downloads/lumanova_bridge.py'], ['Discord', '#']] },
             { h: 'Company', items: [['About', '#'], ['Contact', 'mailto:sbbc212@gmail.com'], ['Privacy', '#']] },
           ].map((col) => (
             <div key={col.h}>
