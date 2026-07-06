@@ -1045,7 +1045,8 @@ export function RenderClassicPage() {
               />
             }
             imageOverlay={
-              s.sourceTool === 'magic' && s.maskUri ? <MagicSelectOverlay />
+              s.aiMagicBusy ? <AiScanOverlay />
+              : s.sourceTool === 'magic' && s.maskUri ? <MagicSelectOverlay />
               : s.sourceTool === 'magic' && s.aiSelOverlay ? <img src={s.aiSelOverlay} alt="" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
               : undefined
             }
@@ -1065,7 +1066,7 @@ export function RenderClassicPage() {
                       border: '1px solid #1f5952', backdropFilter: 'blur(3px)',
                     }}
                   >
-                    <Wand2 size={11} className="animate-pulse" />
+                    <Loader2 size={11} className="animate-spin" />
                     AI 영역 인식 중...
                   </span>
                 )}
@@ -1407,6 +1408,33 @@ function RegionLayerList({
         </span>
       ))}
     </>
+  )
+}
+
+// ── AI 세그멘테이션 로딩 오버레이: 스캔 애니메이션 + 스피너 ──────────────────
+function AiScanOverlay() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      {/* 어둡게 + 스캔 광선 (index.css의 lumanova-node-scan 재사용) */}
+      <div className="absolute inset-0" style={{ background: 'rgba(4,6,9,0.42)' }} />
+      <div className="lumanova-node-scan absolute inset-0" />
+      {/* 중앙 상태 필 */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span
+          className="flex items-center gap-2.5"
+          style={{
+            padding: '10px 18px', borderRadius: 999,
+            background: 'rgba(5,9,10,0.82)', border: '1px solid rgba(0,201,167,0.55)',
+            color: '#7df0dd', fontSize: 13, fontWeight: 750,
+            backdropFilter: 'blur(5px)',
+            boxShadow: '0 10px 36px rgba(0,0,0,.5), 0 0 24px rgba(0,201,167,.18)',
+          }}
+        >
+          <Loader2 size={15} className="animate-spin" />
+          AI가 클릭한 객체의 영역을 인식하는 중...
+        </span>
+      </div>
+    </div>
   )
 }
 
