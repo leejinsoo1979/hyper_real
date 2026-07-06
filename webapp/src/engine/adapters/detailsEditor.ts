@@ -99,7 +99,7 @@ function buildRegionData(strokeAlpha: Uint8Array, w: number, h: number): Uint8Ar
  * 마킹 영역(스트로크+폐곡선 내부, 약간 팽창+페더)만 편집본을 쓰고
  * 나머지는 원본 픽셀을 그대로 유지한다. 실패 시 null (편집본 그대로 사용).
  */
-async function compositeEditedIntoRegion(
+export async function compositeEditedIntoRegion(
   original: string,
   edited: string,
   mask: string,
