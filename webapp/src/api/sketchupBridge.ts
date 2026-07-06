@@ -300,6 +300,12 @@ export function materialTextureUri(m: SourceMaterial): string | null {
   return m.texture ? toDataUri(m.texture) : null
 }
 
+/** 브릿지에 이미 캐시된 재질 목록만 조회 (재추출 명령 없이 — 가볍다). */
+export async function getCachedSourceMaterials(): Promise<SourceMaterial[] | null> {
+  const cached = await fetchMaterialsOnce()
+  return cached?.materials?.length ? cached.materials : null
+}
+
 /**
  * 연결된 3D 툴의 모델 재질을 추출해 온다. 브릿지에 load_materials 명령을 보내고
  * 캐시 timestamp가 갱신될 때까지 폴링한다 (Blender는 주기 갱신이라 명령은 무시됨).

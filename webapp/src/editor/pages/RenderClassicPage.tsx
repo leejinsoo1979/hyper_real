@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Eye, ImagePlus, Zap, Loader2, SlidersHorizontal, Download, X } from 'lucide-react'
-import { useClassicStore, type ClassicModel, type ClassicSize } from '../../state/classicStore'
+import { Eye, ImagePlus, Zap, Loader2, SlidersHorizontal, Download, Pencil, Pipette, Wand2, X } from 'lucide-react'
+import { useClassicStore, type ClassicModel, type ClassicSize, type MaterialSwap } from '../../state/classicStore'
+import { materials as libraryMaterials, type MaterialAsset } from './MaterialsPage'
 import { useUIStore } from '../../state/uiStore'
 import { useGraphStore } from '../../state/graphStore'
 import { useHistoryStore } from '../../state/historyStore'
-import { selectScene, requestCapture, addScene, sendCamera, fetchSourceOnce, captureMask, isBridgeOrigin, bridgeToolLabel } from '../../api/sketchupBridge'
+import { selectScene, requestCapture, addScene, sendCamera, fetchSourceOnce, captureMask, isBridgeOrigin, bridgeToolLabel, getCachedSourceMaterials, materialTextureUri } from '../../api/sketchupBridge'
 import { generateAutoPrompt, buildLightingDescription } from '../../engine/autoPrompt'
 import { renderMain } from '../../engine/adapters/mainRenderer'
 import { EditOverlay } from '../panels/EditOverlay'
@@ -180,6 +181,77 @@ export function RenderClassicPage() {
     sendCamera(action, value)
   }, [])
 
+  // ── 스포이드 재질 교체 ──────────────────────────────────────────────────
+  const [pickedMaterial, setPickedMaterial] = useState<string | null>(null)
+
+  // 소스 이미지 클릭(비율 좌표) → ID 마스크 픽셀 색 → 재질 이름
+  const handleSourcePick = useCallback(async (fx: number, fy: number) => {
+    const st = useClassicStore.getState()
+    if (st.sourceTool !== 'eyedropper') return
+
+    let maskUri = st.maskUri
+    let maskMap = st.maskMap
+    if (!maskUri || maskMap.length === 0) {
+      st.set({ statusText: '재질 마스크 캡처 중...' })
+      const m = await captureMask()
+      if (!m) {
+        useClassicStore.getState().set({ statusText: '재질 인식 실패 - 3D 툴 연결을 확인하세요' })
+        return
+      }
+      maskUri = m.uri
+      maskMap = m.map
+      useClassicStore.getState().set({ maskUri, maskMap })
+    }
+
+    const img = await new Promise<HTMLImageElement | null>((resolve) => {
+      const i = new Image()
+      i.onload = () => resolve(i)
+      i.onerror = () => resolve(null)
+      i.src = maskUri!
+    })
+    if (!img) return
+    const c = document.createElement('canvas')
+    c.width = img.naturalWidth
+    c.height = img.naturalHeight
+    const ctx = c.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return
+    ctx.drawImage(img, 0, 0)
+    const d = ctx.getImageData(
+      Math.min(c.width - 1, Math.floor(fx * c.width)),
+      Math.min(c.height - 1, Math.floor(fy * c.height)),
+      1, 1,
+    ).data
+
+    // 근사 매칭 (±3 — MaskSelectOverlay와 동일 기준)
+    const entry = maskMap.find((m) => {
+      const r = parseInt(m.color.slice(1, 3), 16)
+      const g = parseInt(m.color.slice(3, 5), 16)
+      const b = parseInt(m.color.slice(5, 7), 16)
+      return Math.abs(d[0] - r) <= 3 && Math.abs(d[1] - g) <= 3 && Math.abs(d[2] - b) <= 3
+    })
+    if (!entry) {
+      useClassicStore.getState().set({ statusText: '해당 지점의 재질을 인식하지 못했습니다 (배경/하늘일 수 있음)' })
+      return
+    }
+    setPickedMaterial(entry.material)
+  }, [])
+
+  const addSwap = useCallback((replacement: MaterialSwap['replacement']) => {
+    const material = pickedMaterial
+    if (!material) return
+    const st = useClassicStore.getState()
+    st.set({
+      materialSwaps: [
+        ...st.materialSwaps.filter((sw) => sw.material !== material),
+        { material, replacement },
+      ],
+      sourceTool: 'none',
+      statusText: `재질 교체 지정: ${material} → ${replacement.name} (생성 시 적용됩니다)`,
+    })
+    setPickedMaterial(null)
+  }, [pickedMaterial])
+
+
   // ── 실시간 미러링 (Electron: SketchUp 창을 30fps 스트림으로) ──
   useEffect(() => {
     if (!window.vizmakerNative || !s.mirror || status !== 'connected') {
@@ -352,11 +424,30 @@ export function RenderClassicPage() {
       })
     }
     const engine = st.model === 'gemini-3-pro-image' ? 'experimental-interior' : 'main'
+
+    // 스포이드 재질 교체: 지정된 재질을 사용자가 고른 재질로 바꾸라는 지시 +
+    // 로컬 업로드 재질은 참조 이미지(extraImages)로 함께 전달한다 (1차 생성 전용)
+    let swapSuffix = ''
+    let swapImages: string[] | undefined
+    if (which === 'src' && st.materialSwaps.length > 0) {
+      const imageSwaps = st.materialSwaps.filter((sw) => sw.replacement.kind === 'image')
+      swapImages = imageSwaps.map((sw) => (sw.replacement as { image: string }).image)
+      const lines = st.materialSwaps.map((sw) => {
+        if (sw.replacement.kind === 'library') {
+          return `- Replace every surface using the material "${sw.material}" with: ${sw.replacement.prompt}.`
+        }
+        const refIndex = imageSwaps.indexOf(sw) + 1
+        return `- Replace every surface using the material "${sw.material}" with the material shown in reference image ${refIndex} ("${sw.replacement.name}"). Match its texture, color, and finish.`
+      })
+      swapSuffix = `\n\n[MATERIAL SWAP - APPLY EXACTLY]\n${lines.join('\n')}\nAll other materials and every other aspect of the scene must stay unchanged.`
+    }
+
     try {
       const result = await renderMain({
         engine,
         image: input,
-        prompt: `${prompt}\n\n[LIGHTING]\n${lighting}`,
+        extraImages: swapImages?.length ? swapImages : undefined,
+        prompt: `${prompt}\n\n[LIGHTING]\n${lighting}${swapSuffix}`,
         systemPrompt: '',
         negativePrompt: negative,
         seed: null,
@@ -668,6 +759,43 @@ export function RenderClassicPage() {
                 </PanelAction>
               </>
             }
+            imageToolbar={
+              <SourceToolbar
+                tool={s.sourceTool}
+                onTool={(t) => {
+                  s.set({
+                    sourceTool: t,
+                    statusText: t === 'eyedropper' ? '스포이드: 소스 이미지에서 바꿀 재질을 클릭하세요' : 'Ready',
+                  })
+                  if (t !== 'eyedropper') setPickedMaterial(null)
+                }}
+              />
+            }
+            onImagePick={s.sourceTool === 'eyedropper' ? handleSourcePick : undefined}
+            imageFooter={s.materialSwaps.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {s.materialSwaps.map((sw) => (
+                  <span
+                    key={sw.material}
+                    className="flex items-center gap-1.5"
+                    style={{
+                      padding: '4px 10px', borderRadius: 999, fontSize: 11,
+                      background: 'rgba(8,12,12,0.82)', color: '#35e5cf',
+                      border: '1px solid #1f5952', backdropFilter: 'blur(3px)',
+                    }}
+                  >
+                    {sw.material} → {sw.replacement.name}
+                    <button
+                      title="교체 취소"
+                      onClick={() => s.set({ materialSwaps: s.materialSwaps.filter((x) => x.material !== sw.material) })}
+                      style={{ color: '#7ba8a0', display: 'flex' }}
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : null}
           />
 
           {/* RESULT 1 */}
@@ -720,6 +848,14 @@ export function RenderClassicPage() {
 
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onUpload} />
 
+      {pickedMaterial && (
+        <MaterialSwapDialog
+          material={pickedMaterial}
+          onApply={addSwap}
+          onClose={() => setPickedMaterial(null)}
+        />
+      )}
+
       {editOpen && s.resultImage && (
         <EditOverlay
           image={s.resultImage}
@@ -738,6 +874,239 @@ export function RenderClassicPage() {
           onClose={() => setViewerOpen(false)}
         />
       )}
+    </div>
+  )
+}
+
+// ── 소스 툴바 (스포이드 · 연필 · 매직) ───────────────────────────────────────
+
+function SourceToolbar({ tool, onTool }: {
+  tool: 'none' | 'eyedropper' | 'pencil' | 'magic'
+  onTool: (t: 'none' | 'eyedropper' | 'pencil' | 'magic') => void
+}) {
+  const btn = (key: 'eyedropper' | 'pencil' | 'magic', icon: React.ReactNode, title: string, ready: boolean) => (
+    <button
+      key={key}
+      title={ready ? title : `${title} (준비 중)`}
+      onClick={() => {
+        if (!ready) return
+        onTool(tool === key ? 'none' : key)
+      }}
+      className="flex items-center justify-center rounded-md"
+      style={{
+        width: 30, height: 30,
+        background: tool === key ? C.accent : 'transparent',
+        color: tool === key ? '#06251f' : ready ? '#b9b9c2' : '#4a4a52',
+        cursor: ready ? 'pointer' : 'not-allowed',
+      }}
+    >
+      {icon}
+    </button>
+  )
+  return (
+    <div
+      className="flex items-center gap-0.5"
+      style={{
+        padding: 3, borderRadius: 8, background: 'rgba(10,12,14,0.82)',
+        border: '1px solid #2a2a32', backdropFilter: 'blur(4px)',
+      }}
+    >
+      {btn('eyedropper', <Pipette size={15} />, '스포이드 — 클릭한 표면의 재질을 찾아 교체 재질을 지정', true)}
+      {btn('pencil', <Pencil size={15} />, '연필 — 영역 마킹', false)}
+      {btn('magic', <Wand2 size={15} />, '매직 — 자동 영역 선택', false)}
+    </div>
+  )
+}
+
+// ── 재질 교체 다이얼로그 (스포이드로 재질 선택 후) ───────────────────────────
+// 좌: 스포이드로 찍은 원본 재질 / 우: 사용자가 고른 교체 재질 → [적용]
+
+function SwapPreviewBox({ title, name, thumb, color, empty }: {
+  title: string
+  name: string | null
+  thumb?: string | null
+  color?: string | null
+  empty?: string
+}) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-2">
+      <div style={{ color: '#8a8a96', fontSize: 11 }}>{title}</div>
+      <div
+        className="flex items-center justify-center overflow-hidden"
+        style={{
+          width: 132, height: 96, borderRadius: 10,
+          background: thumb ? `center / cover url(${thumb})` : (color ?? '#101018'),
+          border: '1px solid #2c2c36',
+        }}
+      >
+        {!thumb && !color && (
+          <span className="px-2 text-center" style={{ color: '#55555f', fontSize: 11, lineHeight: 1.5 }}>{empty ?? ''}</span>
+        )}
+      </div>
+      <div className="w-full truncate text-center" style={{ color: name ? '#fff' : '#55555f', fontSize: 12.5, fontWeight: 700 }}>
+        {name ?? '미선택'}
+      </div>
+    </div>
+  )
+}
+
+function MaterialSwapDialog({ material, onApply, onClose }: {
+  material: string
+  onApply: (replacement: MaterialSwap['replacement']) => void
+  onClose: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [replacement, setReplacement] = useState<MaterialSwap['replacement'] | null>(null)
+  const [replacementPreview, setReplacementPreview] = useState<{ thumb: string | null; color: string | null }>({ thumb: null, color: null })
+  const [sourcePreview, setSourcePreview] = useState<{ thumb: string | null; color: string | null }>({ thumb: null, color: null })
+  const uploadRef = useRef<HTMLInputElement>(null)
+
+  // 스포이드로 찍은 재질의 실제 텍스처/색 (브릿지 캐시에서 — 재추출 없음)
+  useEffect(() => {
+    let cancelled = false
+    void getCachedSourceMaterials().then((list) => {
+      if (cancelled || !list) return
+      const found = list.find((m) => m.name === material)
+      if (found) {
+        setSourcePreview({ thumb: materialTextureUri(found), color: found.color })
+      }
+    })
+    return () => { cancelled = true }
+  }, [material])
+
+  const pickLibrary = (asset: MaterialAsset) => {
+    setReplacement({ kind: 'library', name: asset.name, prompt: asset.prompt })
+    setReplacementPreview({
+      thumb: null,
+      color: `radial-gradient(circle at 35% 30%, ${asset.colors[1]}, ${asset.colors[0]} 45%, ${asset.colors[2]})` as string,
+    })
+  }
+
+  const onUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const image = String(reader.result)
+      setReplacement({ kind: 'image', name: file.name.replace(/\.[^.]+$/, ''), image })
+      setReplacementPreview({ thumb: image, color: null })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const q = query.trim().toLowerCase()
+  const list = q
+    ? libraryMaterials.filter((m) => m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q) || m.prompt.toLowerCase().includes(q))
+    : libraryMaterials
+
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center"
+      style={{ zIndex: 120, background: 'rgba(5,5,10,0.6)', backdropFilter: 'blur(3px)' }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 560, maxHeight: '82vh', borderRadius: 12, overflow: 'hidden',
+          background: '#15151d', border: '1px solid #2a2a34', boxShadow: '0 24px 70px rgba(0,0,0,.5)',
+          display: 'flex', flexDirection: 'column',
+        }}
+      >
+        <div className="flex items-center justify-between" style={{ padding: '13px 18px', borderBottom: '1px solid #24242c' }}>
+          <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>재질 교체</span>
+          <button onClick={onClose} style={{ color: '#8a8a96' }}><X size={18} /></button>
+        </div>
+
+        {/* 좌: 원본 재질 → 우: 교체 재질 */}
+        <div className="flex items-center gap-3" style={{ padding: '16px 22px', borderBottom: '1px solid #20202a' }}>
+          <SwapPreviewBox title="스포이드로 선택한 재질" name={material} thumb={sourcePreview.thumb} color={sourcePreview.color} />
+          <span style={{ color: '#00c9a7', fontSize: 22, fontWeight: 800, flexShrink: 0 }}>→</span>
+          <SwapPreviewBox
+            title="교체할 재질"
+            name={replacement?.name ?? null}
+            thumb={replacementPreview.thumb}
+            color={replacementPreview.color}
+            empty="아래에서 선택"
+          />
+        </div>
+
+        <div className="flex items-center gap-2" style={{ padding: '12px 18px' }}>
+          <button
+            onClick={() => uploadRef.current?.click()}
+            className="flex items-center gap-1.5"
+            style={{
+              padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, flexShrink: 0,
+              background: '#1e1e28', color: '#e6e6ee', border: '1px solid #34343e',
+            }}
+          >
+            <ImagePlus size={13} />
+            로컬 이미지
+          </button>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="라이브러리 검색..."
+            className="min-w-0 flex-1 rounded-lg px-3 outline-none"
+            style={{ height: 34, background: '#0d0d15', border: '1px solid #26262f', color: '#fff', fontSize: 12 }}
+          />
+        </div>
+
+        <div className="grid grid-cols-4 gap-2 overflow-y-auto" style={{ padding: '0 18px 14px', minHeight: 120 }}>
+          {list.map((asset) => {
+            const active = replacement?.kind === 'library' && replacement.name === asset.name
+            return (
+              <button
+                key={asset.id}
+                onClick={() => pickLibrary(asset)}
+                className="flex flex-col items-center rounded-lg"
+                style={{
+                  padding: '9px 5px',
+                  background: active ? '#153a34' : '#1a1a22',
+                  border: active ? '1px solid #00c9a7' : '1px solid #26262f',
+                }}
+                title={asset.prompt}
+              >
+                <span
+                  className="rounded-full"
+                  style={{
+                    width: 40, height: 40,
+                    background: `radial-gradient(circle at 35% 30%, ${asset.colors[1]}, ${asset.colors[0]} 45%, ${asset.colors[2]})`,
+                    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.08)',
+                  }}
+                />
+                <span className="mt-1.5 w-full truncate text-center" style={{ fontSize: 10, color: active ? '#7df0dd' : '#c4c4cc', fontWeight: 600 }}>
+                  {asset.name}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="flex items-center justify-end gap-2" style={{ padding: '12px 18px', borderTop: '1px solid #24242c' }}>
+          <button
+            onClick={onClose}
+            style={{ height: 36, padding: '0 16px', borderRadius: 8, fontSize: 12.5, fontWeight: 600, background: '#1e1e28', color: '#c8c8d0' }}
+          >
+            취소
+          </button>
+          <button
+            onClick={() => replacement && onApply(replacement)}
+            disabled={!replacement}
+            style={{
+              height: 36, padding: '0 20px', borderRadius: 8, fontSize: 12.5, fontWeight: 800,
+              background: replacement ? '#00c9a7' : '#1c1c26',
+              color: replacement ? '#06251f' : '#55555f',
+              cursor: replacement ? 'pointer' : 'not-allowed',
+            }}
+          >
+            적용
+          </button>
+        </div>
+
+        <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={onUploadFile} />
+      </div>
     </div>
   )
 }
@@ -805,7 +1174,7 @@ function SourceDropZone({ onBrowse }: { onBrowse: () => void }) {
   )
 }
 
-function Panel({ label, labelRight, active, image, emptyText, emptyContent, loading, loadingText, video, videoViewport, imageOverlay, viewTabs, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions, onView }: {
+function Panel({ label, labelRight, active, image, emptyText, emptyContent, loading, loadingText, video, videoViewport, imageOverlay, viewTabs, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions, onView, imageToolbar, onImagePick, imageFooter }: {
   label: string
   labelRight?: React.ReactNode
   active?: boolean
@@ -829,6 +1198,12 @@ function Panel({ label, labelRight, active, image, emptyText, emptyContent, load
   actions?: React.ReactNode
   /** 지정하면 이미지 호버 시 중앙에 View 버튼 표시 → 클릭 시 확대 보기 */
   onView?: () => void
+  /** 이미지 영역 좌상단 툴바 (스포이드 등) */
+  imageToolbar?: React.ReactNode
+  /** 이미지 클릭 시 이미지 내 비율 좌표(0~1)로 콜백 — 지정되면 십자 커서 */
+  onImagePick?: (fx: number, fy: number) => void
+  /** 이미지 영역 하단 오버레이 (재질 교체 칩 등) */
+  imageFooter?: React.ReactNode
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden" style={{ background: '#111111' }}>
@@ -874,7 +1249,25 @@ function Panel({ label, labelRight, active, image, emptyText, emptyContent, load
           <AspectFitBox src={image}>{imageOverlay}</AspectFitBox>
         ) : image ? (
           <div className="group relative flex h-full w-full items-center justify-center">
-            <img src={image} alt="" className="h-full w-full object-contain" draggable={false} />
+            <img
+              src={image}
+              alt=""
+              className="h-full w-full object-contain"
+              draggable={false}
+              style={onImagePick ? { cursor: 'crosshair' } : undefined}
+              onClick={onImagePick ? (e) => {
+                // object-contain 레터박스를 제외한 이미지 내부 비율 좌표 계산
+                const el = e.currentTarget
+                const r = el.getBoundingClientRect()
+                const scale = Math.min(r.width / el.naturalWidth, r.height / el.naturalHeight)
+                const iw = el.naturalWidth * scale
+                const ih = el.naturalHeight * scale
+                const x = e.clientX - r.left - (r.width - iw) / 2
+                const y = e.clientY - r.top - (r.height - ih) / 2
+                if (x < 0 || y < 0 || x > iw || y > ih) return
+                onImagePick(x / iw, y / ih)
+              } : undefined}
+            />
             {onView && (
               <button
                 onClick={onView}
@@ -895,6 +1288,12 @@ function Panel({ label, labelRight, active, image, emptyText, emptyContent, load
           emptyContent
         ) : (
           <span style={{ color: '#444', fontSize: 12 }}>{emptyText}</span>
+        )}
+        {imageToolbar && (
+          <div className="absolute" style={{ left: 12, top: 12, zIndex: 12 }}>{imageToolbar}</div>
+        )}
+        {imageFooter && (
+          <div className="absolute" style={{ left: 12, right: 12, bottom: 12, zIndex: 12 }}>{imageFooter}</div>
         )}
         {loading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2" style={{ background: 'rgba(10,10,10,0.75)' }}>

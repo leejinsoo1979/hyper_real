@@ -7,6 +7,15 @@ import { create } from 'zustand'
 export type ClassicModel = 'gemini-2.5-flash-image' | 'gemini-3-pro-image'
 export type ClassicSize = '1024' | '1536' | '1920'
 
+/** 스포이드로 지정한 재질 교체: 어떤 재질을 → 무엇으로 바꿀지 */
+export interface MaterialSwap {
+  /** 소스 모델의 재질 이름 (ID 마스크에서 식별) */
+  material: string
+  replacement:
+    | { kind: 'library'; name: string; prompt: string }
+    | { kind: 'image'; name: string; image: string } // 로컬 업로드 (data URI)
+}
+
 interface ClassicState {
   timePreset: 'day' | 'evening' | 'night'
   lightsOn: boolean
@@ -36,6 +45,10 @@ interface ClassicState {
   maskMap: { color: string; material: string }[]
   selectedColors: string[]
   resultMaskView: boolean
+
+  // 소스 툴바 + 재질 교체 (스포이드로 재질 지정 → 생성 시 적용)
+  sourceTool: 'none' | 'eyedropper' | 'pencil' | 'magic'
+  materialSwaps: MaterialSwap[]
 
   // 씬별 미리보기 캐시 (탭 클릭 즉시 표시용 - 레거시 방식)
   scenePreviews: Record<string, string>
@@ -71,6 +84,9 @@ export const useClassicStore = create<ClassicState>((set) => ({
   maskMap: [],
   selectedColors: [],
   resultMaskView: false,
+
+  sourceTool: 'none',
+  materialSwaps: [],
 
   scenePreviews: {},
   previewOverride: null,

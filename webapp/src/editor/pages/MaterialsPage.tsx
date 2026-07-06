@@ -10,7 +10,7 @@ type MaterialCategory = {
   name: string
 }
 
-type MaterialAsset = {
+export type MaterialAsset = {
   id: string
   name: string
   category: string
@@ -35,7 +35,7 @@ const categories: MaterialCategory[] = [
   { id: 'Tiles', name: 'Tiles' },
 ]
 
-const materials: MaterialAsset[] = [
+export const materials: MaterialAsset[] = [
   { id: 'clear-glass-01', name: 'Clear glass 01', category: 'Glass', colors: ['#d9f0f7', '#8ab5c4', '#f7ffff'], prompt: 'transparent clear architectural glass with subtle blue tint and realistic reflections' },
   { id: 'frosted-glass-01', name: 'Frosted glass 01', category: 'Glass', colors: ['#cfd8dc', '#eef4f5', '#8fa1aa'], prompt: 'frosted translucent glass with soft matte surface and diffused reflections' },
   { id: 'brushed-brass-01', name: 'Brushed brass 01', category: 'Metal', colors: ['#8c642b', '#d0a24a', '#5f431f'], prompt: 'brushed brass metal with warm golden tone, satin reflection, fine linear grain' },
