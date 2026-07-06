@@ -223,9 +223,12 @@ async function executeNode(node: NodeData): Promise<void> {
       case 'VIDEO': {
         const params = node.params as VideoParams
         const inputImage = getInputImage(node.id)
+        if (!inputImage) {
+          throw new Error('Image to video requires an image input. Connect a rendered/source image to the VIDEO node.')
+        }
         result = await generateVideo({
           engine: params.engine,
-          image: inputImage ?? '',
+          image: inputImage,
           endFrame: params.endFrameImage,
           duration: params.duration,
           prompt: params.prompt,
@@ -248,6 +251,15 @@ async function executeNode(node: NodeData): Promise<void> {
     updateNodeStatus(node.id, 'done')
     deduct(node.cost)
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    updateNodeResult(node.id, {
+      image: node.result?.image ?? getInputImage(node.id) ?? undefined,
+      video: node.result?.video,
+      error: message,
+      timestamp: new Date().toISOString(),
+      cacheKey: '',
+    })
+    useExecutionStore.getState().setError(message)
     updateNodeStatus(node.id, 'error')
     markDescendantsBlocked(node.id)
   }

@@ -22,9 +22,10 @@ const COLOR_DOTS: Record<string, string> = {
 
 interface DrawTabProps {
   selectedNode: NodeData | null
+  variant?: 'panel' | 'lightbox'
 }
 
-export function DrawTab({ selectedNode }: DrawTabProps) {
+export function DrawTab({ selectedNode, variant = 'panel' }: DrawTabProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fabricRef = useRef<FabricCanvas | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -44,7 +45,9 @@ export function DrawTab({ selectedNode }: DrawTabProps) {
 
     const container = containerRef.current
     const width = container.clientWidth
-    const height = Math.max(200, width * 0.75)
+    const height = variant === 'lightbox'
+      ? Math.max(360, container.clientHeight)
+      : Math.max(200, width * 0.75)
 
     const fc = new FabricCanvas(canvasRef.current, {
       width,
@@ -65,7 +68,7 @@ export function DrawTab({ selectedNode }: DrawTabProps) {
     }
     // Only re-init when selectedNode changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNode?.id])
+  }, [selectedNode?.id, variant])
 
   // Load background image when result changes
   useEffect(() => {
@@ -222,7 +225,7 @@ export function DrawTab({ selectedNode }: DrawTabProps) {
     return (
       <div
         className="flex items-center justify-center"
-        style={{ minHeight: 200, color: '#555555', fontSize: 13 }}
+        style={{ minHeight: variant === 'lightbox' ? '100%' : 200, color: '#555555', fontSize: 13 }}
       >
         Select a node to start drawing
       </div>
@@ -233,7 +236,7 @@ export function DrawTab({ selectedNode }: DrawTabProps) {
     return (
       <div
         className="flex items-center justify-center"
-        style={{ minHeight: 200, color: '#555555', fontSize: 13 }}
+        style={{ minHeight: variant === 'lightbox' ? '100%' : 200, color: '#555555', fontSize: 13 }}
       >
         Run the pipeline first to get a result image
       </div>
@@ -247,7 +250,10 @@ export function DrawTab({ selectedNode }: DrawTabProps) {
   ]
 
   return (
-    <div style={{ minHeight: 200 }}>
+    <div
+      className={variant === 'lightbox' ? 'flex h-full min-h-0 flex-col' : undefined}
+      style={{ minHeight: variant === 'lightbox' ? 0 : 200 }}
+    >
       {/* Toolbar */}
       <div
         className="flex items-center px-3"
@@ -378,7 +384,15 @@ export function DrawTab({ selectedNode }: DrawTabProps) {
       </div>
 
       {/* Canvas */}
-      <div ref={containerRef} className="relative" style={{ backgroundColor: '#111118' }}>
+      <div
+        ref={containerRef}
+        className="relative"
+        style={{
+          backgroundColor: '#111118',
+          flex: variant === 'lightbox' ? '1 1 auto' : undefined,
+          minHeight: variant === 'lightbox' ? 0 : undefined,
+        }}
+      >
         <canvas ref={canvasRef} />
       </div>
     </div>

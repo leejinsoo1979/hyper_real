@@ -25,6 +25,7 @@ interface BaseNodeProps {
   inputPortName?: string
   secondInputPortName?: string
   overlay?: ReactNode
+  error?: string | null
 }
 
 function frameBorder(status: NodeStatus, selected: boolean): string {
@@ -56,6 +57,7 @@ export const BaseNode = memo(function BaseNode({
   inputPortName = 'image',
   secondInputPortName,
   overlay,
+  error,
 }: BaseNodeProps) {
   const isBlocked = status === 'blocked'
 
@@ -93,7 +95,7 @@ export const BaseNode = memo(function BaseNode({
           </div>
         )}
         {status === 'error' && (
-          <div className="absolute right-2 top-2">
+          <div className="absolute right-2 top-2" title={error ?? 'Node failed'}>
             <AlertTriangle size={15} color="#ff4444" />
           </div>
         )}
@@ -119,6 +121,23 @@ export const BaseNode = memo(function BaseNode({
             }}
           >
             {label2}
+          </div>
+        )}
+        {status === 'error' && error && (
+          <div
+            title={error}
+            style={{
+              color: '#ff7474',
+              fontSize: 10.5,
+              lineHeight: '14px',
+              marginTop: 2,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
+            {error}
           </div>
         )}
       </div>

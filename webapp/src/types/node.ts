@@ -81,6 +81,7 @@ export type NodeParams =
 export interface NodeResult {
   image?: string
   video?: string
+  error?: string
   resolution?: string
   timestamp: string
   cacheKey: string

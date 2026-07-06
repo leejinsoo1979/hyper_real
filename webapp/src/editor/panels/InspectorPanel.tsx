@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Maximize2 } from 'lucide-react'
+import { Maximize2, X } from 'lucide-react'
 import { ImageLightbox } from './ImageLightbox'
 import { useUIStore, type InspectorTab } from '../../state/uiStore'
 import { useGraphStore } from '../../state/graphStore'
@@ -111,7 +111,44 @@ export function InspectorPanel() {
 
       <RenderSettings selectedNode={selectedNode} />
 
-      {enlarged && (() => {
+      {enlarged && activeTab === 'draw' && (
+        <div
+          className="fixed inset-0 flex flex-col"
+          style={{ zIndex: 200, backgroundColor: 'rgba(5, 5, 12, 0.95)' }}
+        >
+          <div
+            className="flex shrink-0 items-center justify-between px-5"
+            style={{ height: 52, background: '#15151e', borderBottom: '1px solid #2c2c38' }}
+          >
+            <div className="flex items-center gap-2" style={{ color: '#f2f2f5', fontSize: 13, fontWeight: 750 }}>
+              <Maximize2 size={15} style={{ color: '#00c9a7' }} />
+              Draw
+            </div>
+            <button
+              className="flex h-9 w-9 items-center justify-center rounded-full"
+              style={{ backgroundColor: '#1f1f2a', color: '#ffffff', border: '1px solid #30303d' }}
+              onClick={() => setEnlarged(false)}
+              title="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 p-5">
+            <div
+              className="h-full overflow-hidden rounded-md"
+              style={{
+                background: '#111118',
+                border: '1px solid #2c2c38',
+                boxShadow: '0 24px 80px rgba(0,0,0,.42)',
+              }}
+            >
+              <DrawTab selectedNode={selectedNode} variant="lightbox" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {enlarged && activeTab !== 'draw' && (() => {
         const img =
           selectedNode?.result?.image ??
           (selectedNode && 'image' in selectedNode.params

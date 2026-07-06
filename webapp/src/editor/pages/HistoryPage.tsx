@@ -71,41 +71,222 @@ function getSnapshotEngine(snapshot: GraphSnapshot): string {
   return 'main'
 }
 
-function HistorySkeletonGrid() {
+function HistoryLoadingScreen() {
+  const previewCards = [
+    { width: '68%', delay: '0ms' },
+    { width: '52%', delay: '160ms' },
+    { width: '76%', delay: '320ms' },
+  ]
+
   return (
-    <div className="flex-1 overflow-y-auto px-7 py-6">
+    <div
+      className="relative flex flex-1 items-center justify-center overflow-hidden px-7 py-6"
+      style={{
+        background:
+          'linear-gradient(180deg, #0f0f16 0%, #11111a 48%, #0f0f16 100%), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(0deg, rgba(255,255,255,.02) 1px, transparent 1px)',
+        backgroundSize: 'auto, 42px 42px, 42px 42px',
+      }}
+    >
+      <style>{`
+        @keyframes history-ring-spin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes history-core-pulse {
+          0%, 100% { box-shadow: 0 0 0 rgba(0,201,167,0), inset 0 0 18px rgba(255,255,255,.04); }
+          50% { box-shadow: 0 0 28px rgba(0,201,167,.28), inset 0 0 24px rgba(0,201,167,.08); }
+        }
+        @keyframes history-scan {
+          0% { transform: translateX(-120%); opacity: 0; }
+          14% { opacity: 1; }
+          72% { opacity: 1; }
+          100% { transform: translateX(120%); opacity: 0; }
+        }
+        @keyframes history-card-rise {
+          0%, 100% { transform: translateY(0); border-color: #242430; }
+          50% { transform: translateY(-5px); border-color: rgba(0,201,167,.34); }
+        }
+        @keyframes history-line-fill {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        @keyframes history-dot-glow {
+          0%, 100% { background: #343442; box-shadow: none; }
+          50% { background: #00c9a7; box-shadow: 0 0 16px rgba(0,201,167,.42); }
+        }
+      `}</style>
+
       <div
-        className="grid animate-pulse"
+        className="w-full"
         style={{
-          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-          gap: 18,
-          width: '100%',
-          maxWidth: 1520,
-          margin: '0 auto',
+          maxWidth: 900,
+          borderRadius: 8,
+          background: 'rgba(19,19,28,.74)',
+          border: '1px solid #292938',
+          boxShadow: '0 24px 80px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.04)',
+          overflow: 'hidden',
         }}
       >
-        {Array.from({ length: 8 }).map((_, i) => (
+        <div className="grid" style={{ gridTemplateColumns: '280px minmax(0, 1fr)', minHeight: 392 }}>
           <div
-            key={i}
-            className="overflow-hidden"
+            className="relative flex flex-col justify-between p-6"
             style={{
-              backgroundColor: '#171720',
-              border: '1px solid #242430',
-              borderRadius: 8,
-              width: '100%',
-              opacity: 1 - i * 0.09,
+              background: 'linear-gradient(180deg, rgba(0,201,167,.10), rgba(255,255,255,.018))',
+              borderRight: '1px solid #292938',
             }}
           >
-            <div style={{ aspectRatio: '16 / 10', backgroundColor: '#1d1d28' }} />
-            <div
-              className="flex items-center justify-between gap-2 px-3"
-              style={{ borderTop: '1px solid #222233', height: 40 }}
-            >
-              <div style={{ width: 72, height: 8, borderRadius: 4, backgroundColor: '#242430' }} />
-              <div style={{ width: 48, height: 20, borderRadius: 6, backgroundColor: '#242430' }} />
+            <div>
+              <div
+                className="relative flex items-center justify-center"
+                style={{
+                  width: 62,
+                  height: 62,
+                  borderRadius: 8,
+                  background: '#101018',
+                  border: '1px solid #2d2d3a',
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  className="absolute"
+                  style={{
+                    width: 92,
+                    height: 92,
+                    background: 'conic-gradient(from 90deg, transparent, #00c9a7, transparent, #ff7aa8, transparent)',
+                    animation: 'history-ring-spin 1.8s linear infinite',
+                  }}
+                />
+                <div
+                  className="relative flex items-center justify-center"
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 7,
+                    background: '#12121b',
+                    border: '1px solid rgba(255,255,255,.08)',
+                    animation: 'history-core-pulse 2s ease-in-out infinite',
+                  }}
+                >
+                  <Clock size={22} style={{ color: '#8ff7e6' }} />
+                </div>
+              </div>
+
+              <div className="mt-5" style={{ color: '#ffffff', fontSize: 22, fontWeight: 800, lineHeight: 1.15 }}>
+                Loading history
+              </div>
+              <div className="mt-2" style={{ color: '#9b9baa', fontSize: 12.5, lineHeight: 1.55 }}>
+                Syncing saved renders, previews, prompts, and workflow snapshots.
+              </div>
+            </div>
+
+            <div>
+              {['Connect account', 'Fetch renders', 'Build previews'].map((label, index) => (
+                <div key={label} className="mb-3 flex items-center gap-2.5">
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 999,
+                      animation: `history-dot-glow 1.8s ease-in-out infinite ${index * 180}ms`,
+                    }}
+                  />
+                  <span style={{ color: '#c7c7d1', fontSize: 12, fontWeight: 650 }}>{label}</span>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
+
+          <div className="p-6">
+            <div
+              className="relative overflow-hidden rounded-md"
+              style={{
+                height: 8,
+                background: '#1d1d29',
+                border: '1px solid #2b2b39',
+              }}
+            >
+              <div
+                className="absolute inset-y-0"
+                style={{
+                  width: '48%',
+                  background: 'linear-gradient(90deg, transparent, rgba(0,201,167,.82), rgba(255,122,168,.58), transparent)',
+                  animation: 'history-line-fill 1.6s ease-in-out infinite',
+                }}
+              />
+            </div>
+
+            <div className="mt-6 grid gap-4" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+              {previewCards.map((card, index) => (
+                <div
+                  key={index}
+                  className="relative overflow-hidden"
+                  style={{
+                    borderRadius: 8,
+                    background: '#171720',
+                    border: '1px solid #242430',
+                    animation: `history-card-rise 2s ease-in-out infinite ${card.delay}`,
+                  }}
+                >
+                  <div className="relative overflow-hidden" style={{ aspectRatio: '4 / 3', background: '#101018' }}>
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        background:
+                          index === 0
+                            ? 'linear-gradient(135deg, #20202d, #12352f 45%, #282032)'
+                            : index === 1
+                              ? 'linear-gradient(135deg, #1f2230, #2c2634 52%, #143730)'
+                              : 'linear-gradient(135deg, #151923, #23312f 48%, #33202d)',
+                      }}
+                    />
+                    <div
+                      className="absolute inset-y-0"
+                      style={{
+                        width: '58%',
+                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.16), transparent)',
+                        animation: `history-scan 1.9s ease-in-out infinite ${card.delay}`,
+                      }}
+                    />
+                    <div className="absolute bottom-3 left-3 right-3">
+                      <div style={{ width: card.width, height: 8, borderRadius: 4, background: 'rgba(255,255,255,.20)' }} />
+                      <div className="mt-2" style={{ width: '44%', height: 6, borderRadius: 4, background: 'rgba(255,255,255,.12)' }} />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between px-3" style={{ height: 42, borderTop: '1px solid #242430' }}>
+                    <div style={{ width: 58, height: 8, borderRadius: 4, background: '#2a2a36' }} />
+                    <div style={{ width: 36, height: 20, borderRadius: 6, background: '#242431' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              {['Restoring thumbnails', 'Checking cloud history'].map((label, index) => (
+                <div
+                  key={label}
+                  className="relative overflow-hidden rounded-md px-4"
+                  style={{
+                    height: 54,
+                    background: '#171720',
+                    border: '1px solid #262635',
+                  }}
+                >
+                  <div className="flex h-full items-center justify-between gap-3">
+                    <span style={{ color: '#aaaab8', fontSize: 12, fontWeight: 650 }}>{label}</span>
+                    <span style={{ width: 7, height: 7, borderRadius: 999, background: index === 0 ? '#00c9a7' : '#ff7aa8' }} />
+                  </div>
+                  <div
+                    className="absolute inset-y-0"
+                    style={{
+                      width: '36%',
+                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent)',
+                      animation: `history-scan 2.2s ease-in-out infinite ${index * 260}ms`,
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -541,7 +722,7 @@ export function HistoryPage() {
       </div>
 
       {loading ? (
-        <HistorySkeletonGrid />
+        <HistoryLoadingScreen />
       ) : filteredSnapshots.length === 0 ? (
         <div
           className="flex flex-1 items-center justify-center px-7"
