@@ -80,7 +80,7 @@ export function DocsPage() {
         </div>
       </div>
       <div className="mt-14 text-center">
-        <button onClick={goApp} style={{ padding: '15px 34px', borderRadius: 999, background: TEAL, color: '#06251f', fontSize: 15.5, fontWeight: 800 }}>앱 열기 →</button>
+        <button onClick={goApp} className="lumanova-neon-pill" style={{ padding: '15px 34px', fontSize: 15.5, fontWeight: 850 }}>앱 열기 →</button>
       </div>
     </SubPageShell>
   )

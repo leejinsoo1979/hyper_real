@@ -8,7 +8,7 @@ const PLANS = [
     desc: '지금 바로 시작해보세요.',
     credits: '가입 보너스 30 크레딧',
     features: ['모든 AI 엔진 사용', '영역 선택 정밀 편집', '실시간 미러링', '히스토리 저장', '커뮤니티 지원'],
-    cta: '무료로 시작',
+    cta: 'Get start',
     highlight: false,
   },
   {
@@ -71,12 +71,13 @@ export function PricingPage() {
             </ul>
             <button
               onClick={goApp}
-              className="mt-7 w-full"
+              className={p.highlight ? 'lumanova-neon-pill mt-7 w-full' : 'mt-7 w-full'}
               style={{
-                padding: '13px 0', borderRadius: 10, fontSize: 14, fontWeight: 700,
-                background: p.highlight ? TEAL : 'transparent',
-                color: p.highlight ? '#06251f' : '#e6e6ee',
-                border: p.highlight ? 'none' : '1px solid #2c2c38',
+                padding: '13px 0',
+                fontSize: 14,
+                ...(p.highlight
+                  ? { borderRadius: 999, fontWeight: 850 }
+                  : { borderRadius: 10, fontWeight: 700, background: 'transparent', color: '#e6e6ee', border: '1px solid #2c2c38' }),
               }}
             >
               {p.cta}

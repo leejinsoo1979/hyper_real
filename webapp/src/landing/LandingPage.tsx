@@ -60,10 +60,10 @@ function Hero() {
         <div className="flex flex-wrap items-center gap-4" style={{ marginTop: 44 }}>
           <button
             onClick={goApp}
-            className="flex items-center gap-2"
-            style={{ padding: '16px 32px', borderRadius: 999, background: TEAL, color: '#06251f', fontSize: 15.5, fontWeight: 800 }}
+            className="lumanova-neon-pill flex items-center gap-2"
+            style={{ padding: '16px 32px', fontSize: 15.5, fontWeight: 850 }}
           >
-            무료로 시작하기 <span style={{ fontSize: 17 }}>→</span>
+            Get start <span style={{ fontSize: 17 }}>→</span>
           </button>
           <a
             href="/api/download-rbz"
@@ -289,8 +289,8 @@ function CTA() {
           지금 바로<br /><span style={{ color: TEAL }}>렌더링을 시작하세요</span>
         </h2>
         <p style={{ marginTop: 18, fontSize: 16.5, color: '#a9a9b6' }}>가입하면 무료 크레딧을 드립니다. 카드 등록은 필요 없습니다.</p>
-        <button onClick={goApp} style={{ marginTop: 34, padding: '16px 40px', borderRadius: 999, background: TEAL, color: '#06251f', fontSize: 16.5, fontWeight: 800 }}>
-          무료로 시작하기 →
+        <button onClick={goApp} className="lumanova-neon-pill" style={{ marginTop: 34, padding: '16px 40px', fontSize: 16.5, fontWeight: 850 }}>
+          Get start →
         </button>
       </div>
     </section>

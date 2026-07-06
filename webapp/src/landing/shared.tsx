@@ -52,7 +52,7 @@ export function Nav({ active }: { active?: string }) {
       </nav>
       <div className="flex items-center gap-4">
         <button onClick={goApp} className="hidden sm:block" style={{ fontSize: 14, color: '#d9d9e2', background: 'none' }}>Log in</button>
-        <button onClick={goApp} style={{ padding: '9px 20px', borderRadius: 999, background: TEAL, color: '#06251f', fontSize: 13.5, fontWeight: 700 }}>
+        <button onClick={goApp} className="lumanova-neon-pill" style={{ padding: '9px 20px', fontSize: 13.5, fontWeight: 800 }}>
           Get Started
         </button>
       </div>
