@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ImagePlus, Zap, Loader2, SlidersHorizontal, Download, X } from 'lucide-react'
+import { Eye, ImagePlus, Zap, Loader2, SlidersHorizontal, Download, X } from 'lucide-react'
 import { useClassicStore, type ClassicModel, type ClassicSize } from '../../state/classicStore'
 import { useUIStore } from '../../state/uiStore'
 import { useGraphStore } from '../../state/graphStore'
@@ -8,6 +8,7 @@ import { selectScene, requestCapture, addScene, sendCamera, fetchSourceOnce, cap
 import { generateAutoPrompt, buildLightingDescription } from '../../engine/autoPrompt'
 import { renderMain } from '../../engine/adapters/mainRenderer'
 import { EditOverlay } from '../panels/EditOverlay'
+import { ImageLightbox } from '../panels/ImageLightbox'
 import type { NodeData } from '../../types/node'
 import type { EdgeData } from '../../types/graph'
 
@@ -159,6 +160,7 @@ export function RenderClassicPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [liveStream, setLiveStream] = useState<MediaStream | null>(null)
   const [editOpen, setEditOpen] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const viewport = useUIStore((st) => st.sketchUpViewport)
 
@@ -694,6 +696,7 @@ export function RenderClassicPage() {
             onPrompt={(v) => s.set({ resultPrompt: v })}
             onNegative={(v) => s.set({ resultNegative: v })}
             promptPlaceholder="렌더링 완료 후 2차 생성용 프롬프트를 입력하세요."
+            onView={s.resultImage && !s.resultMaskView ? () => setViewerOpen(true) : undefined}
             actions={
               <PanelAction title="2차 생성 (결과 이미지 기반)" onClick={() => doRender('res')} disabled={s.rendering || !s.resultImage}>
                 {s.rendering ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
@@ -719,6 +722,10 @@ export function RenderClassicPage() {
           }}
           onClose={() => setEditOpen(false)}
         />
+      )}
+
+      {viewerOpen && s.resultImage && (
+        <ImageLightbox image={s.resultImage} onClose={() => setViewerOpen(false)} />
       )}
     </div>
   )
@@ -747,7 +754,7 @@ function PanelAction({ children, title, onClick, disabled, active }: {
   )
 }
 
-function Panel({ label, labelRight, active, image, emptyText, loading, loadingText, video, videoViewport, imageOverlay, viewTabs, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions }: {
+function Panel({ label, labelRight, active, image, emptyText, loading, loadingText, video, videoViewport, imageOverlay, viewTabs, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions, onView }: {
   label: string
   labelRight?: React.ReactNode
   active?: boolean
@@ -768,6 +775,8 @@ function Panel({ label, labelRight, active, image, emptyText, loading, loadingTe
   promptPlaceholder: string
   headerRight?: React.ReactNode
   actions?: React.ReactNode
+  /** 지정하면 이미지 호버 시 중앙에 View 버튼 표시 → 클릭 시 확대 보기 */
+  onView?: () => void
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden" style={{ background: '#111111' }}>
@@ -812,7 +821,24 @@ function Panel({ label, labelRight, active, image, emptyText, loading, loadingTe
           // - 컨테이너 전체가 아니라 이미지 비율 박스 안에 이미지+캔버스를 함께 넣는다
           <AspectFitBox src={image}>{imageOverlay}</AspectFitBox>
         ) : image ? (
-          <img src={image} alt="" className="h-full w-full object-contain" draggable={false} />
+          <div className="group relative flex h-full w-full items-center justify-center">
+            <img src={image} alt="" className="h-full w-full object-contain" draggable={false} />
+            {onView && (
+              <button
+                onClick={onView}
+                title="크게 보기"
+                className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+                style={{
+                  padding: '9px 24px', borderRadius: 999, fontSize: 12.5, fontWeight: 700,
+                  background: 'rgba(8,10,12,0.78)', color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(4px)',
+                }}
+              >
+                <Eye size={14} />
+                View
+              </button>
+            )}
+          </div>
         ) : (
           <span style={{ color: '#444', fontSize: 12 }}>{emptyText}</span>
         )}
