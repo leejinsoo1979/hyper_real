@@ -148,6 +148,16 @@ declare global {
   }
 }
 
+// 스포이드 커서 (핫스팟 = 촉 끝 좌하단). 흰 외곽선 + 검정 본선이라 밝고 어두운 배경 모두에서 보인다
+const EYEDROPPER_CURSOR = (() => {
+  const paths = '<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/>'
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">`
+    + `<g stroke="white" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`
+    + `<g stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`
+    + '</svg>'
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 2 22, crosshair`
+})()
+
 // ── 메인 페이지 ──────────────────────────────────────────────────────────────
 
 export function RenderClassicPage() {
@@ -1254,7 +1264,7 @@ function Panel({ label, labelRight, active, image, emptyText, emptyContent, load
               alt=""
               className="h-full w-full object-contain"
               draggable={false}
-              style={onImagePick ? { cursor: 'crosshair' } : undefined}
+              style={onImagePick ? { cursor: EYEDROPPER_CURSOR } : undefined}
               onClick={onImagePick ? (e) => {
                 // object-contain 레터박스를 제외한 이미지 내부 비율 좌표 계산
                 const el = e.currentTarget
