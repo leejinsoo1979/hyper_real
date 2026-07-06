@@ -188,6 +188,8 @@ export async function compositeEditedIntoRegion(
 
 async function modifyDetailsGemini(input: ModifierInput): Promise<NodeResult> {
   const hasMask = Boolean(input.mask)
+  const materialReferences = input.materialReferences?.filter(Boolean) ?? []
+  const hasMaterialReferences = materialReferences.length > 0
 
   const sysInstruction =
     'You are an image detail editor. ' +
@@ -196,7 +198,10 @@ async function modifyDetailsGemini(input: ModifierInput): Promise<NodeResult> {
       ? 'Two images are provided: the first is the original, the second is the same scene with hand-drawn colored markings indicating WHERE to apply the modification. ' +
         'Apply the change ONLY within the marked region(s). Every unmarked area must remain EXACTLY identical to the original. ' +
         'Never reproduce the marking strokes themselves in the output.'
-      : 'Preserve overall composition and only change the areas described in the prompt.')
+      : 'Preserve overall composition and only change the areas described in the prompt.') +
+    (hasMaterialReferences
+      ? ' Additional reference image(s) are provided after the primary scene. Use them only as material appearance references for color, texture, grain, pattern, scale, roughness, and reflectivity.'
+      : '')
 
   let maskOverlay: string | undefined
   if (input.mask) {
@@ -210,10 +215,17 @@ async function modifyDetailsGemini(input: ModifierInput): Promise<NodeResult> {
 
   const result = await callGemini({
     image: input.image,
+    extraImages: hasMaterialReferences ? materialReferences : undefined,
     maskImage: maskOverlay,
-    prompt: maskOverlay
-      ? `${input.prompt}\n\n[REGION] Apply the modification only to the area marked with colored strokes in the second image. Do not draw the strokes in the result.`
-      : input.prompt,
+    prompt: [
+      input.prompt,
+      hasMaterialReferences
+        ? '[MATERIAL REFERENCE] Use the additional reference image(s) only for the target material appearance. Do not copy objects, lighting, camera, or composition from the reference image(s).'
+        : '',
+      maskOverlay
+        ? '[REGION] Apply the modification only to the area marked with colored strokes in the marked scene image. Do not draw the strokes in the result.'
+        : '',
+    ].filter(Boolean).join('\n\n'),
     systemInstruction: sysInstruction,
   })
 

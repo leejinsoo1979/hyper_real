@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Eye, ImagePlus, Zap, Loader2, SlidersHorizontal, Download, Pencil, Pipette, Wand2, X } from 'lucide-react'
 import { useClassicStore, type ClassicModel, type ClassicSize, type MaterialSwap } from '../../state/classicStore'
-import { materials as libraryMaterials, type MaterialAsset } from './MaterialsPage'
+import { materialReferenceUrl, materialThumbnailUrl, materials as libraryMaterials, type MaterialAsset } from '../../data/materialLibrary'
 import { useUIStore } from '../../state/uiStore'
 import { useGraphStore } from '../../state/graphStore'
 import { useHistoryStore } from '../../state/historyStore'
@@ -437,17 +437,24 @@ export function RenderClassicPage() {
     const engine = st.model === 'gemini-3-pro-image' ? 'experimental-interior' : 'main'
 
     // 스포이드 재질 교체: 지정된 재질을 사용자가 고른 재질로 바꾸라는 지시 +
-    // 로컬 업로드 재질은 참조 이미지(extraImages)로 함께 전달한다 (1차 생성 전용)
+    // 라이브러리/로컬 업로드 재질 이미지는 참조 이미지(extraImages)로 함께 전달한다 (1차 생성 전용)
     let swapSuffix = ''
     let swapImages: string[] | undefined
     if (which === 'src' && st.materialSwaps.length > 0) {
-      const imageSwaps = st.materialSwaps.filter((sw) => sw.replacement.kind === 'image')
-      swapImages = imageSwaps.map((sw) => (sw.replacement as { image: string }).image)
+      const referenceSwaps = st.materialSwaps
+        .map((sw) => {
+          const image = sw.replacement.kind === 'image' ? sw.replacement.image : sw.replacement.referenceImage
+          return image ? { sw, image } : null
+        })
+        .filter((entry): entry is { sw: MaterialSwap; image: string } => entry !== null)
+      swapImages = referenceSwaps.map((entry) => entry.image)
       const lines = st.materialSwaps.map((sw) => {
         if (sw.replacement.kind === 'library') {
-          return `- Replace every surface using the material "${sw.material}" with: ${sw.replacement.prompt}.`
+          const refIndex = referenceSwaps.findIndex((entry) => entry.sw === sw) + 1
+          const refNote = refIndex > 0 ? ` Match reference image ${refIndex} for color, grain, pattern scale, roughness, and finish.` : ''
+          return `- Replace every surface using the material "${sw.material}" with: ${sw.replacement.prompt}.${refNote}`
         }
-        const refIndex = imageSwaps.indexOf(sw) + 1
+        const refIndex = referenceSwaps.findIndex((entry) => entry.sw === sw) + 1
         return `- Replace every surface using the material "${sw.material}" with the material shown in reference image ${refIndex} ("${sw.replacement.name}"). Match its texture, color, and finish.`
       })
       swapSuffix = `\n\n[MATERIAL SWAP - APPLY EXACTLY]\n${lines.join('\n')}\nAll other materials and every other aspect of the scene must stay unchanged.`
@@ -1003,9 +1010,11 @@ function MaterialSwapDialog({ material, onApply, onClose }: {
   }, [material])
 
   const pickLibrary = (asset: MaterialAsset) => {
-    setReplacement({ kind: 'library', name: asset.name, prompt: asset.prompt })
+    const referenceImage = materialReferenceUrl(asset)
+    const thumbnail = materialThumbnailUrl(asset)
+    setReplacement({ kind: 'library', name: asset.name, prompt: asset.prompt, referenceImage })
     setReplacementPreview({
-      thumb: null,
+      thumb: thumbnail,
       color: `radial-gradient(circle at 35% 30%, ${asset.colors[1]}, ${asset.colors[0]} 45%, ${asset.colors[2]})` as string,
     })
   }
@@ -1025,7 +1034,7 @@ function MaterialSwapDialog({ material, onApply, onClose }: {
 
   const q = query.trim().toLowerCase()
   const list = q
-    ? libraryMaterials.filter((m) => m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q) || m.prompt.toLowerCase().includes(q))
+    ? libraryMaterials.filter((m) => m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q) || m.prompt.toLowerCase().includes(q) || m.tags.some((tag) => tag.toLowerCase().includes(q)))
     : libraryMaterials
 
   return (
@@ -1100,7 +1109,9 @@ function MaterialSwapDialog({ material, onApply, onClose }: {
                   className="rounded-full"
                   style={{
                     width: 40, height: 40,
-                    background: `radial-gradient(circle at 35% 30%, ${asset.colors[1]}, ${asset.colors[0]} 45%, ${asset.colors[2]})`,
+                    background: materialThumbnailUrl(asset)
+                      ? `center / cover url(${materialThumbnailUrl(asset)})`
+                      : `radial-gradient(circle at 35% 30%, ${asset.colors[1]}, ${asset.colors[0]} 45%, ${asset.colors[2]})`,
                     boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.08)',
                   }}
                 />

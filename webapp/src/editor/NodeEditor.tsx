@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from 'react'
+import { Download, X } from 'lucide-react'
 import { v4 as uuid } from 'uuid'
 import { LeftSidebar } from './sidebar/LeftSidebar'
 import { NodeCanvas } from './canvas/NodeCanvas'
@@ -20,6 +21,7 @@ import { executePipeline } from '../engine'
 import { useMock } from '../engine/geminiClient'
 import { startBridge, stopBridge, bridgeToolLabel } from '../api/sketchupBridge'
 import { useAuthUser } from '../auth/firebase'
+import { APP_VERSION, UPDATE_MANIFEST_URL, isNewerVersion, type UpdateManifest } from '../app/version'
 
 function statusColor(s: ConnectionStatus): string {
   switch (s) {
@@ -38,6 +40,9 @@ function AppHeader() {
   const toolLabel = bridgeTool ? bridgeToolLabel() : '3D 툴'
 
   const initial = (user?.displayName || user?.email || '·')[0]?.toUpperCase() ?? '·'
+  const openLandingPage = () => {
+    window.open('/', '_blank', 'noopener,noreferrer')
+  }
 
   return (
     <div
@@ -45,7 +50,13 @@ function AppHeader() {
       style={{ height: 48, padding: '0 18px', background: 'linear-gradient(180deg, #0e0e16, #0a0a12)', borderBottom: '1px solid #1c1c26' }}
     >
       {/* 좌: 로고 + 제품명 */}
-      <div className="flex items-center gap-2.5">
+      <button
+        type="button"
+        onClick={openLandingPage}
+        className="flex items-center gap-2.5 rounded-md"
+        style={{ padding: '4px 6px', marginLeft: -6, cursor: 'pointer' }}
+        title="랜딩페이지 열기"
+      >
         <img src="/landing/logo-circle.png" alt="" width={24} height={24} style={{ objectFit: 'contain' }} />
         <span style={{ color: '#f0f0f5', fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em' }}>Lumanova</span>
         {/* 연결 상태: 은은한 점 인디케이터 (텍스트 없이) */}
@@ -53,7 +64,7 @@ function AppHeader() {
           title={sketchUpStatus === 'connected' ? `${toolLabel} 연결됨` : sketchUpStatus === 'connecting' ? '연결 중' : '3D 툴 연결 안 됨'}
           style={{ width: 7, height: 7, borderRadius: 999, background: statusColor(sketchUpStatus), marginLeft: 4, boxShadow: sketchUpStatus === 'connected' ? `0 0 6px ${statusColor(sketchUpStatus)}` : 'none' }}
         />
-      </div>
+      </button>
 
       {/* 우: 프로필 (크레딧 배지는 개인 키 정책 동안 숨김 — 서비스 운영 시 복원) */}
       <div className="flex items-center gap-3">
@@ -72,6 +83,64 @@ function AppHeader() {
   )
 }
 
+function UpdateBanner() {
+  const update = useUIStore((s) => s.desktopUpdate)
+  const dismissedVersion = useUIStore((s) => s.desktopUpdateDismissedVersion)
+  const dismissDesktopUpdate = useUIStore((s) => s.dismissDesktopUpdate)
+  const setActiveSidebarItem = useUIStore((s) => s.setActiveSidebarItem)
+
+  if (!update || dismissedVersion === update.version) return null
+
+  const openUpdate = () => {
+    if (update.downloadUrl) {
+      window.open(update.downloadUrl, '_blank', 'noopener,noreferrer')
+    } else {
+      setActiveSidebarItem('settings')
+    }
+  }
+
+  return (
+    <div
+      className="flex shrink-0 items-center justify-between gap-4"
+      style={{
+        minHeight: 38,
+        padding: '7px 16px 7px 18px',
+        background: 'linear-gradient(90deg, rgba(0,201,167,.16), rgba(34,34,46,.92))',
+        borderBottom: '1px solid rgba(0,201,167,.28)',
+      }}
+    >
+      <div className="min-w-0">
+        <div style={{ color: '#e9fffb', fontSize: 12.5, fontWeight: 800 }}>
+          Lumanova {update.version} 업데이트가 있습니다
+        </div>
+        <div className="truncate" style={{ color: '#91bdb7', fontSize: 11.5, marginTop: 1 }}>
+          {update.title ?? '새 기능과 개선사항을 사용하려면 데스크톱 앱을 업데이트하세요.'}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={openUpdate}
+          className="flex items-center gap-1.5 rounded-md"
+          style={{ height: 28, padding: '0 12px', background: '#00c9a7', color: '#06251f', fontSize: 11.5, fontWeight: 800 }}
+        >
+          <Download size={13} />
+          업데이트
+        </button>
+        <button
+          type="button"
+          title="닫기"
+          onClick={() => dismissDesktopUpdate(update.version)}
+          className="flex items-center justify-center rounded-md"
+          style={{ width: 28, height: 28, color: '#8fc8bf', background: 'rgba(255,255,255,.04)' }}
+        >
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function NodeEditor() {
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId)
   const isRunning = useExecutionStore((s) => s.isRunning)
@@ -83,6 +152,25 @@ export function NodeEditor() {
   useEffect(() => {
     startBridge()
     return () => stopBridge()
+  }, [])
+
+  useEffect(() => {
+    if (!window.vizmakerNative) return
+    let cancelled = false
+
+    fetch(`${UPDATE_MANIFEST_URL}?t=${Date.now()}`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((manifest: UpdateManifest | null) => {
+        if (cancelled || !manifest?.version) return
+        useUIStore.getState().setDesktopUpdate(
+          isNewerVersion(manifest.version, APP_VERSION) ? manifest : null,
+        )
+      })
+      .catch(() => {
+        if (!cancelled) useUIStore.getState().setDesktopUpdate(null)
+      })
+
+    return () => { cancelled = true }
   }, [])
 
   // 개인 키 정책: 크레딧 잔액으로 실행을 막지 않는다 (비용은 본인 API 계정으로 청구)
@@ -180,6 +268,7 @@ export function NodeEditor() {
     <div className="flex h-full w-full flex-col">
       {/* App Header */}
       <AppHeader />
+      <UpdateBanner />
       {/* MOCK 배너 (개발자 모드 전용) */}
       {!saasMode() && useMock() && (
         <div className="flex shrink-0 items-center px-5" style={{ height: 26, background: '#ffaa0014', borderBottom: '1px solid #2a220f' }}>

@@ -4,73 +4,13 @@ import { Loader2, RefreshCw, Search, X } from 'lucide-react'
 import { useGraphStore } from '../../state/graphStore'
 import { useUIStore } from '../../state/uiStore'
 import { loadSourceMaterials, materialTextureUri, type SourceMaterial } from '../../api/sketchupBridge'
-
-type MaterialCategory = {
-  id: string
-  name: string
-}
-
-export type MaterialAsset = {
-  id: string
-  name: string
-  category: string
-  colors: string[]
-  prompt: string
-}
-
-const categories: MaterialCategory[] = [
-  { id: 'Glass', name: 'Glass' },
-  { id: 'Metal', name: 'Metal' },
-  { id: 'Concrete', name: 'Concrete' },
-  { id: 'Wood', name: 'Wood' },
-  { id: 'Stones', name: 'Stones' },
-  { id: 'Brick', name: 'Brick' },
-  { id: 'Ground', name: 'Ground' },
-  { id: 'Plastic', name: 'Plastic' },
-  { id: 'Wall coverings', name: 'Wall coverings' },
-  { id: 'Roof coverings', name: 'Roof coverings' },
-  { id: 'Ceilings', name: 'Ceilings' },
-  { id: 'Grids', name: 'Grids' },
-  { id: 'Marble and granite', name: 'Marble and granite' },
-  { id: 'Tiles', name: 'Tiles' },
-]
-
-export const materials: MaterialAsset[] = [
-  { id: 'clear-glass-01', name: 'Clear glass 01', category: 'Glass', colors: ['#d9f0f7', '#8ab5c4', '#f7ffff'], prompt: 'transparent clear architectural glass with subtle blue tint and realistic reflections' },
-  { id: 'frosted-glass-01', name: 'Frosted glass 01', category: 'Glass', colors: ['#cfd8dc', '#eef4f5', '#8fa1aa'], prompt: 'frosted translucent glass with soft matte surface and diffused reflections' },
-  { id: 'brushed-brass-01', name: 'Brushed brass 01', category: 'Metal', colors: ['#8c642b', '#d0a24a', '#5f431f'], prompt: 'brushed brass metal with warm golden tone, satin reflection, fine linear grain' },
-  { id: 'black-steel-01', name: 'Black steel 01', category: 'Metal', colors: ['#0f1112', '#2b2f31', '#555b5e'], prompt: 'matte black powder coated steel with subtle edge highlights' },
-  { id: 'raw-concrete-01', name: 'Raw concrete 01', category: 'Concrete', colors: ['#77736b', '#a19d92', '#4d4b46'], prompt: 'raw architectural concrete, matte surface, subtle trowel marks, realistic mineral texture' },
-  { id: 'microcement-01', name: 'Microcement 01', category: 'Concrete', colors: ['#9a9488', '#c4beb2', '#6f6a62'], prompt: 'seamless warm grey microcement with smooth matte finish and handcrafted tonal variation' },
-  { id: 'oak-herringbone-01', name: 'Oak herringbone 01', category: 'Wood', colors: ['#8a5f34', '#c79b62', '#6e4525'], prompt: 'herringbone oak wood flooring, warm natural tone, matte finish, visible grain' },
-  { id: 'dark-walnut-01', name: 'Dark walnut 01', category: 'Wood', colors: ['#2b1810', '#5a351f', '#8a5b37'], prompt: 'dark walnut wood veneer, satin finish, deep brown natural grain, high-end wall panel' },
-  { id: 'travertine-01', name: 'Travertine 01', category: 'Stones', colors: ['#b69b79', '#d5c1a0', '#8e765b'], prompt: 'natural travertine stone, honed beige surface, subtle horizontal pores and veins' },
-  { id: 'limestone-01', name: 'Limestone 01', category: 'Stones', colors: ['#a69a85', '#d2c7b2', '#7b725f'], prompt: 'natural limestone stone, soft beige grey color, honed matte mineral surface' },
-  { id: 'clean-brick-01', name: 'Clean brick 01', category: 'Brick', colors: ['#8b3f2d', '#c56f54', '#f0c5aa'], prompt: 'clean red brick wall material, regular mortar joints, crisp masonry texture' },
-  { id: 'clean-brick-02', name: 'Clean brick 02', category: 'Brick', colors: ['#9a4b36', '#d98d6b', '#f4d3bd'], prompt: 'clean warm brick material with light mortar joints and realistic masonry pattern' },
-  { id: 'clean-brick-03', name: 'Clean brick 03', category: 'Brick', colors: ['#7e3d2d', '#b85f43', '#e6b193'], prompt: 'clean dark red brick wall with tight mortar lines and even masonry rhythm' },
-  { id: 'dirty-brick-01', name: 'Dirty brick 01', category: 'Brick', colors: ['#b96e5b', '#f1dfd6', '#6b4a42'], prompt: 'weathered dirty brick wall, faded red clay, white worn mortar, aged exterior masonry' },
-  { id: 'dirty-brick-02', name: 'Dirty brick 02', category: 'Brick', colors: ['#b67a64', '#d9b7a6', '#5e5d64'], prompt: 'aged dirty brick with grey weathering, uneven clay tones, exterior wall material' },
-  { id: 'painted-brick-01', name: 'Painted brick 01', category: 'Brick', colors: ['#ebe7df', '#cfc8bd', '#9d9488'], prompt: 'painted white brick wall, visible brick relief, matte worn paint finish' },
-  { id: 'rough-brick-01', name: 'Rough brick 01', category: 'Brick', colors: ['#6d3a32', '#9a5648', '#33414a'], prompt: 'rough aged brick, uneven clay tones, dark weathering, realistic exterior texture' },
-  { id: 'round-brick-01', name: 'Round brick 01', category: 'Brick', colors: ['#b7b5ae', '#dedbd1', '#78736d'], prompt: 'rounded light brick pattern, soft grey mortar, decorative masonry surface' },
-  { id: 'grass-ground-01', name: 'Grass ground 01', category: 'Ground', colors: ['#284a24', '#5f8a3a', '#1d2b18'], prompt: 'natural grass ground material, dense green landscape texture, outdoor site surface' },
-  { id: 'gravel-ground-01', name: 'Gravel ground 01', category: 'Ground', colors: ['#6f6a61', '#aaa092', '#3d3a35'], prompt: 'fine gravel ground surface, mixed grey stones, realistic outdoor path material' },
-  { id: 'white-plastic-01', name: 'White plastic 01', category: 'Plastic', colors: ['#f1f0ea', '#c8c8c2', '#ffffff'], prompt: 'matte white plastic, smooth manufactured surface, subtle soft reflections' },
-  { id: 'black-plastic-01', name: 'Black plastic 01', category: 'Plastic', colors: ['#121212', '#363638', '#050505'], prompt: 'satin black plastic, smooth modern surface, controlled soft reflection' },
-  { id: 'linen-wall-01', name: 'Linen wall 01', category: 'Wall coverings', colors: ['#b7aa98', '#e0d5c5', '#8f8372'], prompt: 'natural linen wall covering, soft woven texture, warm neutral beige textile surface' },
-  { id: 'wallpaper-01', name: 'Wallpaper 01', category: 'Wall coverings', colors: ['#5d6470', '#c1b8a9', '#2d3137'], prompt: 'premium patterned wallpaper, subtle decorative lines, matte interior wall covering' },
-  { id: 'slate-roof-01', name: 'Slate roof 01', category: 'Roof coverings', colors: ['#31363a', '#596167', '#191c1e'], prompt: 'dark slate roof covering, overlapping shingles, realistic exterior roofing material' },
-  { id: 'clay-roof-01', name: 'Clay roof 01', category: 'Roof coverings', colors: ['#7f3521', '#c2643c', '#4a1d12'], prompt: 'terracotta clay roof tiles, curved overlapping pattern, warm exterior roofing material' },
-  { id: 'acoustic-ceiling-01', name: 'Acoustic ceiling 01', category: 'Ceilings', colors: ['#d8d5cd', '#f0eee8', '#a5a198'], prompt: 'white acoustic ceiling panels, fine perforated texture, clean commercial interior finish' },
-  { id: 'linear-ceiling-01', name: 'Linear ceiling 01', category: 'Ceilings', colors: ['#b08a5f', '#d2b083', '#6d4b2f'], prompt: 'linear wood slat ceiling, warm timber strips, modern architectural ceiling finish' },
-  { id: 'metal-grid-01', name: 'Metal grid 01', category: 'Grids', colors: ['#22272b', '#707982', '#111315'], prompt: 'dark metal grid mesh, regular square pattern, industrial architectural screen material' },
-  { id: 'white-grid-01', name: 'White grid 01', category: 'Grids', colors: ['#d9d9d3', '#ffffff', '#9d9d98'], prompt: 'white architectural grid panel, clean regular divisions, bright interior screen surface' },
-  { id: 'calacatta-01', name: 'Calacatta 01', category: 'Marble and granite', colors: ['#f2eee7', '#c9c0b6', '#8f867c'], prompt: 'Calacatta white marble, polished surface, soft grey veining, luxury stone slab' },
-  { id: 'black-granite-01', name: 'Black granite 01', category: 'Marble and granite', colors: ['#111111', '#4b4b4b', '#88847c'], prompt: 'polished black granite, subtle mineral speckles, high-end stone countertop material' },
-  { id: 'terracotta-tile-01', name: 'Terracotta tile 01', category: 'Tiles', colors: ['#9c4e2c', '#c76f42', '#6f321e'], prompt: 'handmade terracotta ceramic tile, warm clay color, slight irregularity, matte rustic finish' },
-  { id: 'green-zellige-01', name: 'Green zellige 01', category: 'Tiles', colors: ['#16493e', '#2f7965', '#0d2d26'], prompt: 'glossy green zellige tile, handmade ceramic, uneven surface reflections, artisanal wall finish' },
-]
+import {
+  categories,
+  materialReferenceUrl,
+  materialThumbnailUrl,
+  materials,
+  type MaterialAsset,
+} from '../../data/materialLibrary'
 
 function CategoryIcon({ category }: { category: string }) {
   return (
@@ -102,6 +42,34 @@ function swatchStyle(asset: MaterialAsset): React.CSSProperties {
   return {
     backgroundImage: `radial-gradient(circle at 35% 28%, ${b}, ${a} 42%, ${c} 100%)${grid}`,
   }
+}
+
+function MaterialPreview({ asset }: { asset: MaterialAsset }) {
+  const [failed, setFailed] = useState(false)
+  const thumbnail = failed ? null : materialThumbnailUrl(asset)
+
+  return (
+    <span
+      className="relative overflow-hidden rounded-full"
+      style={{
+        width: 60,
+        height: 60,
+        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.08), 0 8px 18px rgba(0,0,0,.34)',
+        ...swatchStyle(asset),
+      }}
+    >
+      {thumbnail && (
+        <img
+          src={thumbnail}
+          alt=""
+          loading="lazy"
+          className="h-full w-full object-cover"
+          draggable={false}
+          onError={() => setFailed(true)}
+        />
+      )}
+    </span>
+  )
 }
 
 export function MaterialsPage({ open }: { open: boolean }) {
@@ -145,20 +113,24 @@ export function MaterialsPage({ open }: { open: boolean }) {
     const q = query.trim().toLowerCase()
     return materials.filter((m) => {
       const categoryMatch = selectedCategory ? m.category === selectedCategory : true
-      const queryMatch = !q || m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q) || m.prompt.toLowerCase().includes(q)
+      const queryMatch = !q
+        || m.name.toLowerCase().includes(q)
+        || m.category.toLowerCase().includes(q)
+        || m.prompt.toLowerCase().includes(q)
+        || m.tags.some((tag) => tag.toLowerCase().includes(q))
       return categoryMatch && queryMatch
     })
   }, [query, selectedCategory])
   const searchActive = query.trim().length > 0
 
-  const createModifierWithPrompt = (prompt: string, presetId: string) => {
+  const createModifierWithPrompt = (prompt: string, presetId: string, materialReferences?: string[]) => {
     setPromptText(prompt)
     const selected = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : null
     const modifierId = createNode('MODIFIER', {
       x: selected ? selected.position.x + 340 : 220,
       y: selected ? selected.position.y : 220,
     })
-    updateNodeParams(modifierId, { prompt, presetId, mask: null, maskLayers: [] })
+    updateNodeParams(modifierId, { prompt, presetId, mask: null, maskLayers: [], materialReferences })
     if (selected) {
       addEdge({
         id: uuid(),
@@ -172,10 +144,12 @@ export function MaterialsPage({ open }: { open: boolean }) {
   }
 
   const applyMaterial = (asset: MaterialAsset) => {
+    const referenceUrl = materialReferenceUrl(asset)
     setSelectedMaterialId(asset.id)
     createModifierWithPrompt(
-      `Replace the selected or masked surface material with ${asset.prompt}. Preserve the original geometry, camera, lighting, object positions, and all unmasked areas exactly.`,
+      `Replace the selected or masked surface material with ${asset.prompt}. Preserve the original geometry, camera, lighting, object positions, and all unmasked areas exactly.${referenceUrl ? ' Use the provided material reference image for color, grain, pattern scale, roughness, and reflectivity.' : ''}`,
       asset.id,
+      referenceUrl ? [referenceUrl] : undefined,
     )
   }
 
@@ -430,15 +404,7 @@ export function MaterialsPage({ open }: { open: boolean }) {
                 {selectedMaterialId === asset.id && (
                   <span className="absolute left-1 top-1" style={{ color: '#b9b9bf', fontSize: 15 }}>♡</span>
                 )}
-                <span
-                  className="rounded-full"
-                  style={{
-                    width: 60,
-                    height: 60,
-                    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.08), 0 8px 18px rgba(0,0,0,.34)',
-                    ...swatchStyle(asset),
-                  }}
-                />
+                <MaterialPreview asset={asset} />
                 <span className="mt-2 w-full truncate text-center" style={{ fontSize: 12, fontWeight: 600 }}>
                   {asset.name}
                 </span>

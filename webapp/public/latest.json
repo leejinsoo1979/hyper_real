@@ -1,0 +1,11 @@
+{
+  "version": "1.0.6",
+  "releasedAt": "2026-07-06",
+  "title": "Lumanova desktop update",
+  "notes": [
+    "Improved history video thumbnails and preview playback.",
+    "Added SketchUp, Blender, and Rhino plugin download fixes.",
+    "Updated landing page and editor polish."
+  ],
+  "downloadUrl": "https://hyper-real-3vvh.vercel.app/docs"
+}

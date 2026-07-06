@@ -11,6 +11,7 @@ import { getStoredApiKey, setStoredApiKey } from '../../engine/geminiClient'
 import { getStoredXaiApiKey, setStoredXaiApiKey } from '../../engine/xaiClient'
 import { saasMode } from '../../api/lumanovaApi'
 import { useUIStore } from '../../state/uiStore'
+import { APP_VERSION } from '../../app/version'
 
 // ---------------------------------------------------------------------------
 // Settings — 실물 VizMaker 디자인 언어 (좌측 큰 제목 + 전체폭 섹션 행)
@@ -103,7 +104,7 @@ const pluginFamilies: PluginFamily[] = [
 
 // 설치(다운로드) 파일: SketchUp은 rbz(API 패키징), Blender/Rhino는 정적 파일
 const PLUGIN_DOWNLOADS: Partial<Record<PluginKey, { url: string; filename: string }>> = {
-  sketchup: { url: '/api/download-rbz', filename: 'Lumanova_v1.0.6.rbz' },
+  sketchup: { url: '/downloads/Lumanova_v1.0.7.rbz', filename: 'Lumanova_v1.0.7.rbz' },
   blender: { url: '/downloads/lumanova_bridge.py', filename: 'lumanova_bridge.py' },
   rhino: { url: '/downloads/lumanova_bridge_rhino.py', filename: 'lumanova_bridge_rhino.py' },
 }
@@ -326,6 +327,7 @@ export function SettingsPage() {
   const saas = saasMode()
   const status = useUIStore((s) => s.sketchUpStatus)
   const bridgeTool = useUIStore((s) => s.bridgeTool)
+  const desktopUpdate = useUIStore((s) => s.desktopUpdate)
   const [pluginsOpen, setPluginsOpen] = useState(false)
   const connectedToolLabel = bridgeTool ? (TOOL_LABELS[bridgeTool] ?? bridgeTool) : null
 
@@ -404,7 +406,7 @@ export function SettingsPage() {
         <PluginDownloadRow
           name="SketchUp"
           hint="SketchUp 2021~2025 지원 · 설치: 창(Window) → Extension Manager → Install Extension → 받은 rbz 선택 → SketchUp 재시작"
-          href="/api/download-rbz"
+          href="/downloads/Lumanova_v1.0.7.rbz"
           label="SketchUp 다운로드"
         />
         <PluginDownloadRow
@@ -437,7 +439,20 @@ export function SettingsPage() {
 
       <Section title="정보">
         <Row label="앱" value="Lumanova" />
-        <Row label="버전" value="1.0.5" />
+        <Row label="현재 버전" value={APP_VERSION} />
+        <Row
+          label="업데이트"
+          value={desktopUpdate ? (
+            <a
+              href={desktopUpdate.downloadUrl ?? '/docs'}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: '#00c9a7', fontWeight: 800, textDecoration: 'none' }}
+            >
+              {desktopUpdate.version} 사용 가능 →
+            </a>
+          ) : '최신 버전'}
+        />
         <Row label="업데이트 채널" value="Stable" />
       </Section>
 

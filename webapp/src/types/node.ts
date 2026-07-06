@@ -46,6 +46,7 @@ export interface ModifierParams {
   presetId: string | null
   mask: string | null
   maskLayers: MaskLayer[]
+  materialReferences?: string[]
 }
 
 export interface UpscaleParams {

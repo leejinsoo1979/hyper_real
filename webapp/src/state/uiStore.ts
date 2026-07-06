@@ -4,6 +4,14 @@ export type SidebarItem = 'render' | 'nodes' | 'history' | 'account' | 'tutorial
 export type InspectorTab = 'preview' | 'compare' | 'draw'
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected'
 
+export interface DesktopUpdateInfo {
+  version: string
+  releasedAt?: string
+  title?: string
+  notes?: string[]
+  downloadUrl?: string
+}
+
 export interface SketchUpSceneInfo {
   name: string
   active: boolean
@@ -38,6 +46,8 @@ interface UIState {
   /** 연결된 브릿지의 툴 종류 (sketchup | blender | rhino). 미연결이면 null */
   bridgeTool: string | null
   bridgeMaterials: DccMaterialInfo[]
+  desktopUpdate: DesktopUpdateInfo | null
+  desktopUpdateDismissedVersion: string | null
 
   setActiveSidebarItem: (item: SidebarItem) => void
   setActiveTab: (tab: InspectorTab) => void
@@ -53,6 +63,8 @@ interface UIState {
   setSketchUpViewport: (vp: { w: number; h: number; sf: number; title?: string | null } | null) => void
   setBridgeTool: (tool: string | null) => void
   setBridgeMaterials: (materials: DccMaterialInfo[]) => void
+  setDesktopUpdate: (update: DesktopUpdateInfo | null) => void
+  dismissDesktopUpdate: (version: string) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -69,6 +81,8 @@ export const useUIStore = create<UIState>((set) => ({
   sketchUpViewport: null,
   bridgeTool: null,
   bridgeMaterials: [],
+  desktopUpdate: null,
+  desktopUpdateDismissedVersion: null,
 
   setActiveSidebarItem: (item) => set({ activeSidebarItem: item, materialLibraryOpen: false }),
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -84,4 +98,6 @@ export const useUIStore = create<UIState>((set) => ({
   setSketchUpViewport: (vp) => set({ sketchUpViewport: vp }),
   setBridgeTool: (tool) => set({ bridgeTool: tool }),
   setBridgeMaterials: (materials) => set({ bridgeMaterials: materials }),
+  setDesktopUpdate: (update) => set({ desktopUpdate: update }),
+  dismissDesktopUpdate: (version) => set({ desktopUpdateDismissedVersion: version }),
 }))

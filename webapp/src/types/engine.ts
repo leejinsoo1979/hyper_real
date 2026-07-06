@@ -27,6 +27,7 @@ export interface ModifierInput {
   negativePrompt: string
   mask: string | null
   maskLayers: MaskLayer[]
+  materialReferences?: string[]
 }
 
 export interface UpscaleInput {

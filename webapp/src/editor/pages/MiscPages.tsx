@@ -195,7 +195,7 @@ export function SupportPage() {
       <Section title="문의 채널">
         <div className="flex flex-col gap-3">
           <ContactRow label="이메일" value="sbbc212@gmail.com" href="mailto:sbbc212@gmail.com" />
-          <ContactRow label="SketchUp 플러그인" value="Lumanova_v1.0.6.rbz" href="/api/download-rbz" download />
+          <ContactRow label="SketchUp 플러그인" value="Lumanova_v1.0.7.rbz" href="/downloads/Lumanova_v1.0.7.rbz" download />
           <ContactRow label="Blender 플러그인" value="lumanova_bridge.py" href="/downloads/lumanova_bridge.py" download />
         </div>
         <p style={{ marginTop: 14, fontSize: 11.5, color: '#6a6a74', lineHeight: 1.6 }}>

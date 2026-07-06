@@ -15,7 +15,7 @@ const SECTIONS: { id: string; label: string; body: DocItem[] }[] = [
       {
         h: 'SketchUp 플러그인 (2021~2025)',
         p: '아래 버튼으로 rbz 파일을 받은 뒤 — SketchUp의 창(Window) → Extension Manager → Install Extension → 받은 rbz 선택 → SketchUp 재시작. 재시작하면 툴바에 Lumanova 아이콘이 나타납니다.',
-        download: { href: '/api/download-rbz', label: 'SketchUp 플러그인 다운로드 (.rbz)' },
+        download: { href: '/downloads/Lumanova_v1.0.7.rbz', label: 'SketchUp 플러그인 다운로드 (.rbz)' },
       },
       {
         h: 'Blender 애드온 (4.2~4.5)',

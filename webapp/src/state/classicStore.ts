@@ -12,7 +12,7 @@ export interface MaterialSwap {
   /** 소스 모델의 재질 이름 (ID 마스크에서 식별) */
   material: string
   replacement:
-    | { kind: 'library'; name: string; prompt: string }
+    | { kind: 'library'; name: string; prompt: string; referenceImage?: string | null }
     | { kind: 'image'; name: string; image: string } // 로컬 업로드 (data URI)
 }
 

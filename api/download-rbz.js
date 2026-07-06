@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
-const RBZ_FILENAME = 'Lumanova_v1.0.6.rbz'
+const RBZ_FILENAME = 'Lumanova_v1.0.7.rbz'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {

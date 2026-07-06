@@ -211,6 +211,7 @@ async function executeNode(node: NodeData): Promise<void> {
           negativePrompt: '',
           mask: params.mask,
           maskLayers: params.maskLayers,
+          materialReferences: params.materialReferences,
         })
         break
       }
