@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Clock, Download, RotateCcw, Search, ImageIcon, RefreshCw, Eye, ChevronsLeftRight, ArrowLeft, Copy, Play } from 'lucide-react'
 import { useHistoryStore } from '../../state/historyStore'
 import { useGraphStore } from '../../state/graphStore'
+import { useClassicStore } from '../../state/classicStore'
 import { useUIStore } from '../../state/uiStore'
 import { useAuthUser } from '../../auth/firebase'
 import type { GraphSnapshot } from '../../types/graph'
@@ -479,8 +480,37 @@ function HistoryDetailView({ snapshot, onBack }: { snapshot: GraphSnapshot; onBa
   const handleUse = () => {
     if (!canRestore) return
     const { nodes, edges } = snapshot.graph
+    const isClassic = nodes.some((n) => String(n.id).startsWith('classic-'))
+
+    if (isClassic) {
+      // 클래식 렌더 기록: 그래프에 옛 sketchup-origin 노드를 넣으면 라이브 소스로
+      // 오인되므로(소스/결과 어긋남), classicStore에 일관된 쌍으로 복원한다
+      const srcNode = nodes.find((n) => n.type === 'SOURCE')
+      const renderNode = [...nodes].reverse().find((n) => n.type !== 'SOURCE' && n.result?.image)
+      const prompt = renderNode && 'prompt' in renderNode.params ? String(renderNode.params.prompt ?? '') : ''
+      const srcImage = srcNode?.result?.image ?? null
+      useClassicStore.getState().set({
+        frozenSource: srcImage,
+        frozenFromBridge: false,
+        mirror: false,
+        resultImage: renderNode?.result?.image ?? null,
+        renderSourceImage: srcImage,
+        sourcePrompt: prompt,
+        maskUri: null,
+        maskMap: [],
+        selectedColors: [],
+        sourceSelectedColors: [],
+        materialSwaps: [],
+        regionMaterial: null,
+        statusText: '히스토리 작업을 불러왔습니다 — Mirror를 켜면 실시간 뷰로 복귀합니다',
+      })
+      useUIStore.getState().setActiveSidebarItem('render')
+      return
+    }
+
+    // 노드 에디터 스냅샷: 그래프 복원 후 노드 화면으로
     useGraphStore.setState({ nodes, edges, selectedNodeId: null })
-    useUIStore.getState().setActiveSidebarItem('render')
+    useUIStore.getState().setActiveSidebarItem('nodes')
   }
 
   const handleSave = () => {

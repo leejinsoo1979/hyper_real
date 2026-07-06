@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react'
+import { memo, useEffect, useState, type ReactNode } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Loader2, AlertTriangle } from 'lucide-react'
 import type { NodeStatus } from '../../types/node'
@@ -34,6 +34,21 @@ function frameBorder(status: NodeStatus, selected: boolean): string {
   if (status === 'running') return '1px solid #00c9a7'
   if (status === 'queued') return '1px solid #f0ad4e'
   return '1px solid #2a2a32'
+}
+
+// 실행 경과 시간 (status가 running인 동안 1초마다 증가)
+function ElapsedTimer() {
+  const [sec, setSec] = useState(0)
+  useEffect(() => {
+    const t0 = Date.now()
+    const timer = setInterval(() => setSec(Math.floor((Date.now() - t0) / 1000)), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  return (
+    <span style={{ marginTop: 6, fontSize: 11.5, fontWeight: 700, color: '#7df0dd', fontVariantNumeric: 'tabular-nums' }}>
+      {sec}초
+    </span>
+  )
 }
 
 // 실물 Lumanova: 연결점은 작은 라운드-사각 칩
@@ -90,8 +105,9 @@ export const BaseNode = memo(function BaseNode({
         )}
 
         {status === 'running' && (
-          <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(10,10,14,0.45)' }}>
+          <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ background: 'rgba(10,10,14,0.45)' }}>
             <Loader2 size={26} color="#00c9a7" className="animate-spin" />
+            <ElapsedTimer />
           </div>
         )}
         {status === 'error' && (

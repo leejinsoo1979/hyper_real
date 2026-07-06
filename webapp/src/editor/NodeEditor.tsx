@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Download, X } from 'lucide-react'
 import { v4 as uuid } from 'uuid'
 import { LeftSidebar } from './sidebar/LeftSidebar'
@@ -137,6 +137,25 @@ function UpdateBanner() {
           <X size={14} />
         </button>
       </div>
+    </div>
+  )
+}
+
+// 파이프라인 실행 경과 시간 (프롬프트 바 위 좌측)
+function PipelineElapsed() {
+  const [sec, setSec] = useState(0)
+  useEffect(() => {
+    const t0 = Date.now()
+    const timer = setInterval(() => setSec(Math.floor((Date.now() - t0) / 1000)), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  return (
+    <div
+      className="absolute bottom-full left-8 mb-2 flex items-center gap-1.5 rounded-md px-2.5 py-1"
+      style={{ background: 'rgba(13,13,20,0.9)', border: '1px solid #1f5952', color: '#7df0dd', fontSize: 11.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
+    >
+      <span className="animate-pulse" style={{ width: 6, height: 6, borderRadius: 999, background: '#00f0c8' }} />
+      렌더링 중... {sec}초
     </div>
   )
 }
@@ -330,6 +349,8 @@ export function NodeEditor() {
                     {executionError}
                   </div>
                 )}
+
+                {isRunning && <PipelineElapsed />}
 
                 {/* Progress bar during execution */}
                 {isRunning && (
