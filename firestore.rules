@@ -1,17 +1,37 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email in ['uablejs@gmail.com', 'sbbc212@gmail.com'];
+    }
+
     // 크레딧: 본인만 읽기. 생성은 가입보너스 30 고정. 수정은 감액(1~4)만 허용.
     match /credits/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow create: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.balance == 30;
-      allow update: if request.auth != null && request.auth.uid == uid
+      allow read: if isAdmin() || (request.auth != null && request.auth.uid == uid);
+      allow create: if isAdmin() || (
+        request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.balance == 30
+      );
+      allow update: if isAdmin() || (request.auth != null && request.auth.uid == uid
         && request.resource.data.balance is int
         && request.resource.data.balance >= 0
         && resource.data.balance - request.resource.data.balance >= 1
-        && resource.data.balance - request.resource.data.balance <= 4;
+        && resource.data.balance - request.resource.data.balance <= 4);
       allow delete: if false;
+    }
+
+    // 관리자 재질 카탈로그: 앱은 API/관리자 페이지를 통해 읽고 관리자는 수정 가능.
+    match /materials/{materialId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 사용자 관리용 프로필 메타데이터.
+    match /userProfiles/{uid} {
+      allow read, create, update: if isAdmin() || (request.auth != null && request.auth.uid == uid);
+      allow delete: if isAdmin();
     }
     // 사용 로그: 본인만 생성/읽기, 수정/삭제 불가
     match /users/{uid}/renderLogs/{logId} {

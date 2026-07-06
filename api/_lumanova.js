@@ -15,8 +15,30 @@ export const COSTS = { main: 1, pro: 4, auto_prompt: 1 }
 
 export function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+}
+
+const DEFAULT_ADMIN_EMAILS = ['uablejs@gmail.com', 'sbbc212@gmail.com']
+
+export function adminEmails() {
+  return String(process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+    .concat(DEFAULT_ADMIN_EMAILS)
+}
+
+export function isAdminUser(user) {
+  const email = String(user?.email ?? '').toLowerCase()
+  return Boolean(email && adminEmails().includes(email))
+}
+
+export async function requireAdmin(req) {
+  const user = await verifyUser(req)
+  if (!user) return { user: null, error: 'UNAUTHORIZED', status: 401 }
+  if (!isAdminUser(user)) return { user, error: 'FORBIDDEN', status: 403 }
+  return { user, error: null, status: 200 }
 }
 
 /** Authorization 헤더의 Firebase ID 토큰 검증. 실패 시 null. */
@@ -61,7 +83,15 @@ export async function getBalance(user) {
     const created = await fsFetch(`/credits?documentId=${user.uid}`, {
       method: 'POST',
       token: user.token,
-      body: { fields: { balance: { integerValue: '30' } } },
+      body: {
+        fields: {
+          balance: { integerValue: '30' },
+          email: { stringValue: String(user.email ?? '') },
+          uid: { stringValue: user.uid },
+          createdAt: { timestampValue: new Date().toISOString() },
+          updatedAt: { timestampValue: new Date().toISOString() },
+        },
+      },
     })
     if (created.ok) return 30
   }

@@ -16,6 +16,20 @@ const cfg = {
   appId: (import.meta.env.VITE_FIREBASE_APP_ID as string | undefined) ?? '1:1004103656505:web:62ac15a749077e2b8799e8',
 }
 
+const DEFAULT_ADMIN_EMAILS = ['uablejs@gmail.com', 'sbbc212@gmail.com']
+
+export function adminEmails(): string[] {
+  const envEmails = String(import.meta.env.VITE_ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+  return [...new Set([...DEFAULT_ADMIN_EMAILS, ...envEmails])]
+}
+
+export function isAdminEmail(email?: string | null): boolean {
+  return Boolean(email && adminEmails().includes(email.toLowerCase()))
+}
+
 let app: FirebaseApp | null = null
 
 /**

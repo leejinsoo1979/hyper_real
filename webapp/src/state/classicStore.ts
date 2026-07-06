@@ -49,6 +49,8 @@ interface ClassicState {
   // 소스 툴바 + 재질 교체 (스포이드로 재질 지정 → 생성 시 적용)
   sourceTool: 'none' | 'eyedropper' | 'pencil' | 'magic'
   materialSwaps: MaterialSwap[]
+  /** 매직툴로 선택한 재질 영역(마스크 색). 있으면 1차 생성이 이 영역만 편집 */
+  sourceSelectedColors: string[]
 
   // 씬별 미리보기 캐시 (탭 클릭 즉시 표시용 - 레거시 방식)
   scenePreviews: Record<string, string>
@@ -87,6 +89,7 @@ export const useClassicStore = create<ClassicState>((set) => ({
 
   sourceTool: 'none',
   materialSwaps: [],
+  sourceSelectedColors: [],
 
   scenePreviews: {},
   previewOverride: null,

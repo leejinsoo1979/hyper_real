@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuid } from 'uuid'
 import { Loader2, RefreshCw, Search, X } from 'lucide-react'
 import { useGraphStore } from '../../state/graphStore'
 import { useUIStore } from '../../state/uiStore'
 import { loadSourceMaterials, materialTextureUri, type SourceMaterial } from '../../api/sketchupBridge'
+import { apiMaterialCatalog } from '../../api/materialCatalog'
 import {
   categories,
   materialReferenceUrl,
@@ -77,6 +78,7 @@ export function MaterialsPage({ open }: { open: boolean }) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null)
+  const [catalog, setCatalog] = useState<MaterialAsset[]>(materials)
   const [sourceMaterials, setSourceMaterials] = useState<SourceMaterial[] | null>(null)
   const [sourceLoading, setSourceLoading] = useState(false)
   const [sourceError, setSourceError] = useState<string | null>(null)
@@ -88,6 +90,18 @@ export function MaterialsPage({ open }: { open: boolean }) {
   const addEdge = useGraphStore((s) => s.addEdge)
   const selectNode = useGraphStore((s) => s.selectNode)
   const setPromptText = useUIStore((s) => s.setPromptText)
+
+  useEffect(() => {
+    let cancelled = false
+    void apiMaterialCatalog().then((remote) => {
+      if (cancelled || !remote?.length) return
+      const merged = new Map<string, MaterialAsset>()
+      for (const item of materials) merged.set(item.id, item)
+      for (const item of remote) merged.set(item.id, item)
+      setCatalog([...merged.values()])
+    })
+    return () => { cancelled = true }
+  }, [])
 
   const refreshSourceMaterials = async () => {
     if (sourceLoading) return
@@ -111,7 +125,7 @@ export function MaterialsPage({ open }: { open: boolean }) {
 
   const visibleMaterials = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return materials.filter((m) => {
+    return catalog.filter((m) => {
       const categoryMatch = selectedCategory ? m.category === selectedCategory : true
       const queryMatch = !q
         || m.name.toLowerCase().includes(q)
@@ -120,7 +134,7 @@ export function MaterialsPage({ open }: { open: boolean }) {
         || m.tags.some((tag) => tag.toLowerCase().includes(q))
       return categoryMatch && queryMatch
     })
-  }, [query, selectedCategory])
+  }, [catalog, query, selectedCategory])
   const searchActive = query.trim().length > 0
 
   const createModifierWithPrompt = (prompt: string, presetId: string, materialReferences?: string[]) => {

@@ -420,6 +420,9 @@ export function RenderClassicPage() {
     let selMask: string | null = null
     if (which === 'res' && st.maskUri && st.selectedColors.length > 0) {
       selMask = await buildSelectionMask(st.maskUri, st.selectedColors)
+    } else if (which === 'src' && st.maskUri && st.sourceSelectedColors.length > 0) {
+      // 매직툴 선택: 1차 생성도 선택 영역만 편집 (영역 밖은 원본 픽셀 유지)
+      selMask = await buildSelectionMask(st.maskUri, st.sourceSelectedColors)
     }
     st.set({
       rendering: true,
@@ -783,15 +786,48 @@ export function RenderClassicPage() {
                 onTool={(t) => {
                   s.set({
                     sourceTool: t,
-                    statusText: t === 'eyedropper' ? '스포이드: 소스 이미지에서 바꿀 재질을 클릭하세요' : 'Ready',
+                    statusText:
+                      t === 'eyedropper' ? '스포이드: 소스 이미지에서 바꿀 재질을 클릭하세요'
+                      : t === 'magic' ? '매직: 영역에 마우스를 올리면 테두리가 표시되고, 클릭하면 선택됩니다'
+                      : 'Ready',
                   })
                   if (t !== 'eyedropper') setPickedMaterial(null)
+                  // 매직툴은 재질 ID 마스크가 필요 — 없으면 즉시 캡처
+                  if (t === 'magic' && !useClassicStore.getState().maskUri) {
+                    s.set({ statusText: '매직: 재질 마스크 캡처 중...' })
+                    void captureMask().then((m) => {
+                      useClassicStore.getState().set(m
+                        ? { maskUri: m.uri, maskMap: m.map, statusText: '매직: 영역에 마우스를 올리면 테두리가 표시되고, 클릭하면 선택됩니다' }
+                        : { statusText: '재질 마스크 캡처 실패 - 3D 툴 연결을 확인하세요', sourceTool: 'none' })
+                    })
+                  }
                 }}
               />
             }
+            imageOverlay={s.sourceTool === 'magic' && s.maskUri ? <MaskSelectOverlay /> : undefined}
             onImagePick={s.sourceTool === 'eyedropper' ? handleSourcePick : undefined}
-            imageFooter={s.materialSwaps.length > 0 ? (
+            imageFooter={(s.materialSwaps.length > 0 || s.sourceSelectedColors.length > 0) ? (
               <div className="flex flex-wrap gap-1.5">
+                {s.sourceSelectedColors.length > 0 && (
+                  <span
+                    className="flex items-center gap-1.5"
+                    style={{
+                      padding: '4px 10px', borderRadius: 999, fontSize: 11,
+                      background: 'rgba(8,12,12,0.82)', color: '#7df0dd',
+                      border: '1px solid #1f5952', backdropFilter: 'blur(3px)',
+                    }}
+                  >
+                    <Wand2 size={11} />
+                    선택 영역 {s.sourceSelectedColors.length}개 — 생성 시 이 부분만 변경
+                    <button
+                      title="선택 해제"
+                      onClick={() => s.set({ sourceSelectedColors: [] })}
+                      style={{ color: '#7ba8a0', display: 'flex' }}
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                )}
                 {s.materialSwaps.map((sw) => (
                   <span
                     key={sw.material}
@@ -931,7 +967,7 @@ function SourceToolbar({ tool, onTool }: {
     >
       {btn('eyedropper', <Pipette size={15} />, '스포이드 — 클릭한 표면의 재질을 찾아 교체 재질을 지정', true)}
       {btn('pencil', <Pencil size={15} />, '연필 — 영역 마킹', false)}
-      {btn('magic', <Wand2 size={15} />, '매직 — 자동 영역 선택', false)}
+      {btn('magic', <Wand2 size={15} />, '매직 — 호버로 재질 영역 미리보고 클릭으로 선택', true)}
     </div>
   )
 }

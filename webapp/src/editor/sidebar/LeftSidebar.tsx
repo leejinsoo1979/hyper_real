@@ -7,10 +7,11 @@ import {
   PlaySquare,
   HelpCircle,
   Settings,
+  Shield,
   type LucideIcon,
 } from 'lucide-react'
 import { useUIStore, type SidebarItem } from '../../state/uiStore'
-import { firebaseEnabled, useAuthUser } from '../../auth/firebase'
+import { firebaseEnabled, isAdminEmail, useAuthUser } from '../../auth/firebase'
 
 interface SidebarButton {
   id: SidebarItem | 'materials'
@@ -85,6 +86,9 @@ function SidebarIcon({ button }: { button: SidebarButton }) {
 }
 
 export function LeftSidebar() {
+  const user = useAuthUser()
+  const showAdmin = isAdminEmail(user?.email)
+
   return (
     <aside
       className="flex h-full flex-col items-center"
@@ -104,6 +108,7 @@ export function LeftSidebar() {
       </div>
       <div className="flex-1" />
       <div className="flex w-full flex-col items-center">
+        {showAdmin && <AdminIcon />}
         {bottomButtons.map((btn) => (
           <SidebarIcon key={btn.id} button={btn} />
         ))}
@@ -113,6 +118,30 @@ export function LeftSidebar() {
   )
 }
 
+function AdminIcon() {
+  return (
+    <button
+      onClick={() => { window.location.href = '/admin' }}
+      className="relative my-0.5 flex flex-col items-center justify-center self-center"
+      style={{
+        height: 62,
+        width: 64,
+        borderRadius: 10,
+        background: 'rgba(0,201,167,0.10)',
+        border: '1px solid rgba(0,201,167,.18)',
+      }}
+      title="관리자 모드"
+    >
+      <Shield size={22} color="#2fe6c8" className="transition-colors duration-150" />
+      <span
+        className="mt-1.5 text-center leading-none"
+        style={{ fontSize: 11, fontWeight: 700, color: '#eafffb' }}
+      >
+        Admin
+      </span>
+    </button>
+  )
+}
 
 // 좌측 하단 프로필 배지: 로그인 상태를 항상 눈으로 확인 가능하게
 function ProfileBadge() {
