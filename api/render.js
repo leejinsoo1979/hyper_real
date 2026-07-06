@@ -1,10 +1,21 @@
 // POST /api/render — 로그인 사용자의 크레딧을 차감하고 서버 키로 Gemini 렌더
 import { cors, verifyUser, spendCredits, getBalance, logRender, geminiRender, COSTS } from './_lumanova.js'
 
+// 정책(2026-07-06): 사용자 개별 키로만 렌더링 — 서버 키 렌더링 비활성화.
+// 서비스(크레딧) 운영을 시작할 때 이 가드를 제거하고 재활성화한다.
+const SERVER_RENDERING_DISABLED = true
+
 export default async function handler(req, res) {
   cors(res)
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD' })
+
+  if (SERVER_RENDERING_DISABLED) {
+    return res.status(410).json({
+      error: 'SERVER_RENDERING_DISABLED',
+      detail: '본인 Gemini API 키를 Settings → API Keys에 등록해 사용하세요.',
+    })
+  }
 
   const user = await verifyUser(req)
   if (!user) return res.status(401).json({ error: 'UNAUTHORIZED' })

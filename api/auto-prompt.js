@@ -1,10 +1,20 @@
 // POST /api/auto-prompt — 씬 분석 자동 프롬프트 (텍스트 모델, 1크레딧)
 import { cors, verifyUser, spendCredits, getBalance, logRender, geminiText, COSTS } from './_lumanova.js'
 
+// 정책(2026-07-06): 사용자 개별 키로만 호출 — 서버 키 사용 비활성화 (render.js와 동일)
+const SERVER_RENDERING_DISABLED = true
+
 export default async function handler(req, res) {
   cors(res)
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD' })
+
+  if (SERVER_RENDERING_DISABLED) {
+    return res.status(410).json({
+      error: 'SERVER_RENDERING_DISABLED',
+      detail: '본인 Gemini API 키를 Settings → API Keys에 등록해 사용하세요.',
+    })
+  }
 
   const user = await verifyUser(req)
   if (!user) return res.status(401).json({ error: 'UNAUTHORIZED' })
