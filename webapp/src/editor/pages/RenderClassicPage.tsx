@@ -194,6 +194,7 @@ export function RenderClassicPage() {
 
   // ── 스포이드 재질 교체 ──────────────────────────────────────────────────
   const [pickedMaterial, setPickedMaterial] = useState<string | null>(null)
+  const [regionPickOpen, setRegionPickOpen] = useState(false)
 
   // 소스 이미지 클릭(비율 좌표) → ID 마스크 픽셀 색 → 재질 이름
   const handleSourcePick = useCallback(async (fx: number, fy: number) => {
@@ -414,7 +415,10 @@ export function RenderClassicPage() {
     const prompt = which === 'src' ? st.sourcePrompt : st.resultPrompt
     const negative = which === 'src' ? st.sourceNegative : st.resultNegative
     if (!input) { st.set({ statusText: '소스 이미지가 없습니다' }); return }
-    if (!prompt.trim()) { st.set({ statusText: '프롬프트를 입력하거나 Auto로 생성하세요' }); return }
+    const regionFlow = which === 'res' && !!st.regionMaterial && st.selectedColors.length > 0
+    const effectivePrompt = prompt.trim()
+      || (regionFlow ? 'Apply the specified material to the selected region while keeping everything else identical.' : '')
+    if (!effectivePrompt) { st.set({ statusText: '프롬프트를 입력하거나 Auto로 생성하세요' }); return }
 
     const lighting = buildLightingDescription(st.timePreset, st.lightsOn)
     // 영역 선택이 있으면 흑백 선택 마스크 생성 (흰색=변경 허용 영역)
@@ -469,6 +473,16 @@ export function RenderClassicPage() {
       promptSuffix += `\n\n[STYLE REFERENCE]\nImage ${extraImages.length + 1} is a style reference for aesthetics ONLY. Borrow its color palette, material feel, lighting mood, and atmosphere. ABSOLUTELY DO NOT copy any objects, furniture, layout, faces, logos, or composition from it.`
     }
 
+    // 선택 영역 재질: 매직 선택 영역에 라이브러리/로컬 재질 적용 (2차 전용)
+    if (regionFlow && st.regionMaterial) {
+      if (st.regionMaterial.kind === 'image') {
+        extraImages.push(st.regionMaterial.image)
+        promptSuffix += `\n\n[REGION MATERIAL]\nApply the material shown in image ${extraImages.length + 1} ("${st.regionMaterial.name}") to the editable (masked) region: match its texture, color, pattern scale, and finish. Everything outside the region must stay untouched.`
+      } else {
+        promptSuffix += `\n\n[REGION MATERIAL]\nChange the editable (masked) region's material to: ${st.regionMaterial.prompt}. Everything outside the region must stay untouched.`
+      }
+    }
+
     // 스포이드 재질 교체: 지정된 재질을 사용자가 고른 재질로 (1차·2차 공통)
     if (st.materialSwaps.length > 0) {
       const lines = st.materialSwaps.map((sw) => {
@@ -486,7 +500,7 @@ export function RenderClassicPage() {
         engine,
         image: input,
         extraImages: extraImages.length > 0 ? extraImages : undefined,
-        prompt: `${prompt}\n\n[LIGHTING]\n${lighting}${promptSuffix}`,
+        prompt: `${effectivePrompt}\n\n[LIGHTING]\n${lighting}${promptSuffix}`,
         systemPrompt: '',
         negativePrompt: negative,
         seed: null,
@@ -508,7 +522,7 @@ export function RenderClassicPage() {
           ? '선택 부위만 적용 완료 (나머지 영역은 원본 유지)'
           : '렌더링 완료 - RESULT의 [마스크 패스] 탭에서 부위를 선택할 수 있습니다',
         // 마스크 적용 렌더가 끝나면 선택 소진 (다음 렌더에 의도치 않게 재적용 방지)
-        ...(selMask ? { selectedColors: [] } : {}),
+        ...(selMask ? { selectedColors: [], regionMaterial: null } : {}),
       })
       saveClassicRenderHistory({
         sourceImage: input,
@@ -980,12 +994,44 @@ export function RenderClassicPage() {
                   선택 영역 {s.selectedColors.length}개 — 2차 생성 시 이 부분만 변경
                   <button
                     title="선택 해제"
-                    onClick={() => s.set({ selectedColors: [] })}
+                    onClick={() => s.set({ selectedColors: [], regionMaterial: null })}
                     style={{ color: '#7ba8a0', display: 'flex' }}
                   >
                     <X size={11} />
                   </button>
                 </span>
+                {s.regionMaterial ? (
+                  <span
+                    className="flex items-center gap-1.5"
+                    style={{
+                      padding: '4px 10px', borderRadius: 999, fontSize: 11,
+                      background: 'rgba(8,12,12,0.82)', color: '#35e5cf',
+                      border: '1px solid #1f5952', backdropFilter: 'blur(3px)',
+                    }}
+                  >
+                    영역 재질: {s.regionMaterial.name}
+                    <button
+                      title="재질 지정 해제"
+                      onClick={() => s.set({ regionMaterial: null })}
+                      style={{ color: '#7ba8a0', display: 'flex' }}
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setRegionPickOpen(true)}
+                    className="flex items-center gap-1.5"
+                    title="선택 영역에 적용할 재질을 라이브러리/로컬에서 선택"
+                    style={{
+                      padding: '4px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                      background: '#00c9a7', color: '#06251f',
+                    }}
+                  >
+                    <ImagePlus size={11} />
+                    재질 적용
+                  </button>
+                )}
               </div>
             ) : undefined}
             viewTabs={s.resultImage && s.maskUri ? {
@@ -1028,6 +1074,21 @@ export function RenderClassicPage() {
           material={pickedMaterial}
           onApply={addSwap}
           onClose={() => setPickedMaterial(null)}
+        />
+      )}
+
+      {regionPickOpen && (
+        <MaterialSwapDialog
+          material={null}
+          regionCount={s.selectedColors.length}
+          onApply={(replacement) => {
+            s.set({
+              regionMaterial: replacement,
+              statusText: `선택 영역 재질 지정: ${replacement.name} — 2차 생성(⚡)하면 적용됩니다`,
+            })
+            setRegionPickOpen(false)
+          }}
+          onClose={() => setRegionPickOpen(false)}
         />
       )}
 
@@ -1191,8 +1252,10 @@ function SwapPreviewBox({ title, name, thumb, color, empty, loading }: {
   )
 }
 
-function MaterialSwapDialog({ material, onApply, onClose }: {
-  material: string
+function MaterialSwapDialog({ material, regionCount, onApply, onClose }: {
+  /** 스포이드로 찍은 재질 이름. null이면 '선택 영역' 모드 (매직 선택에 재질 적용) */
+  material: string | null
+  regionCount?: number
   onApply: (replacement: MaterialSwap['replacement']) => void
   onClose: () => void
 }) {
@@ -1208,6 +1271,7 @@ function MaterialSwapDialog({ material, onApply, onClose }: {
   // 2) 없으면(용량 예산으로 생략된 경우) 그 재질 하나만 브릿지에서 상세 추출
   // "A 외 2" / "A / B" 병합 라벨은 첫 재질 이름으로 조회한다
   useEffect(() => {
+    if (material === null) { setSourceLoading(false); return }
     let cancelled = false
     const lookupName = material.includes(' 외 ') ? material.split(' 외 ')[0] : material.split(' / ')[0]
     void (async () => {
@@ -1278,7 +1342,22 @@ function MaterialSwapDialog({ material, onApply, onClose }: {
 
         {/* 좌: 원본 재질 → 우: 교체 재질 */}
         <div className="flex items-center gap-3" style={{ padding: '16px 22px', borderBottom: '1px solid #20202a' }}>
-          <SwapPreviewBox title="스포이드로 선택한 재질" name={material} thumb={sourcePreview.thumb} color={sourcePreview.color} loading={sourceLoading} />
+          {material !== null ? (
+            <SwapPreviewBox title="스포이드로 선택한 재질" name={material} thumb={sourcePreview.thumb} color={sourcePreview.color} loading={sourceLoading} />
+          ) : (
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-2">
+              <div style={{ color: '#8a8a96', fontSize: 11 }}>적용 대상</div>
+              <div
+                className="flex items-center justify-center"
+                style={{ width: 132, height: 96, borderRadius: 10, background: '#12201d', border: '1px solid #1f5952' }}
+              >
+                <Wand2 size={26} style={{ color: '#35e5cf' }} />
+              </div>
+              <div className="w-full truncate text-center" style={{ color: '#fff', fontSize: 12.5, fontWeight: 700 }}>
+                매직 선택 영역 {regionCount ?? 0}개
+              </div>
+            </div>
+          )}
           <span style={{ color: '#00c9a7', fontSize: 22, fontWeight: 800, flexShrink: 0 }}>→</span>
           <SwapPreviewBox
             title="교체할 재질"

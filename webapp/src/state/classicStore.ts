@@ -60,6 +60,8 @@ interface ClassicState {
   resultTool: 'none' | 'eyedropper' | 'pencil' | 'magic'
   /** 스타일 참조 이미지 (색·재질·조명 분위기만 참조, data URI) */
   styleRef: string | null
+  /** RESULT 선택 영역에 적용할 재질 (매직 선택 + 라이브러리/로컬 이미지) */
+  regionMaterial: MaterialSwap['replacement'] | null
 
   // 씬별 미리보기 캐시 (탭 클릭 즉시 표시용 - 레거시 방식)
   scenePreviews: Record<string, string>
@@ -104,6 +106,7 @@ export const useClassicStore = create<ClassicState>((set) => ({
   frozenFromBridge: false,
   resultTool: 'none',
   styleRef: null,
+  regionMaterial: null,
 
   scenePreviews: {},
   previewOverride: null,
