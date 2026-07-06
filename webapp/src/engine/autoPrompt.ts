@@ -6,8 +6,7 @@
 //   - 텍스트 모델(gemini-2.5-flash) + thinkingBudget 0 (geminiClient가 처리)
 //   - 네거티브 파싱: 섹션 제목 변형([NEGATIVE PROMPT - ...]) 허용, 실패 시 기본값
 // ---------------------------------------------------------------------------
-import { callGemini, useMock, getStoredApiKey } from './geminiClient'
-import { saasMode, apiAutoPrompt } from '../api/lumanovaApi'
+import { callGemini, useMock } from './geminiClient'
 import { useGraphStore } from '../state/graphStore'
 
 export type TimePreset = 'day' | 'evening' | 'night'
@@ -182,13 +181,7 @@ export async function generateAutoPrompt(
 
   const instruction = buildInstruction(styleHint, lighting)
 
-  // SaaS 모드: 서버 프록시 (크레딧 1 차감). 개인 키가 있으면 아래 직접 호출 경로 사용.
-  if (saasMode() && !getStoredApiKey()) {
-    const r = await apiAutoPrompt({ image: opts.image, instruction })
-    if (opts.signal?.aborted) throw new Error('Cancelled by user')
-    if (!r.text.trim()) throw new Error('프롬프트 생성 실패: AI 응답이 비어 있습니다')
-    return parseAutoPromptResponse(r.text)
-  }
+  // 정책(2026-07-06): 사용자 개별 키로만 호출 — 서버 프록시(운영자 키) 경로 미사용
 
   const result = await callGemini({
     image: opts.image,

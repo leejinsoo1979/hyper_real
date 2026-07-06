@@ -476,11 +476,11 @@ function ApiKeySection({ saas }: { saas: boolean }) {
     <Section title="API Keys">
       {saas && (
         <div className="mb-3" style={{ fontSize: 11.5, color: '#71717c' }}>
-          기본적으로 키는 필요 없습니다(크레딧으로 렌더링). 본인 키를 입력하면 크레딧 차감 없이 본인 키로 처리합니다.
+          이미지 렌더링(Gemini)과 영상 생성(xAI Grok) 모두 본인 API 키가 필요합니다. 아래에서 발급받아 등록하세요.
         </div>
       )}
       <ApiKeyRow
-        label="Gemini (이미지 렌더링)"
+        label="Gemini (이미지 렌더링 · 필수)"
         placeholder="AIza..."
         read={() => getStoredApiKey() ?? ''}
         write={setStoredApiKey}
@@ -495,7 +495,7 @@ function ApiKeySection({ saas }: { saas: boolean }) {
       />
       <div style={{ borderTop: '1px solid #22222a', margin: '14px 0' }} />
       <ApiKeyRow
-        label="xAI Grok (이미지 → 영상 생성)"
+        label="xAI Grok (이미지 → 영상 생성 · 필수)"
         placeholder="xai-..."
         read={() => getStoredXaiApiKey() ?? ''}
         write={setStoredXaiApiKey}

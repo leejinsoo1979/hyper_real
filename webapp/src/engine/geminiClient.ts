@@ -8,6 +8,8 @@
 //   - MIME detection from base64 prefix
 // ---------------------------------------------------------------------------
 
+import { firebaseEnabled } from '../auth/firebase'
+
 // ── Error hierarchy ────────────────────────────────────────────────────────
 
 export class GeminiError extends Error {
@@ -121,14 +123,17 @@ function resolveApiKey(): string | null {
 export function useMock(): boolean {
   const flag = import.meta.env.VITE_USE_MOCK
   if (flag === 'true' || flag === '1') return true
-  // No API key → fall back to mock silently
+  // 배포(SaaS) 모드: 키가 없어도 mock으로 조용히 빠지지 않는다 —
+  // 실제 호출 경로로 진행시켜 getApiKey()가 키 등록 안내 에러를 던지게 한다
+  if (firebaseEnabled()) return false
+  // 개발 모드: 키 없으면 mock으로 흐름 검증
   return resolveApiKey() === null
 }
 
 function getApiKey(): string {
   const key = resolveApiKey()
   if (!key) {
-    throw new AuthError('API key is not set — Settings에서 입력하세요')
+    throw new AuthError('Gemini API Key가 없습니다. Settings → API Keys에서 본인 키를 등록하세요.')
   }
   return key
 }

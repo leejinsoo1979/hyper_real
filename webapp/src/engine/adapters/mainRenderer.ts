@@ -1,7 +1,6 @@
 import type { RenderInput } from '../../types/engine'
 import type { NodeResult } from '../../types/node'
-import { callGemini, useMock, getStoredApiKey } from '../geminiClient'
-import { saasMode, apiRender } from '../../api/lumanovaApi'
+import { callGemini, useMock } from '../geminiClient'
 
 // ── Mock (development) ─────────────────────────────────────────────────────
 
@@ -56,26 +55,9 @@ async function renderMainGemini(input: RenderInput): Promise<NodeResult> {
 
 // ── Exported switcher ──────────────────────────────────────────────────────
 
-// SaaS 모드: 서버 프록시(크레딧 차감) 경유. 반환 형태는 기존과 동일.
-async function renderMainSaas(input: RenderInput): Promise<NodeResult> {
-  const engine = input.engine?.startsWith('experimental') ? 'pro' as const : 'main' as const
-  const r = await apiRender({
-    engine,
-    image: input.image,
-    prompt: input.prompt,
-    negativePrompt: input.negativePrompt ?? '',
-    mask: input.mask ?? undefined,
-  })
-  return {
-    image: r.image,
-    resolution: input.resolution,
-    timestamp: new Date().toISOString(),
-    cacheKey: '',
-  }
-}
-
+// 정책(2026-07-06): 사용자 개별 API 키로만 렌더링한다.
+// 서버 프록시(운영자 키 + 크레딧) 경로는 사용하지 않는다 — 서비스 운영 시 재도입 예정.
+// 키가 없으면 geminiClient.getApiKey()가 Settings 등록 안내 에러를 던진다.
 export async function renderMain(input: RenderInput): Promise<NodeResult> {
-  // SaaS 모드: 기본은 서버 프록시(크레딧). 개인 키를 넣었으면 본인 키로 직접 호출(미차감)
-  if (saasMode() && !getStoredApiKey()) return renderMainSaas(input)
   return useMock() ? renderMainMock(input) : renderMainGemini(input)
 }

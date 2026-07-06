@@ -38,10 +38,10 @@ const SECTIONS: { id: string; label: string; body: DocItem[] }[] = [
     body: [
       {
         h: '어떤 키가 필요한가요?',
-        p: '이미지 렌더링은 기본적으로 키 없이 크레딧으로 동작합니다. 본인 Gemini 키를 등록하면 크레딧 차감 없이 본인 키로 렌더링됩니다. 이미지 → 영상 생성(Grok Imagine)은 본인 xAI 키가 반드시 필요합니다.',
+        p: '이미지 렌더링에는 본인 Gemini 키가, 이미지 → 영상 생성(Grok Imagine)에는 본인 xAI 키가 필요합니다. 두 키 모두 발급은 몇 분이면 끝나고, 사용량은 각자 본인 계정으로 청구됩니다.',
       },
       {
-        h: 'Gemini 키 발급 (이미지 렌더링 · 선택)',
+        h: 'Gemini 키 발급 (이미지 렌더링 · 필수)',
         p: '① Google AI Studio에 접속해 Google 계정으로 로그인 → ② "API 키 만들기(Create API key)" 클릭 (프로젝트가 없으면 자동 생성) → ③ AIza…로 시작하는 키 복사. 무료 등급으로도 렌더링을 시작할 수 있습니다.',
         link: { href: 'https://aistudio.google.com/apikey', label: 'Google AI Studio 열기' },
       },
