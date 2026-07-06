@@ -1,11 +1,14 @@
-import { useState } from 'react'
-import { Maximize2, X } from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
+import { ImagePlus, Loader2, Maximize2, Play, X } from 'lucide-react'
+import { v4 as uuid } from 'uuid'
 import { ImageLightbox } from './ImageLightbox'
 import { useUIStore, type InspectorTab } from '../../state/uiStore'
 import { useGraphStore } from '../../state/graphStore'
+import { useExecutionStore } from '../../state/executionStore'
+import { executePipeline } from '../../engine'
 import { PreviewTab } from './PreviewTab'
 import { CompareTab, getNodeInputImage } from './CompareTab'
-import { DrawTab } from './DrawTab'
+import { DrawTab, type DrawTabHandle } from './DrawTab'
 import { RenderSettings } from './RenderSettings'
 import { SketchUpScenesPanel } from './SketchUpScenesPanel'
 import { DccMaterialsPanel } from './DccMaterialsPanel'
@@ -27,6 +30,35 @@ export function InspectorPanel() {
   const selectedNode = selectedNodeId
     ? nodes.find((n) => n.id === selectedNodeId) ?? null
     : null
+
+  // Draw 전체화면: 드로잉+프롬프트 → Modifier 노드 자동 추가 후 2차 생성
+  const isRunning = useExecutionStore((s) => s.isRunning)
+  const drawApiRef = useRef<DrawTabHandle | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [drawPrompt, setDrawPrompt] = useState('')
+
+  const handleDrawGenerate = useCallback(() => {
+    const prompt = drawPrompt.trim()
+    if (!prompt || isRunning || !selectedNode) return
+    const store = useGraphStore.getState()
+    const mask = drawApiRef.current?.exportMaskData() ?? null
+    const newId = store.createNode('MODIFIER', {
+      x: selectedNode.position.x + 340,
+      y: selectedNode.position.y,
+    })
+    useGraphStore.getState().addEdge({
+      id: uuid(),
+      from: selectedNode.id,
+      fromPort: 'image',
+      to: newId,
+      toPort: 'image',
+    })
+    useGraphStore.getState().updateNodeParams(newId, { prompt, mask })
+    useGraphStore.getState().selectNode(newId)
+    setDrawPrompt('')
+    setEnlarged(false)
+    void executePipeline(newId)
+  }, [drawPrompt, isRunning, selectedNode])
 
   return (
     <aside
@@ -133,7 +165,7 @@ export function InspectorPanel() {
               <X size={18} />
             </button>
           </div>
-          <div className="min-h-0 flex-1 p-5">
+          <div className="min-h-0 flex-1 p-5 pb-3">
             <div
               className="h-full overflow-hidden rounded-md"
               style={{
@@ -142,8 +174,71 @@ export function InspectorPanel() {
                 boxShadow: '0 24px 80px rgba(0,0,0,.42)',
               }}
             >
-              <DrawTab selectedNode={selectedNode} variant="lightbox" />
+              <DrawTab selectedNode={selectedNode} variant="lightbox" apiRef={drawApiRef} />
             </div>
+          </div>
+
+          {/* 하단 프롬프트 바 — 드로잉+프롬프트로 2차 생성 (Modifier 노드 자동 추가) */}
+          <div
+            className="flex shrink-0 items-center gap-2.5"
+            style={{ padding: '10px 20px 16px' }}
+          >
+            <button
+              className="flex shrink-0 items-center justify-center"
+              style={{
+                width: 44, height: 44, borderRadius: 10,
+                background: '#1c1c25', border: '1px solid #2c2c38', color: '#a9a9b4',
+              }}
+              title="이미지 첨부 (캔버스에 참조 이미지 추가 · Ctrl+V 붙여넣기도 가능)"
+              onClick={() => fileInputRef.current?.click()}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3d3d4b'; e.currentTarget.style.color = '#ffffff' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2c2c38'; e.currentTarget.style.color = '#a9a9b4' }}
+            >
+              <ImagePlus size={18} />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                const reader = new FileReader()
+                reader.onload = () => drawApiRef.current?.addImage(reader.result as string)
+                reader.readAsDataURL(file)
+                e.target.value = ''
+              }}
+            />
+            <input
+              type="text"
+              value={drawPrompt}
+              onChange={(e) => setDrawPrompt(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleDrawGenerate() }}
+              placeholder="수정할 내용을 입력하세요 — 예: 표시한 부분의 소파를 가죽 소재로 바꿔줘"
+              className="min-w-0 flex-1 rounded-xl px-4 outline-none"
+              style={{
+                height: 44, background: '#101018', border: '1px solid #2c2c38',
+                color: '#fff', fontSize: 13.5,
+              }}
+            />
+            <button
+              onClick={handleDrawGenerate}
+              disabled={!drawPrompt.trim() || isRunning}
+              className="flex shrink-0 items-center justify-center gap-2 rounded-xl"
+              style={{
+                height: 44, padding: '0 26px', fontSize: 13.5, fontWeight: 800,
+                background: !drawPrompt.trim() || isRunning
+                  ? 'linear-gradient(180deg, #23232c, #1a1a22)'
+                  : 'linear-gradient(180deg, #18e3c4, #00bfa2)',
+                color: !drawPrompt.trim() || isRunning ? '#6d6d78' : '#031716',
+                border: !drawPrompt.trim() || isRunning ? '1px solid #32323e' : '1px solid rgba(94,255,226,.45)',
+                cursor: !drawPrompt.trim() || isRunning ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {isRunning ? <Loader2 size={15} className="animate-spin" /> : <Play size={13} fill="currentColor" />}
+              {isRunning ? 'Running' : 'Make'}
+            </button>
           </div>
         </div>
       )}

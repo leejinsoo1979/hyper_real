@@ -20,12 +20,21 @@ const COLOR_DOTS: Record<string, string> = {
   Yellow: '#ffdc00',
 }
 
+/** 부모(전체화면 오버레이 등)가 캔버스를 제어할 수 있는 핸들 */
+export interface DrawTabHandle {
+  /** 배경 제외 드로잉만 투명 PNG dataURL로 추출. 그린 게 없으면 null */
+  exportMaskData: () => string | null
+  /** 이미지를 캔버스 위에 오브젝트로 첨부 */
+  addImage: (dataUrl: string) => void
+}
+
 interface DrawTabProps {
   selectedNode: NodeData | null
   variant?: 'panel' | 'lightbox'
+  apiRef?: React.RefObject<DrawTabHandle | null>
 }
 
-export function DrawTab({ selectedNode, variant = 'panel' }: DrawTabProps) {
+export function DrawTab({ selectedNode, variant = 'panel', apiRef }: DrawTabProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fabricRef = useRef<FabricCanvas | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -135,12 +144,12 @@ export function DrawTab({ selectedNode, variant = 'panel' }: DrawTabProps) {
     }
   }, [activeTool])
 
-  // Export mask and save to MODIFIER node params
-  const exportMask = useCallback(() => {
+  // 배경 제외 드로잉만 투명 PNG dataURL로 추출 (그린 게 없으면 null)
+  const exportMaskData = useCallback((): string | null => {
     const fc = fabricRef.current
-    if (!fc || !selectedNode || !isModifier) return
+    if (!fc) return null
+    if (fc.getObjects().length === 0) return null
 
-    // Export without background to get transparent PNG mask
     const bgImage = fc.backgroundImage
     fc.backgroundImage = undefined
     fc.renderAll()
@@ -149,9 +158,34 @@ export function DrawTab({ selectedNode, variant = 'panel' }: DrawTabProps) {
 
     fc.backgroundImage = bgImage
     fc.renderAll()
+    return maskData
+  }, [])
 
+  const addImage = useCallback((dataUrl: string) => {
+    const fc = fabricRef.current
+    if (!fc) return
+    FabricImage.fromURL(dataUrl).then((img) => {
+      img.set({ left: 50, top: 50, scaleX: 0.5, scaleY: 0.5 })
+      fc.add(img)
+      fc.setActiveObject(img)
+      fc.renderAll()
+    })
+  }, [])
+
+  // 부모 핸들 연결
+  useEffect(() => {
+    if (!apiRef) return
+    apiRef.current = { exportMaskData, addImage }
+    return () => { apiRef.current = null }
+  }, [apiRef, exportMaskData, addImage])
+
+  // Export mask and save to MODIFIER node params
+  const exportMask = useCallback(() => {
+    if (!selectedNode || !isModifier) return
+    const maskData = exportMaskData()
+    if (maskData === null) return
     updateNodeParams(selectedNode.id, { mask: maskData } as Partial<ModifierParams>)
-  }, [selectedNode, isModifier, updateNodeParams])
+  }, [selectedNode, isModifier, updateNodeParams, exportMaskData])
 
   // Auto-export on drawing change
   useEffect(() => {
