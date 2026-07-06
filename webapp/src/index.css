@@ -10,11 +10,9 @@
   --color-warning: #f0ad4e;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* 주의: 여기에 unlayered 전역 리셋(`margin: 0; padding: 0`)을 두면 Tailwind v4의
+   @layer utilities보다 항상 우선해서 padding/margin 유틸리티(px-4 등)가 전부 무효화된다.
+   리셋은 Tailwind preflight(@import "tailwindcss"에 포함)가 담당한다. */
 
 html,
 body,
