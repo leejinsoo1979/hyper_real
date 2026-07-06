@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Clock, Download, RotateCcw, Search, ImageIcon, RefreshCw, Eye, ChevronsLeftRight, ArrowLeft, Copy, Play } from 'lucide-react'
+import { Clock, Download, RotateCcw, Search, ImageIcon, RefreshCw, Eye, ChevronsLeftRight, ArrowLeft, Copy, Play, SquarePen, Workflow } from 'lucide-react'
 import { useHistoryStore } from '../../state/historyStore'
 import { useGraphStore } from '../../state/graphStore'
 import { useClassicStore } from '../../state/classicStore'
@@ -441,27 +441,63 @@ function HistoryCard({ snapshot, onOpen }: { snapshot: GraphSnapshot; onOpen: (s
             {formatTimeAgo(snapshot.timestamp)}
           </span>
         </div>
-        <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+        <div className="flex items-center gap-1.5" style={{ flexShrink: 0 }}>
           <span style={{ color: '#5d5d68', fontSize: 10 }}>
             -{snapshot.creditUsed}
           </span>
-          <button
-            onClick={(e) => { e.stopPropagation(); onOpen(snapshot) }}
-            className="flex items-center gap-1 rounded-md px-2.5 transition-colors duration-150"
-            style={{
-              height: 24,
-              backgroundColor: hovered ? 'rgba(0,201,167,.16)' : '#20202c',
-              border: `1px solid ${hovered ? 'rgba(0,201,167,.55)' : '#2e2e3b'}`,
-              color: hovered ? '#7df0dc' : '#b8b8c4',
-              fontSize: 11,
-              fontWeight: 700,
-              lineHeight: 1,
-            }}
-            title="View"
-          >
-            <Eye size={12} />
-            View
-          </button>
+          {[
+            { key: 'view', icon: <Eye size={12} />, label: 'View', title: '크게 보기' },
+            { key: 'edit', icon: <SquarePen size={12} />, label: 'Edit', title: '이 이미지를 렌더 화면 소스로' },
+            { key: 'node', icon: <Workflow size={12} />, label: 'Node', title: '이 이미지를 노드 에디터 소스로' },
+          ].map((b) => (
+            <button
+              key={b.key}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (b.key === 'view') { onOpen(snapshot); return }
+                const img = getResultThumbnail(snapshot)
+                if (!img) return
+                if (b.key === 'edit') {
+                  // 히스토리 결과 이미지를 클래식 렌더의 소스로 (미러 정지, 편집 상태 초기화)
+                  useClassicStore.getState().set({
+                    frozenSource: img,
+                    frozenFromBridge: false,
+                    mirror: false,
+                    resultImage: null,
+                    renderSourceImage: null,
+                    maskUri: null,
+                    maskMap: [],
+                    selectedColors: [],
+                    sourceSelectedColors: [],
+                    materialSwaps: [],
+                    regionMaterial: null,
+                    statusText: '히스토리 이미지를 소스로 불러왔습니다 — Mirror를 켜면 실시간 뷰로 복귀',
+                  })
+                  useUIStore.getState().setActiveSidebarItem('render')
+                } else {
+                  // 노드 에디터에 SOURCE 노드로 추가 (겹치지 않게 계단식 배치)
+                  const g = useGraphStore.getState()
+                  const n = g.nodes.length
+                  g.createSourceNode(img, 'upload', { x: 120 + (n % 6) * 60, y: 140 + (n % 4) * 50 })
+                  useUIStore.getState().setActiveSidebarItem('nodes')
+                }
+              }}
+              className="flex items-center gap-1 rounded-md px-2 transition-colors duration-150"
+              style={{
+                height: 24,
+                backgroundColor: hovered ? 'rgba(0,201,167,.16)' : '#20202c',
+                border: `1px solid ${hovered ? 'rgba(0,201,167,.55)' : '#2e2e3b'}`,
+                color: hovered ? '#7df0dc' : '#b8b8c4',
+                fontSize: 10.5,
+                fontWeight: 700,
+                lineHeight: 1,
+              }}
+              title={b.title}
+            >
+              {b.icon}
+              {b.label}
+            </button>
+          ))}
         </div>
       </div>
     </div>
