@@ -7,4 +7,5 @@ webapp/dist
 docs
 nano_banana_renderer
 *.rbz
+!webapp/public/downloads/Lumanova_v1.0.6.rbz
 temp.zip

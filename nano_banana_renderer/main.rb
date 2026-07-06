@@ -15,7 +15,7 @@ require 'tmpdir'
 
 module NanoBanana
   PLUGIN_NAME = 'Lumanova'
-  PLUGIN_VERSION = '1.0.5'
+  PLUGIN_VERSION = '1.0.6'
   PLUGIN_AUTHOR = 'Lumanova'
   PLUGIN_DESCRIPTION = 'SketchUp과 연동되는 AI 실사 렌더링 플러그인'
 
