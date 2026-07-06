@@ -738,6 +738,7 @@ export function HistoryPage() {
   const loadSnapshots = useHistoryStore((s) => s.loadSnapshots)
   const user = useAuthUser()
   const [query, setQuery] = useState('')
+  const [mediaTab, setMediaTab] = useState<'image' | 'video'>('image')
   const [visibleCount, setVisibleCount] = useState(HISTORY_PAGE_SIZE)
   const [detailSnapshot, setDetailSnapshot] = useState<GraphSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
@@ -758,7 +759,8 @@ export function HistoryPage() {
     if (loading && snapshots.length > 0) setLoading(false)
   }, [loading, snapshots.length])
 
-  const filteredSnapshots = useMemo(() => {
+  // 검색어만 반영된 목록 (탭별 개수 표시용)
+  const searchedSnapshots = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return snapshots
     return snapshots.filter((snapshot) => {
@@ -766,6 +768,17 @@ export function HistoryPage() {
       return snapshot.id.toLowerCase().includes(q) || date.includes(q)
     })
   }, [query, snapshots])
+
+  const videoCount = useMemo(
+    () => searchedSnapshots.filter((s) => getSnapshotVideo(s) !== null).length,
+    [searchedSnapshots],
+  )
+  const imageCount = searchedSnapshots.length - videoCount
+
+  const filteredSnapshots = useMemo(
+    () => searchedSnapshots.filter((s) => (getSnapshotVideo(s) !== null) === (mediaTab === 'video')),
+    [searchedSnapshots, mediaTab],
+  )
 
   const visibleSnapshots = filteredSnapshots.slice(0, visibleCount)
   const hasMore = visibleCount < filteredSnapshots.length
@@ -790,7 +803,7 @@ export function HistoryPage() {
             History
           </h1>
           <div className="mt-1" style={{ color: '#777784', fontSize: 12 }}>
-            {loading ? 'Loading history...' : `${filteredSnapshots.length} saved renders`}
+            {loading ? 'Loading history...' : `${filteredSnapshots.length} saved ${mediaTab === 'video' ? 'videos' : 'renders'}`}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -824,6 +837,39 @@ export function HistoryPage() {
         </div>
       </div>
 
+      {/* 미디어 타입 탭: 이미지 / 영상 */}
+      <div
+        className="flex shrink-0 items-center gap-2 px-7"
+        style={{ height: 50, borderBottom: '1px solid #222233' }}
+      >
+        {([
+          { key: 'image', icon: <ImageIcon size={13} />, label: '이미지', count: imageCount },
+          { key: 'video', icon: <Play size={12} fill="currentColor" />, label: '영상', count: videoCount },
+        ] as const).map((t) => {
+          const active = mediaTab === t.key
+          return (
+            <button
+              key={t.key}
+              onClick={() => { setMediaTab(t.key); setVisibleCount(HISTORY_PAGE_SIZE) }}
+              className="flex items-center gap-1.5 rounded-full transition-colors duration-150"
+              style={{
+                height: 32,
+                padding: '0 16px',
+                fontSize: 12.5,
+                fontWeight: active ? 750 : 500,
+                background: active ? 'rgba(0,201,167,.14)' : '#171720',
+                border: `1px solid ${active ? 'rgba(0,201,167,.45)' : '#2a2a36'}`,
+                color: active ? '#37e7cb' : '#8f8f9a',
+              }}
+            >
+              {t.icon}
+              {t.label}
+              <span style={{ fontSize: 11, opacity: 0.75 }}>{loading ? '' : t.count}</span>
+            </button>
+          )
+        })}
+      </div>
+
       {loading ? (
         <HistoryLoadingScreen />
       ) : filteredSnapshots.length === 0 ? (
@@ -839,10 +885,16 @@ export function HistoryPage() {
               <ImageIcon size={22} />
             </div>
             <div className="mt-4" style={{ color: '#eeeeF5', fontSize: 14, fontWeight: 750 }}>
-              {query.trim() ? 'No matching renders' : 'No renders saved yet'}
+              {query.trim()
+                ? (mediaTab === 'video' ? 'No matching videos' : 'No matching renders')
+                : (mediaTab === 'video' ? 'No videos saved yet' : 'No renders saved yet')}
             </div>
             <div className="mt-1.5 max-w-xs" style={{ fontSize: 12, color: '#858592', lineHeight: 1.45 }}>
-              {query.trim() ? 'Try another search term.' : 'Finished render results will appear here as thumbnails.'}
+              {query.trim()
+                ? 'Try another search term.'
+                : mediaTab === 'video'
+                  ? 'Image to video 노드로 생성한 영상이 여기에 표시됩니다.'
+                  : 'Finished render results will appear here as thumbnails.'}
             </div>
             {!query.trim() && (
               <button
