@@ -60,6 +60,8 @@ interface PingResponse {
 interface DataResponse {
   source: string | null
   rendered: string | null
+  depth?: string | null
+  depthTimestamp?: number
   timestamp: number // unix seconds
 }
 
@@ -341,6 +343,30 @@ export async function loadSourceMaterials(): Promise<SourceMaterial[] | null> {
   // 갱신 감지 실패 시 마지막 캐시라도 반환 (구버전 브릿지는 null)
   const last = await fetchMaterialsOnce()
   return last?.materials?.length ? last.materials : null
+}
+
+/**
+ * 현재 뷰의 깊이맵 캡처 (구조 고정 렌더용).
+ * SketchUp = 안개 근사(가까움=밝음), Blender = Mist 패스. 미지원 브릿지는 null.
+ */
+export async function captureDepth(): Promise<string | null> {
+  let before = 0
+  try {
+    const res = await fetchWithTimeout(bridgeUrl('/api/data'))
+    if (res.ok) before = ((await res.json()) as DataResponse).depthTimestamp ?? 0
+  } catch { /* 무시 — 신선도 비교만 못할 뿐 */ }
+
+  if (!(await sendCommand({ type: 'capture_depth' }))) return null
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 400))
+    try {
+      const res = await fetchWithTimeout(bridgeUrl('/api/data'))
+      if (!res.ok) continue
+      const data: DataResponse = await res.json()
+      if (data.depth && (data.depthTimestamp ?? 0) !== before) return toDataUri(data.depth)
+    } catch { /* 재시도 */ }
+  }
+  return null
 }
 
 /** SketchUp의 저장된 씬 목록 조회. null = 일시적 실패 (기존 목록 유지해야 함). */

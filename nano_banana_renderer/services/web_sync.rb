@@ -101,6 +101,8 @@ module NanoBanana
                 source: @current_source_image,
                 rendered: @current_image,
                 viewport: vp,
+                depth: @current_depth_image,
+                depthTimestamp: @current_depth_time || 0,
                 timestamp: Time.now.to_i
               }.to_json
             end
@@ -297,6 +299,8 @@ module NanoBanana
             update_bridge_materials
           when 'load_material'
             update_bridge_material_entry(cmd['name'])
+          when 'capture_depth'
+            capture_depth_map
           end
         rescue StandardError => e
           puts "[NanoBanana] 브릿지 명령 에러(#{cmd['type']}): #{e.message}"
@@ -361,6 +365,61 @@ module NanoBanana
       puts "[NanoBanana] 브릿지: 재질 #{materials.length}개 추출 (텍스처 #{materials.count { |m| m[:texture] }}개)"
     rescue StandardError => e
       puts "[NanoBanana] 재질 추출 에러: #{e.message}"
+    end
+
+    # 근사 깊이맵 캡처 (구조 고정 렌더용, 모델 무변경)
+    # 원리: 히든라인 모드(면 전부 흰색) + 검정 안개 + 검정 배경 → 가까울수록 밝고
+    # 멀수록 어두운 그레이스케일 = 깊이맵. 렌더 옵션만 잠시 바꾸고 전부 복원한다.
+    def capture_depth_map
+      model = Sketchup.active_model
+      return unless model
+
+      view = model.active_view
+      ro = model.rendering_options
+      saved = {}
+      begin
+        # 안개 끝 거리: 카메라에서 모델 경계 가장 먼 모서리까지
+        eye = view.camera.eye
+        bounds = model.bounds
+        far = 100.0
+        (0..7).each do |i|
+          c = bounds.corner(i)
+          d = eye.distance(c).to_f
+          far = d if d > far
+        end
+
+        { 'RenderMode' => 1,                 # 히든라인: 면 전부 흰색
+          'EdgeDisplayMode' => 0,
+          'DrawSilhouettes' => false,
+          'DisplayShadows' => false,
+          'ModelTransparency' => false,
+          'DrawHorizon' => false, 'DrawGround' => false, 'DrawSky' => false,
+          'BackgroundColor' => Sketchup::Color.new(0, 0, 0),
+          'DisplayFog' => true,
+          'FogUseSkyColor' => false,
+          'FogColor' => Sketchup::Color.new(0, 0, 0),
+          'FogStartDist' => 0.0,
+          'FogEndDist' => far * 1.05 }.each do |k, v|
+          begin
+            saved[k] = ro[k]
+            ro[k] = v
+          rescue StandardError
+          end
+        end
+
+        temp_path = File.join(Dir.tmpdir, 'lumanova_depth.jpg')
+        view.write_image(filename: temp_path, width: 960, height: 540, antialias: false, transparent: false, compression: 0.88)
+        if File.exist?(temp_path)
+          @current_depth_image = Base64.strict_encode64(File.binread(temp_path))
+          @current_depth_time = (Time.now.to_f * 1000).to_i
+          puts '[NanoBanana] 깊이맵 캡처 완료 (fog 근사)'
+        end
+      rescue StandardError => e
+        puts "[NanoBanana] 깊이맵 캡처 에러: #{e.message}"
+      ensure
+        saved.each { |k, v| ro[k] = v rescue nil }
+        view.invalidate
+      end
     end
 
     # 재질 1개 상세 추출 (스포이드용) — 일괄 추출의 용량 예산과 무관하게

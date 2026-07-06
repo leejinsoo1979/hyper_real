@@ -52,6 +52,15 @@ interface ClassicState {
   /** 매직툴로 선택한 재질 영역(마스크 색). 있으면 1차 생성이 이 영역만 편집 */
   sourceSelectedColors: string[]
 
+  /** 구조 고정: 렌더 시 깊이맵을 함께 보내 형상·카메라를 강제 유지 */
+  depthLock: boolean
+  /** frozenSource가 브릿지 캡처(Convert)에서 왔는지 — 업로드면 깊이맵 캡처 불가 */
+  frozenFromBridge: boolean
+  /** RESULT 패널 툴 (스포이드/매직 — 2차 생성 대상 지정) */
+  resultTool: 'none' | 'eyedropper' | 'pencil' | 'magic'
+  /** 스타일 참조 이미지 (색·재질·조명 분위기만 참조, data URI) */
+  styleRef: string | null
+
   // 씬별 미리보기 캐시 (탭 클릭 즉시 표시용 - 레거시 방식)
   scenePreviews: Record<string, string>
   previewOverride: string | null
@@ -90,6 +99,11 @@ export const useClassicStore = create<ClassicState>((set) => ({
   sourceTool: 'none',
   materialSwaps: [],
   sourceSelectedColors: [],
+
+  depthLock: true,
+  frozenFromBridge: false,
+  resultTool: 'none',
+  styleRef: null,
 
   scenePreviews: {},
   previewOverride: null,

@@ -5,7 +5,7 @@ import { materialReferenceUrl, materialThumbnailUrl, materials as libraryMateria
 import { useUIStore } from '../../state/uiStore'
 import { useGraphStore } from '../../state/graphStore'
 import { useHistoryStore } from '../../state/historyStore'
-import { selectScene, requestCapture, addScene, sendCamera, fetchSourceOnce, captureMask, isBridgeOrigin, bridgeToolLabel, getCachedSourceMaterials, loadMaterialDetail, loadSourceMaterials, materialTextureUri } from '../../api/sketchupBridge'
+import { selectScene, requestCapture, addScene, sendCamera, fetchSourceOnce, captureMask, isBridgeOrigin, bridgeToolLabel, captureDepth, getCachedSourceMaterials, loadMaterialDetail, loadSourceMaterials, materialTextureUri } from '../../api/sketchupBridge'
 import { generateAutoPrompt, buildLightingDescription } from '../../engine/autoPrompt'
 import { renderMain } from '../../engine/adapters/mainRenderer'
 import { EditOverlay } from '../panels/EditOverlay'
@@ -198,7 +198,7 @@ export function RenderClassicPage() {
   // 소스 이미지 클릭(비율 좌표) → ID 마스크 픽셀 색 → 재질 이름
   const handleSourcePick = useCallback(async (fx: number, fy: number) => {
     const st = useClassicStore.getState()
-    if (st.sourceTool !== 'eyedropper') return
+    if (st.sourceTool !== 'eyedropper' && st.resultTool !== 'eyedropper') return
 
     let maskUri = st.maskUri
     let maskMap = st.maskMap
@@ -257,6 +257,7 @@ export function RenderClassicPage() {
         { material: pickedMaterial, replacement },
       ],
       sourceTool: 'none',
+      resultTool: 'none',
       statusText: `재질 교체 지정: ${pickedMaterial} → ${replacement.name} (생성 시 적용됩니다)`,
     })
     setPickedMaterial(null)
@@ -356,6 +357,7 @@ export function RenderClassicPage() {
         // 새 고화질 캡처 도착: 미러 정지 + 정지 이미지 고정 (렌더/Auto의 입력)
         useClassicStore.getState().set({
           frozenSource: now.uri,
+          frozenFromBridge: true,
           mirror: false,
           sourceLoading: false,
           statusText: `고품질 캡처 완료 (${s.size}px) - Auto로 프롬프트 생성하세요. Mirror를 켜면 실시간으로 복귀`,
@@ -439,36 +441,52 @@ export function RenderClassicPage() {
     }
     const engine = st.model === 'gemini-3-pro-image' ? 'experimental-interior' : 'main'
 
-    // 스포이드 재질 교체: 지정된 재질을 사용자가 고른 재질로 바꾸라는 지시 +
-    // 라이브러리/로컬 업로드 재질 이미지는 참조 이미지(extraImages)로 함께 전달한다 (1차 생성 전용)
-    let swapSuffix = ''
-    let swapImages: string[] | undefined
-    if (which === 'src' && st.materialSwaps.length > 0) {
-      const referenceSwaps = st.materialSwaps
-        .map((sw) => {
-          const image = sw.replacement.kind === 'image' ? sw.replacement.image : sw.replacement.referenceImage
-          return image ? { sw, image } : null
-        })
-        .filter((entry): entry is { sw: MaterialSwap; image: string } => entry !== null)
-      swapImages = referenceSwaps.map((entry) => entry.image)
+    // ── 추가 입력 이미지 조립: [깊이맵] + [스타일 참조] + [재질 교체 참조] ──
+    // 순서 고정: 프롬프트에서 "image N"으로 지칭하므로 배열 순서와 일치해야 한다
+    const extraImages: string[] = []
+    let promptSuffix = ''
+
+    // 구조 고정: 브릿지 뷰가 입력일 때만 깊이맵 캡처 (업로드 이미지엔 미적용)
+    const bridgeInput = !st.frozenSource || st.frozenFromBridge
+    if (which === 'src' && st.depthLock && bridgeInput && useUIStore.getState().sketchUpStatus === 'connected') {
+      st.set({ statusText: '깊이맵 캡처 중... (구조 고정)' })
+      const depth = await captureDepth()
+      if (depth) {
+        extraImages.push(depth)
+        // 명암 방향: SketchUp 안개 근사 = 밝음이 가까움 / Blender Mist = 밝음이 멂
+        const convention = useUIStore.getState().bridgeTool === 'blender'
+          ? 'brighter = farther from camera'
+          : 'brighter = closer to camera'
+        promptSuffix += `\n\n[GEOMETRY LOCK - DEPTH MAP]\nImage ${extraImages.length + 1} is a depth map of the EXACT same view (${convention}). Treat it as the authoritative 3D structure: keep the camera position, wall/furniture geometry, and object placement pixel-identical to it. Never add, remove, move, or resize any object. Only change materials, textures, lighting, and atmosphere.`
+      } else {
+        st.set({ statusText: '깊이맵 캡처 실패 — 구조 고정 없이 진행합니다' })
+      }
+    }
+
+    // 스타일 참조: 색·재질·조명 분위기만 (형상/오브젝트 복사 금지)
+    if (st.styleRef) {
+      extraImages.push(st.styleRef)
+      promptSuffix += `\n\n[STYLE REFERENCE]\nImage ${extraImages.length + 1} is a style reference for aesthetics ONLY. Borrow its color palette, material feel, lighting mood, and atmosphere. ABSOLUTELY DO NOT copy any objects, furniture, layout, faces, logos, or composition from it.`
+    }
+
+    // 스포이드 재질 교체: 지정된 재질을 사용자가 고른 재질로 (1차·2차 공통)
+    if (st.materialSwaps.length > 0) {
       const lines = st.materialSwaps.map((sw) => {
         if (sw.replacement.kind === 'library') {
-          const refIndex = referenceSwaps.findIndex((entry) => entry.sw === sw) + 1
-          const refNote = refIndex > 0 ? ` Match reference image ${refIndex} for color, grain, pattern scale, roughness, and finish.` : ''
-          return `- Replace every surface using the material "${sw.material}" with: ${sw.replacement.prompt}.${refNote}`
+          return `- Replace every surface using the material "${sw.material}" with: ${sw.replacement.prompt}.`
         }
-        const refIndex = referenceSwaps.findIndex((entry) => entry.sw === sw) + 1
-        return `- Replace every surface using the material "${sw.material}" with the material shown in reference image ${refIndex} ("${sw.replacement.name}"). Match its texture, color, and finish.`
+        extraImages.push(sw.replacement.image)
+        return `- Replace every surface using the material "${sw.material}" with the material shown in image ${extraImages.length + 1} ("${sw.replacement.name}"). Match its texture, color, and finish.`
       })
-      swapSuffix = `\n\n[MATERIAL SWAP - APPLY EXACTLY]\n${lines.join('\n')}\nAll other materials and every other aspect of the scene must stay unchanged.`
+      promptSuffix += `\n\n[MATERIAL SWAP - APPLY EXACTLY]\n${lines.join('\n')}\nAll other materials must stay unchanged.`
     }
 
     try {
       const result = await renderMain({
         engine,
         image: input,
-        extraImages: swapImages?.length ? swapImages : undefined,
-        prompt: `${prompt}\n\n[LIGHTING]\n${lighting}${swapSuffix}`,
+        extraImages: extraImages.length > 0 ? extraImages : undefined,
+        prompt: `${prompt}\n\n[LIGHTING]\n${lighting}${promptSuffix}`,
         systemPrompt: '',
         negativePrompt: negative,
         seed: null,
@@ -523,7 +541,7 @@ export function RenderClassicPage() {
     const f = e.target.files?.[0]
     if (!f) return
     const reader = new FileReader()
-    reader.onload = () => useClassicStore.getState().set({ frozenSource: String(reader.result), mirror: false, statusText: '이미지 로드됨' })
+    reader.onload = () => useClassicStore.getState().set({ frozenSource: String(reader.result), frozenFromBridge: false, mirror: false, statusText: '이미지 로드됨' })
     reader.readAsDataURL(f)
     e.target.value = ''
   }, [])
@@ -577,6 +595,59 @@ export function RenderClassicPage() {
               options={[{ v: '1024', l: '속도' }, { v: '1536', l: '밸런스' }, { v: '1920', l: '고품질' }]}
               value={s.size}
               onChange={(v) => s.set({ size: v as ClassicSize })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <SectionLabel>Structure</SectionLabel>
+            <button
+              onClick={() => s.set({
+                depthLock: !s.depthLock,
+                statusText: !s.depthLock
+                  ? '구조 고정 ON — 렌더 시 깊이맵으로 형상·카메라를 강제 유지합니다'
+                  : '구조 고정 OFF',
+              })}
+              className="flex items-center justify-between"
+              title="렌더 시 뷰포트 깊이맵을 함께 보내 벽·가구·카메라가 절대 변형되지 않게 합니다"
+              style={{
+                padding: '8px 10px', borderRadius: 6,
+                background: C.input, border: `1px solid ${s.depthLock ? '#1f5952' : C.border}`,
+              }}
+            >
+              <span className="flex flex-col items-start" style={{ gap: 1 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: s.depthLock ? '#e8fffb' : '#9a9aa1' }}>
+                  구조 고정 <span style={{ fontSize: 9.5, color: s.depthLock ? '#35e5cf' : C.dim }}>Depth</span>
+                </span>
+                <span style={{ fontSize: 9, color: C.dim }}>형상·카메라 변형 방지</span>
+              </span>
+              <span
+                className="relative"
+                style={{
+                  width: 30, height: 17, borderRadius: 999, flexShrink: 0,
+                  background: s.depthLock ? C.accent : '#2a2a2a',
+                  transition: 'background 160ms',
+                }}
+              >
+                <span
+                  className="absolute"
+                  style={{
+                    top: 2, left: s.depthLock ? 15 : 2, width: 13, height: 13, borderRadius: 999,
+                    background: '#ffffff', transition: 'left 160ms',
+                    boxShadow: '0 1px 3px rgba(0,0,0,.4)',
+                  }}
+                />
+              </span>
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <SectionLabel>Style</SectionLabel>
+            <StyleRefSlot
+              image={s.styleRef}
+              onPick={(img) => s.set({
+                styleRef: img,
+                statusText: img ? '스타일 참조 등록 — 색·재질·조명 분위기만 참조합니다 (형상 복사 안 함)' : '스타일 참조 제거됨',
+              })}
             />
           </div>
 
@@ -866,7 +937,57 @@ export function RenderClassicPage() {
               </>
             ) : undefined}
             image={s.resultMaskView && s.maskUri ? s.maskUri : s.resultImage}
-            imageOverlay={s.resultMaskView && s.maskUri && s.resultImage ? <MaskSelectOverlay /> : null}
+            imageOverlay={
+              s.resultMaskView && s.maskUri && s.resultImage ? <MaskSelectOverlay />
+              : s.resultTool === 'magic' && s.maskUri && s.resultImage ? <MagicSelectOverlay colorsKey="selectedColors" />
+              : null
+            }
+            imageToolbar={s.resultImage ? (
+              <SourceToolbar
+                tool={s.resultTool}
+                onTool={(t) => {
+                  s.set({
+                    resultTool: t,
+                    statusText:
+                      t === 'eyedropper' ? '스포이드: 결과 이미지에서 바꿀 재질을 클릭하세요'
+                      : t === 'magic' ? '매직: 영역에 마우스를 올리면 테두리가 표시되고, 클릭하면 선택됩니다 (2차 생성 대상)'
+                      : 'Ready',
+                  })
+                  if (t !== 'eyedropper') setPickedMaterial(null)
+                  if (t === 'magic' && !useClassicStore.getState().maskUri) {
+                    s.set({ statusText: '매직: 재질 마스크 캡처 중...' })
+                    void captureMask().then((m) => {
+                      useClassicStore.getState().set(m
+                        ? { maskUri: m.uri, maskMap: m.map, statusText: '매직: 영역에 마우스를 올리면 테두리가 표시되고, 클릭하면 선택됩니다' }
+                        : { statusText: '재질 마스크 캡처 실패 - 3D 툴 연결을 확인하세요', resultTool: 'none' })
+                    })
+                  }
+                }}
+              />
+            ) : undefined}
+            onImagePick={s.resultTool === 'eyedropper' && !s.resultMaskView ? handleSourcePick : undefined}
+            imageFooter={s.selectedColors.length > 0 && s.resultImage ? (
+              <div className="flex flex-wrap gap-1.5">
+                <span
+                  className="flex items-center gap-1.5"
+                  style={{
+                    padding: '4px 10px', borderRadius: 999, fontSize: 11,
+                    background: 'rgba(8,12,12,0.82)', color: '#7df0dd',
+                    border: '1px solid #1f5952', backdropFilter: 'blur(3px)',
+                  }}
+                >
+                  <Wand2 size={11} />
+                  선택 영역 {s.selectedColors.length}개 — 2차 생성 시 이 부분만 변경
+                  <button
+                    title="선택 해제"
+                    onClick={() => s.set({ selectedColors: [] })}
+                    style={{ color: '#7ba8a0', display: 'flex' }}
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              </div>
+            ) : undefined}
             viewTabs={s.resultImage && s.maskUri ? {
               items: [
                 { key: 'render', label: '렌더' },
@@ -928,6 +1049,69 @@ export function RenderClassicPage() {
           onClose={() => setViewerOpen(false)}
         />
       )}
+    </div>
+  )
+}
+
+// ── 스타일 참조 슬롯 (렌더 설정 사이드바) ────────────────────────────────────
+function StyleRefSlot({ image, onPick }: { image: string | null; onPick: (img: string | null) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [hover, setHover] = useState(false)
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => onPick(String(reader.result))
+    reader.readAsDataURL(file)
+  }
+
+  return (
+    <div
+      className="relative overflow-hidden"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ borderRadius: 6 }}
+    >
+      <button
+        onClick={() => inputRef.current?.click()}
+        className="flex w-full flex-col items-center justify-center gap-1"
+        title={image ? '클릭해서 다른 이미지로 교체' : '스타일 참조 이미지 업로드 — 색·재질·조명 분위기만 참조 (형상은 복사하지 않음)'}
+        style={{
+          height: 64,
+          borderRadius: 6,
+          background: image ? `center / cover url(${image})` : C.input,
+          border: image ? '1px solid #1f5952' : `1px dashed ${C.border}`,
+          color: C.dim,
+        }}
+      >
+        {!image && (
+          <>
+            <ImagePlus size={15} style={{ color: '#7a7a82' }} />
+            <span style={{ fontSize: 9.5 }}>스타일 참조 이미지</span>
+          </>
+        )}
+        {image && hover && (
+          <span
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.45)', color: '#fff', fontSize: 10.5, fontWeight: 600 }}
+          >
+            클릭해서 교체
+          </span>
+        )}
+      </button>
+      {image && (
+        <button
+          title="스타일 참조 제거"
+          onClick={(e) => { e.stopPropagation(); onPick(null) }}
+          className="absolute flex items-center justify-center rounded-full"
+          style={{ top: 4, right: 4, width: 18, height: 18, background: 'rgba(10,10,14,0.85)', color: '#ddd' }}
+        >
+          <X size={11} />
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
     </div>
   )
 }
@@ -1503,7 +1687,7 @@ function AspectFitBox({ src, children }: { src: string; children: React.ReactNod
 }
 
 // ── 매직툴 오버레이: 호버 = 재질 영역 외곽선 글로우 미리보기 / 클릭 = 선택 토글 ──
-function MagicSelectOverlay() {
+function MagicSelectOverlay({ colorsKey = 'sourceSelectedColors' }: { colorsKey?: 'sourceSelectedColors' | 'selectedColors' }) {
   const maskUri = useClassicStore((st) => st.maskUri)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const maskDataRef = useRef<{ data: Uint8ClampedArray; w: number; h: number } | null>(null)
@@ -1614,7 +1798,7 @@ function MagicSelectOverlay() {
       const ctx = cv.getContext('2d')!
       ctx.clearRect(0, 0, md.w, md.h)
 
-      const sel = useClassicStore.getState().sourceSelectedColors
+      const sel = useClassicStore.getState()[colorsKey]
       const pulse = 0.72 + 0.28 * Math.sin(t / 320)
 
       // 선택 확정 영역: 은은한 채움 + 또렷한 외곽선
@@ -1670,15 +1854,13 @@ function MagicSelectOverlay() {
     const hex = colorAtEvent(e)
     if (!hex) return
     const st = useClassicStore.getState()
-    const next = st.sourceSelectedColors.includes(hex)
-      ? st.sourceSelectedColors.filter((c) => c !== hex)
-      : [...st.sourceSelectedColors, hex]
-    st.set({
-      sourceSelectedColors: next,
-      statusText: next.length > 0
-        ? `매직: ${next.length}개 영역 선택됨 — 프롬프트 입력 후 생성하면 선택 영역만 변경됩니다`
-        : '매직: 선택 해제됨',
-    })
+    const cur = st[colorsKey]
+    const next = cur.includes(hex) ? cur.filter((c) => c !== hex) : [...cur, hex]
+    const statusText = next.length > 0
+      ? `매직: ${next.length}개 영역 선택됨 — 프롬프트 입력 후 생성하면 선택 영역만 변경됩니다`
+      : '매직: 선택 해제됨'
+    if (colorsKey === 'sourceSelectedColors') st.set({ sourceSelectedColors: next, statusText })
+    else st.set({ selectedColors: next, statusText })
   }
 
   return (
