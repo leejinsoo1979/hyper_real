@@ -22,15 +22,19 @@ async function renderMainMock(input: RenderInput): Promise<NodeResult> {
 
 const MASK_INSTRUCTION = `\n\n[SELECTION MASK - CRITICAL]\nThe second image is a selection mask. WHITE areas = the ONLY region you may change. BLACK areas = must remain EXACTLY identical to the input image, pixel-faithful. Apply the requested change only inside the white region.`
 
+const MULTI_INPUT_INSTRUCTION = `\n\n[MULTIPLE INPUT IMAGES]\nThe first image is the PRIMARY base — preserve its composition, camera angle, and geometry. The additional images are references: use their materials, style, mood, or elements as described in the prompt when combining them into one result.`
+
 async function renderMainGemini(input: RenderInput): Promise<NodeResult> {
   // Gemini에는 네거티브 파라미터가 없으므로 프롬프트에 AVOID 섹션으로 합성
   let fullPrompt = input.negativePrompt
     ? `${input.prompt}\n\n[NEGATIVE - MUST AVOID]\n${input.negativePrompt}`
     : input.prompt
   if (input.mask) fullPrompt += MASK_INSTRUCTION
+  if (input.extraImages?.length) fullPrompt += MULTI_INPUT_INSTRUCTION
 
   const result = await callGemini({
     image: input.image,
+    extraImages: input.extraImages,
     maskImage: input.mask ?? undefined,
     prompt: fullPrompt,
     engine: input.engine,

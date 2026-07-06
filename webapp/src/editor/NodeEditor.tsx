@@ -17,7 +17,7 @@ import type { ConnectionStatus } from '../state/uiStore'
 import { useUndoStore } from '../state/undoStore'
 import { executePipeline } from '../engine'
 import { useMock } from '../engine/geminiClient'
-import { startBridge, stopBridge } from '../api/sketchupBridge'
+import { startBridge, stopBridge, bridgeToolLabel } from '../api/sketchupBridge'
 import { useAuthUser } from '../auth/firebase'
 
 function statusColor(s: ConnectionStatus): string {
@@ -31,8 +31,10 @@ function statusColor(s: ConnectionStatus): string {
 // ── 앱 상단 헤더: 로고+제품명 · 크레딧 · 프로필 (SketchUp 연결 텍스트 제거) ──
 function AppHeader() {
   const sketchUpStatus = useUIStore((s) => s.sketchUpStatus)
+  const bridgeTool = useUIStore((s) => s.bridgeTool)
   const setActiveSidebarItem = useUIStore((s) => s.setActiveSidebarItem)
   const user = useAuthUser()
+  const toolLabel = bridgeTool ? bridgeToolLabel() : '3D 툴'
 
   const initial = (user?.displayName || user?.email || '·')[0]?.toUpperCase() ?? '·'
 
@@ -47,7 +49,7 @@ function AppHeader() {
         <span style={{ color: '#f0f0f5', fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em' }}>Lumanova</span>
         {/* 연결 상태: 은은한 점 인디케이터 (텍스트 없이) */}
         <span
-          title={sketchUpStatus === 'connected' ? 'SketchUp 연결됨' : sketchUpStatus === 'connecting' ? '연결 중' : '연결 안 됨'}
+          title={sketchUpStatus === 'connected' ? `${toolLabel} 연결됨` : sketchUpStatus === 'connecting' ? '연결 중' : '3D 툴 연결 안 됨'}
           style={{ width: 7, height: 7, borderRadius: 999, background: statusColor(sketchUpStatus), marginLeft: 4, boxShadow: sketchUpStatus === 'connected' ? `0 0 6px ${statusColor(sketchUpStatus)}` : 'none' }}
         />
       </div>

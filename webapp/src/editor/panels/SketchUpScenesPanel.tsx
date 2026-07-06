@@ -22,7 +22,7 @@ export function SketchUpScenesPanel({ selectedNode }: { selectedNode: NodeData |
     isBridgeOrigin(selectedNode.params.origin)
 
   if (status !== 'connected' || !isBridgeSource) return null
-  const toolLabel = bridgeTool ? bridgeToolLabel() : 'SketchUp'
+  const toolLabel = bridgeTool ? bridgeToolLabel() : '3D 툴'
 
   const handleSelect = async (name: string) => {
     setSwitching(name)

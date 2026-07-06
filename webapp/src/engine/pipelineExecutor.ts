@@ -144,6 +144,15 @@ function getInputImage(nodeId: string): string | null {
   return inputNode?.result?.image ?? null
 }
 
+/** 모든 입력 이미지 (그룹 소스 생성 — 여러 노드가 연결된 경우). 첫 번째가 기본 이미지 */
+function getInputImages(nodeId: string): string[] {
+  const { nodes, edges } = useGraphStore.getState()
+  return edges
+    .filter((e) => e.to === nodeId && e.toPort === 'image')
+    .map((e) => nodes.find((n) => n.id === e.from)?.result?.image)
+    .filter((img): img is string => !!img)
+}
+
 // ── Execute single node ──
 
 async function executeNode(node: NodeData): Promise<void> {
@@ -172,7 +181,8 @@ async function executeNode(node: NodeData): Promise<void> {
 
       case 'RENDER': {
         const params = node.params as RenderParams
-        const inputImage = getInputImage(node.id)
+        // 그룹 소스 생성: 입력이 여러 개면 첫 번째가 기본, 나머지는 참조 이미지
+        const inputImages = getInputImages(node.id)
         // 시간대/조명 설정을 프롬프트에 합성 (구 플러그인의 build_render_prompt 역할)
         const lighting = buildLightingDescription(
           params.timePreset ?? 'day',
@@ -180,7 +190,8 @@ async function executeNode(node: NodeData): Promise<void> {
         )
         result = await renderMain({
           engine: params.engine,
-          image: inputImage ?? '',
+          image: inputImages[0] ?? '',
+          extraImages: inputImages.length > 1 ? inputImages.slice(1) : undefined,
           prompt: `${params.prompt}\n\n[LIGHTING]\n${lighting}`,
           systemPrompt: '',
           negativePrompt: params.negativePrompt ?? '',

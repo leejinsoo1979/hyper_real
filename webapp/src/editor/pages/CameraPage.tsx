@@ -78,8 +78,8 @@ export function CameraPage() {
     return (
       <div className="flex flex-1 items-center justify-center" style={{ backgroundColor: '#111118' }}>
         <div className="text-center" style={{ color: '#666677', fontSize: 13, lineHeight: 1.8 }}>
-          SketchUp이 연결되어 있지 않습니다.<br />
-          SketchUp을 실행하면 (플러그인 설치 필요) 자동으로 연결됩니다.
+          3D 툴이 연결되어 있지 않습니다.<br />
+          SketchUp·Blender·Rhino를 실행하면 (플러그인 설치 필요) 자동으로 연결됩니다.
         </div>
       </div>
     )

@@ -184,6 +184,8 @@ export interface GeminiResult {
 
 export interface CallGeminiOptions {
   image: string // data URI or raw base64
+  /** 추가 참조 이미지 (그룹 소스 생성: 기본 이미지 뒤에 순서대로 전달) */
+  extraImages?: string[]
   maskImage?: string // 선택 영역 마스크 (두 번째 이미지로 전달)
   prompt: string
   engine?: string // maps to model
@@ -212,6 +214,10 @@ export async function callGemini(
   }
 
   const parts: Record<string, unknown>[] = [{ inlineData: { mimeType, data: base64 } }]
+  for (const extra of opts.extraImages ?? []) {
+    const ex = stripDataUri(extra)
+    parts.push({ inlineData: { mimeType: ex.mimeType, data: ex.base64 } })
+  }
   if (opts.maskImage) {
     const mk = stripDataUri(opts.maskImage)
     parts.push({ inlineData: { mimeType: mk.mimeType, data: mk.base64 } })

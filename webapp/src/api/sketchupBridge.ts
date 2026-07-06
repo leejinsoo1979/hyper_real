@@ -120,9 +120,10 @@ export function isBridgeOrigin(origin: unknown): boolean {
   return origin === 'sketchup' || origin === 'blender' || origin === 'rhino'
 }
 
-/** 연결된 툴의 표시 이름 ('SketchUp' | 'Blender' | 'Rhino'). 미연결이면 기본값 */
-export function bridgeToolLabel(): string {
-  const tool = useUIStore.getState().bridgeTool ?? 'sketchup'
+/** 연결된 툴의 표시 이름 ('SketchUp' | 'Blender' | 'Rhino'). 미연결이면 중립 라벨 */
+export function bridgeToolLabel(fallback = '3D 툴'): string {
+  const tool = useUIStore.getState().bridgeTool
+  if (!tool) return fallback
   return tool === 'sketchup' ? 'SketchUp' : tool[0].toUpperCase() + tool.slice(1)
 }
 

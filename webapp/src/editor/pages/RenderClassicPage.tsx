@@ -163,8 +163,8 @@ export function RenderClassicPage() {
   const [viewerOpen, setViewerOpen] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const viewport = useUIStore((st) => st.sketchUpViewport)
-  const bridgeTool = useUIStore((st) => st.bridgeTool) // 라벨 반응성용 구독
-  const toolLabel = bridgeTool ? bridgeToolLabel() : 'SketchUp'
+  const bridgeTool = useUIStore((st) => st.bridgeTool) // 노드 탐색 + 라벨 반응성
+  const toolLabel = bridgeToolLabel() // 미연결이면 '3D 툴' (SketchUp 전용 아님)
 
   // 3D 툴 미러 이미지 (브릿지가 그래프의 소스 노드에 주입 — 연결 툴에 따라 origin이 다름)
   // 툴을 오간 경우 소스 노드가 툴별로 존재할 수 있으므로 현재 연결 툴의 노드를 우선한다

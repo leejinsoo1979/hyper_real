@@ -9,6 +9,8 @@ export interface EngineAdapter {
 export interface RenderInput {
   engine: string
   image: string
+  /** 추가 입력 이미지 (그룹 소스 생성 — 여러 노드를 입력으로 연결한 경우) */
+  extraImages?: string[]
   prompt: string
   systemPrompt: string
   negativePrompt: string
