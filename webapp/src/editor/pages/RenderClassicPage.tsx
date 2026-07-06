@@ -149,13 +149,14 @@ declare global {
 }
 
 // 스포이드 커서 (핫스팟 = 촉 끝 좌하단). 흰 외곽선 + 검정 본선이라 밝고 어두운 배경 모두에서 보인다
+// 표준 커서 크기(~18px)로 렌더링 — 24px + 두꺼운 외곽선은 커서로는 과대
 const EYEDROPPER_CURSOR = (() => {
   const paths = '<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/>'
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">`
-    + `<g stroke="white" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`
-    + `<g stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none">`
+    + `<g stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`
+    + `<g stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`
     + '</svg>'
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 2 22, crosshair`
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 1 17, crosshair`
 })()
 
 // ── 메인 페이지 ──────────────────────────────────────────────────────────────
@@ -192,10 +193,10 @@ export function RenderClassicPage() {
   }, [])
 
   // ── 스포이드 재질 교체 ──────────────────────────────────────────────────
-  const [pickedMaterial, setPickedMaterial] = useState<string | null>(null)
+  const [pickedMaterial, setPickedMaterial] = useState<{ material: string; thumb: string | null } | null>(null)
 
   // 소스 이미지 클릭(비율 좌표) → ID 마스크 픽셀 색 → 재질 이름
-  const handleSourcePick = useCallback(async (fx: number, fy: number) => {
+  const handleSourcePick = useCallback(async (fx: number, fy: number, imageSrc: string) => {
     const st = useClassicStore.getState()
     if (st.sourceTool !== 'eyedropper') return
 
@@ -243,7 +244,29 @@ export function RenderClassicPage() {
       useClassicStore.getState().set({ statusText: '해당 지점의 재질을 인식하지 못했습니다 (배경/하늘일 수 있음)' })
       return
     }
-    setPickedMaterial(entry.material)
+
+    // 클릭 지점 주변 소스 이미지를 잘라 썸네일로 — 브릿지 텍스처가 없어도 항상 표시된다
+    const thumb = await new Promise<string | null>((resolve) => {
+      const src = new Image()
+      src.onload = () => {
+        try {
+          const cw = Math.round(Math.min(src.naturalWidth, src.naturalHeight) * 0.22)
+          const cx = Math.max(0, Math.min(src.naturalWidth - cw, Math.round(fx * src.naturalWidth - cw / 2)))
+          const cy = Math.max(0, Math.min(src.naturalHeight - cw, Math.round(fy * src.naturalHeight - cw / 2)))
+          const cc = document.createElement('canvas')
+          cc.width = 200
+          cc.height = 200
+          cc.getContext('2d')!.drawImage(src, cx, cy, cw, cw, 0, 0, 200, 200)
+          resolve(cc.toDataURL('image/jpeg', 0.85))
+        } catch {
+          resolve(null)
+        }
+      }
+      src.onerror = () => resolve(null)
+      src.src = imageSrc
+    })
+
+    setPickedMaterial({ material: entry.material, thumb })
   }, [])
 
   const addSwap = useCallback((replacement: MaterialSwap['replacement']) => {
@@ -252,11 +275,11 @@ export function RenderClassicPage() {
     const st = useClassicStore.getState()
     st.set({
       materialSwaps: [
-        ...st.materialSwaps.filter((sw) => sw.material !== material),
-        { material, replacement },
+        ...st.materialSwaps.filter((sw) => sw.material !== material.material),
+        { material: material.material, replacement },
       ],
       sourceTool: 'none',
-      statusText: `재질 교체 지정: ${material} → ${replacement.name} (생성 시 적용됩니다)`,
+      statusText: `재질 교체 지정: ${material.material} → ${replacement.name} (생성 시 적용됩니다)`,
     })
     setPickedMaterial(null)
   }, [pickedMaterial])
@@ -961,7 +984,7 @@ function SwapPreviewBox({ title, name, thumb, color, empty }: {
 }
 
 function MaterialSwapDialog({ material, onApply, onClose }: {
-  material: string
+  material: { material: string; thumb: string | null }
   onApply: (replacement: MaterialSwap['replacement']) => void
   onClose: () => void
 }) {
@@ -976,13 +999,13 @@ function MaterialSwapDialog({ material, onApply, onClose }: {
     let cancelled = false
     void getCachedSourceMaterials().then((list) => {
       if (cancelled || !list) return
-      const found = list.find((m) => m.name === material)
+      const found = list.find((m) => m.name === material.material)
       if (found) {
         setSourcePreview({ thumb: materialTextureUri(found), color: found.color })
       }
     })
     return () => { cancelled = true }
-  }, [material])
+  }, [material.material])
 
   const pickLibrary = (asset: MaterialAsset) => {
     setReplacement({ kind: 'library', name: asset.name, prompt: asset.prompt })
@@ -1031,7 +1054,7 @@ function MaterialSwapDialog({ material, onApply, onClose }: {
 
         {/* 좌: 원본 재질 → 우: 교체 재질 */}
         <div className="flex items-center gap-3" style={{ padding: '16px 22px', borderBottom: '1px solid #20202a' }}>
-          <SwapPreviewBox title="스포이드로 선택한 재질" name={material} thumb={sourcePreview.thumb} color={sourcePreview.color} />
+          <SwapPreviewBox title="스포이드로 선택한 재질" name={material.material} thumb={sourcePreview.thumb ?? material.thumb} color={sourcePreview.color} />
           <span style={{ color: '#00c9a7', fontSize: 22, fontWeight: 800, flexShrink: 0 }}>→</span>
           <SwapPreviewBox
             title="교체할 재질"
@@ -1211,7 +1234,7 @@ function Panel({ label, labelRight, active, image, emptyText, emptyContent, load
   /** 이미지 영역 좌상단 툴바 (스포이드 등) */
   imageToolbar?: React.ReactNode
   /** 이미지 클릭 시 이미지 내 비율 좌표(0~1)로 콜백 — 지정되면 십자 커서 */
-  onImagePick?: (fx: number, fy: number) => void
+  onImagePick?: (fx: number, fy: number, imageSrc: string) => void
   /** 이미지 영역 하단 오버레이 (재질 교체 칩 등) */
   imageFooter?: React.ReactNode
 }) {
@@ -1275,7 +1298,7 @@ function Panel({ label, labelRight, active, image, emptyText, emptyContent, load
                 const x = e.clientX - r.left - (r.width - iw) / 2
                 const y = e.clientY - r.top - (r.height - ih) / 2
                 if (x < 0 || y < 0 || x > iw || y > ih) return
-                onImagePick(x / iw, y / ih)
+                onImagePick(x / iw, y / ih, el.src)
               } : undefined}
             />
             {onView && (
