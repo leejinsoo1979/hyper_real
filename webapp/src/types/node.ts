@@ -59,8 +59,8 @@ export interface UpscaleParams {
 }
 
 export interface VideoParams {
-  // 실물 Lumanova 엔진 4종 (docs/VIDEO_ANALYSIS.md §6)
-  engine: 'kling' | 'seedance' | 'sora' | 'veo'
+  // 실물 Lumanova 엔진 4종 (docs/VIDEO_ANALYSIS.md §6) + Grok Imagine (실제 연동)
+  engine: 'grok' | 'kling' | 'seedance' | 'sora' | 'veo'
   duration: 5 | 10
   prompt: string
   endFrameImage: string | null

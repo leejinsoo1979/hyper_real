@@ -14,6 +14,8 @@ export function PreviewTab({ selectedNode }: PreviewTabProps) {
 
   const image = selectedNode?.result?.image ?? null
   const resolution = selectedNode?.result?.resolution ?? null
+  const rawVideo = selectedNode?.result?.video ?? null
+  const video = rawVideo && rawVideo.startsWith('http') ? rawVideo : null
 
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
@@ -59,6 +61,19 @@ export function PreviewTab({ selectedNode }: PreviewTabProps) {
         style={{ minHeight: 200, color: '#555555', fontSize: 13 }}
       >
         No image selected
+      </div>
+    )
+  }
+
+  if (video) {
+    return (
+      <div style={{ minHeight: 200 }}>
+        <video src={video} controls autoPlay loop muted playsInline className="w-full" style={{ display: 'block' }} />
+        <div className="flex justify-end" style={{ padding: '6px 8px' }}>
+          <a href={video} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: '#00c9a7' }}>
+            새 탭에서 열기 / 저장
+          </a>
+        </div>
       </div>
     )
   }

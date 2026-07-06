@@ -1,9 +1,10 @@
 import type { VideoInput } from '../../types/engine'
 import type { NodeResult } from '../../types/node'
+import { generateGrokVideo } from '../xaiClient'
 
-// Video generation uses dedicated video APIs (Kling, Seedance) rather than
-// Gemini image generation. The real implementation will call those services
-// once their adapters are ready. For now, all paths return the mock.
+// Video generation:
+// - 'grok'  → xAI Grok Imagine API (실제 생성)
+// - 그 외(kling/seedance/sora/veo) → 어댑터 준비 전까지 mock
 
 // ── Mock ───────────────────────────────────────────────────────────────────
 
@@ -12,6 +13,20 @@ function delay(ms: number): Promise<void> {
 }
 
 export async function generateVideo(input: VideoInput): Promise<NodeResult> {
+  if (input.engine === 'grok') {
+    const videoUrl = await generateGrokVideo({
+      image: input.image,
+      prompt: input.prompt,
+      duration: input.duration,
+    })
+    return {
+      image: input.image,
+      video: videoUrl,
+      timestamp: new Date().toISOString(),
+      cacheKey: '',
+    }
+  }
+
   await delay(5000)
   return {
     image: input.image,

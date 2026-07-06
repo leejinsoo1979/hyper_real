@@ -8,6 +8,7 @@ import logoRhino from '../../assets/plugin-logos/rhino.png'
 import logoUnreal from '../../assets/plugin-logos/unreal.png'
 import logoBlender from '../../assets/plugin-logos/blender.png'
 import { getStoredApiKey, setStoredApiKey } from '../../engine/geminiClient'
+import { getStoredXaiApiKey, setStoredXaiApiKey } from '../../engine/xaiClient'
 import { saasMode } from '../../api/lumanovaApi'
 import { useUIStore } from '../../state/uiStore'
 
@@ -468,31 +469,74 @@ function PluginDownloadRow({ name, hint, href, label }: { name: string; hint: st
   )
 }
 
-// Gemini API Key: 개발자 모드에선 필수, SaaS 모드에선 선택(본인 키 사용 시 크레딧 미차감)
+// API Keys: Gemini(렌더링) + xAI Grok(영상 생성)
+// 개발자 모드에선 Gemini 필수, SaaS 모드에선 선택(본인 키 사용 시 크레딧 미차감)
 function ApiKeySection({ saas }: { saas: boolean }) {
-  const [apiKey, setApiKey] = useState(() => getStoredApiKey() ?? '')
+  return (
+    <Section title="API Keys">
+      {saas && (
+        <div className="mb-3" style={{ fontSize: 11.5, color: '#71717c' }}>
+          기본적으로 키는 필요 없습니다(크레딧으로 렌더링). 본인 키를 입력하면 크레딧 차감 없이 본인 키로 처리합니다.
+        </div>
+      )}
+      <ApiKeyRow
+        label="Gemini (이미지 렌더링)"
+        placeholder="AIza..."
+        read={() => getStoredApiKey() ?? ''}
+        write={setStoredApiKey}
+        issueHref="https://aistudio.google.com/apikey"
+        issueLabel="Google AI Studio에서 발급"
+      />
+      <div style={{ borderTop: '1px solid #22222a', margin: '14px 0' }} />
+      <ApiKeyRow
+        label="xAI Grok (이미지 → 영상 생성)"
+        placeholder="xai-..."
+        read={() => getStoredXaiApiKey() ?? ''}
+        write={setStoredXaiApiKey}
+        issueHref="https://console.x.ai"
+        issueLabel="xAI Console에서 발급"
+      />
+      <div style={{ marginTop: 10, fontSize: 11.5, color: '#71717c' }}>
+        키는 이 컴퓨터(브라우저)에만 저장되며 서버로 전송되지 않습니다.
+      </div>
+    </Section>
+  )
+}
+
+function ApiKeyRow({
+  label,
+  placeholder,
+  read,
+  write,
+  issueHref,
+  issueLabel,
+}: {
+  label: string
+  placeholder: string
+  read: () => string
+  write: (key: string) => void
+  issueHref: string
+  issueLabel: string
+}) {
+  const [apiKey, setApiKey] = useState(read)
   const [saved, setSaved] = useState(false)
   const [revealed, setRevealed] = useState(false)
 
   const handleSave = () => {
-    setStoredApiKey(apiKey.trim())
+    write(apiKey.trim())
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
 
   return (
-    <Section title={saas ? 'API Key (선택)' : 'Gemini API Key'}>
-      {saas && (
-        <div className="mb-3" style={{ fontSize: 11.5, color: '#71717c' }}>
-          기본적으로 키는 필요 없습니다(크레딧으로 렌더링). 본인 Gemini 키를 입력하면 크레딧 차감 없이 본인 키로 렌더링합니다.
-        </div>
-      )}
+    <div>
+      <div style={{ marginBottom: 6, fontSize: 12.5, fontWeight: 600, color: '#c8c8d0' }}>{label}</div>
       <div className="flex gap-2">
         <input
           type={revealed ? 'text' : 'password'}
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
-          placeholder="AIza..."
+          placeholder={placeholder}
           className="flex-1 rounded-lg px-3 outline-none"
           style={{ height: 38, background: '#0d0d15', border: '1px solid #26262f', color: '#fff', fontSize: 13 }}
         />
@@ -509,12 +553,11 @@ function ApiKeySection({ saas }: { saas: boolean }) {
           {saved ? '저장됨 ✓' : '저장'}
         </button>
       </div>
-      <div style={{ marginTop: 8, fontSize: 11.5, color: '#71717c' }}>
-        키는 이 컴퓨터에만 저장됩니다.{' '}
-        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{ color: '#00c9a7' }}>
-          Google AI Studio에서 발급
+      <div style={{ marginTop: 6, fontSize: 11.5, color: '#71717c' }}>
+        <a href={issueHref} target="_blank" rel="noreferrer" style={{ color: '#00c9a7' }}>
+          {issueLabel}
         </a>
       </div>
-    </Section>
+    </div>
   )
 }

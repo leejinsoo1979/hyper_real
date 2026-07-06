@@ -40,7 +40,7 @@ function getDefaultParams(type: NodeType): NodeParams {
     case 'UPSCALE':
       return { scale: 2 as const, optimizedFor: 'standard' as const, creativity: 0, detailStrength: 0, similarity: 0, promptStrength: 0, prompt: 'Upscale' }
     case 'VIDEO':
-      return { engine: 'kling' as const, duration: 5 as const, prompt: 'Move forward', endFrameImage: null }
+      return { engine: 'grok' as const, duration: 5 as const, prompt: 'Move forward', endFrameImage: null }
     case 'COMPARE':
       return { mode: 'slider' as const }
   }

@@ -479,6 +479,7 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
                 label="Engine"
                 value={(selectedNode.params as VideoParams).engine}
                 options={[
+                  { value: 'grok', label: 'Grok Imagine 1.5' },
                   { value: 'kling', label: 'Kling v2.1' },
                   { value: 'seedance', label: 'Seedance' },
                   { value: 'sora', label: 'Sora' },
