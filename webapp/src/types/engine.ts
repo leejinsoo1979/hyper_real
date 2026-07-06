@@ -46,6 +46,7 @@ export interface VideoInput {
   image: string
   endFrame: string | null
   duration: number
+  resolution?: '480p' | '720p' | '1080p'
   prompt: string
 }
 

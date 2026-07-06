@@ -18,6 +18,7 @@ export async function generateVideo(input: VideoInput): Promise<NodeResult> {
       image: input.image,
       prompt: input.prompt,
       duration: input.duration,
+      resolution: input.resolution ?? '1080p',
     })
     return {
       image: input.image,

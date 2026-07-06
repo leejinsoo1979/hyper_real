@@ -243,6 +243,7 @@ async function executeNode(node: NodeData): Promise<void> {
           image: inputImage,
           endFrame: params.endFrameImage,
           duration: params.duration,
+          resolution: params.resolution ?? '1080p',
           prompt: params.prompt,
         })
         break

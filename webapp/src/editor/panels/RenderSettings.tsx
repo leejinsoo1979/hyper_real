@@ -564,6 +564,21 @@ export function RenderSettings({ selectedNode }: RenderSettingsProps) {
                   })
                 }
               />
+
+              <SettingsDropdown
+                label="Resolution"
+                value={(selectedNode.params as VideoParams).resolution ?? '1080p'}
+                options={[
+                  { value: '1080p', label: '1080p (고품질)' },
+                  { value: '720p', label: '720p' },
+                  { value: '480p', label: '480p (빠름·저렴)' },
+                ]}
+                onChange={(v) =>
+                  updateNodeParams(selectedNode.id, {
+                    resolution: v as VideoParams['resolution'],
+                  })
+                }
+              />
             </>
           )}
         </div>

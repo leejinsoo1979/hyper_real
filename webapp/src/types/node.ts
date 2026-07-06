@@ -63,6 +63,8 @@ export interface VideoParams {
   // 실물 Lumanova 엔진 4종 (docs/VIDEO_ANALYSIS.md §6) + Grok Imagine (실제 연동)
   engine: 'grok' | 'kling' | 'seedance' | 'sora' | 'veo'
   duration: 5 | 10
+  /** 출력 해상도 (xAI 기본값이 480p라 명시 필수) */
+  resolution: '480p' | '720p' | '1080p'
   prompt: string
   endFrameImage: string | null
 }
