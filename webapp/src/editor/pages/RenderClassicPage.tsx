@@ -367,6 +367,7 @@ export function RenderClassicPage() {
       }
       useClassicStore.getState().set({
         resultImage: finalImage,
+        renderSourceImage: input,
         rendering: false,
         statusText: selMask
           ? '선택 부위만 적용 완료 (나머지 영역은 원본 유지)'
@@ -725,7 +726,11 @@ export function RenderClassicPage() {
       )}
 
       {viewerOpen && s.resultImage && (
-        <ImageLightbox image={s.resultImage} onClose={() => setViewerOpen(false)} />
+        <ImageLightbox
+          image={s.resultImage}
+          compareImage={s.renderSourceImage}
+          onClose={() => setViewerOpen(false)}
+        />
       )}
     </div>
   )

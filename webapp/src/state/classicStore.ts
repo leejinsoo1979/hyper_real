@@ -17,6 +17,8 @@ interface ClassicState {
   // 이미지: frozenSource는 Convert/업로드로 고정된 소스 (mirror OFF 시 유지)
   frozenSource: string | null
   resultImage: string | null
+  // 마지막 렌더에 입력으로 쓰인 이미지 (확대 보기의 Compare 슬라이더 쌍)
+  renderSourceImage: string | null
 
   sourcePrompt: string
   sourceNegative: string
@@ -52,6 +54,7 @@ export const useClassicStore = create<ClassicState>((set) => ({
 
   frozenSource: null,
   resultImage: null,
+  renderSourceImage: null,
 
   sourcePrompt: '',
   sourceNegative: '',
