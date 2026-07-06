@@ -156,6 +156,63 @@ function PresetCard({
   )
 }
 
+function VideoPresetRow({
+  preset,
+  isSelected,
+  onClick,
+}: {
+  preset: PromptPreset
+  isSelected: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left transition-colors duration-150"
+      style={{
+        padding: '10px 11px',
+        borderRadius: 8,
+        background: isSelected ? 'rgba(0,201,167,0.11)' : '#1c1c25',
+        border: isSelected ? '1px solid rgba(0,201,167,0.58)' : '1px solid #26262f',
+      }}
+    >
+      <div className="flex items-start gap-2.5">
+        <div
+          className="flex items-center justify-center"
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 8,
+            background: isSelected ? 'rgba(0,201,167,0.14)' : '#15151d',
+            color: isSelected ? '#00c9a7' : '#a9a9b4',
+            flex: '0 0 auto',
+          }}
+        >
+          {getPresetIcon(preset.id, 18)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div style={{ color: isSelected ? '#dffdf8' : '#f0f0f5', fontSize: 12.5, fontWeight: 800 }}>
+            {preset.name}
+          </div>
+          <div
+            className="mt-1 overflow-hidden"
+            style={{
+              color: '#8f95a3',
+              fontSize: 11,
+              lineHeight: 1.35,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+            }}
+          >
+            {preset.visualConstraints}
+          </div>
+        </div>
+      </div>
+    </button>
+  )
+}
+
 export function PromptPresets({ selectedNode }: PromptPresetsProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [tab, setTab] = useState<'Prompt Presets' | 'My Presets'>('Prompt Presets')
@@ -183,6 +240,7 @@ export function PromptPresets({ selectedNode }: PromptPresetsProps) {
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
 
   const presets = selectedNode ? getPresetsForNodeType(selectedNode.type) : []
+  const isVideoNode = selectedNode?.type === 'VIDEO'
 
   const handlePresetClick = useCallback(
     (preset: PromptPreset) => {
@@ -259,7 +317,20 @@ export function PromptPresets({ selectedNode }: PromptPresetsProps) {
         </button>
       </div>
 
-      {!collapsed && tab === 'Prompt Presets' && (
+      {!collapsed && tab === 'Prompt Presets' && isVideoNode && (
+        <div className="grid gap-2 px-4 py-4">
+          {presets.map((preset) => (
+            <VideoPresetRow
+              key={preset.id}
+              preset={preset}
+              isSelected={selectedPresetId === preset.id}
+              onClick={() => handlePresetClick(preset)}
+            />
+          ))}
+        </div>
+      )}
+
+      {!collapsed && tab === 'Prompt Presets' && !isVideoNode && (
         <div className="grid grid-cols-3 gap-2 px-4 py-4">
           {presets.map((preset) => (
             <PresetCard

@@ -46,7 +46,7 @@ function getDefaultParams(type: NodeType): NodeParams {
       return {
         engine: 'grok' as const,
         duration: 5 as const,
-        prompt: 'Create a restrained architectural walkthrough: a slow forward dolly into the space with subtle handheld stabilization, natural parallax on furniture and walls, realistic interior lighting, and no changes to layout, materials, objects, or camera height.',
+        prompt: 'Generate a minimal premium camera drift. Keep the composition almost identical to the source image, adding only a very subtle stabilized motion, micro parallax, natural exposure breathing, and gentle lens realism. Preserve all geometry, subject identity, object placement, materials, lighting, and framing with maximum fidelity.',
         endFrameImage: null,
       }
     case 'COMPARE':

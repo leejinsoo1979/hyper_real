@@ -66,23 +66,27 @@ function buildVideoPrompt(prompt: string): string {
   const trimmed = prompt.trim()
   const direction = trimmed.length > 0
     ? trimmed
-    : 'Create a slow architectural walkthrough with natural stabilized camera movement.'
+    : 'Generate a minimal premium camera drift with subtle parallax, natural exposure breathing, and maximum fidelity to the source image.'
 
-  return `${direction}
+  return `[CREATIVE DIRECTION]
+${direction}
 
-Motion direction:
-- Use refined architectural visualization pacing, not fast action movement.
-- Keep motion slow, stabilized, cinematic, and physically plausible.
-- Add subtle parallax and depth only where it naturally follows the camera move.
+[SOURCE IMAGE PRESERVATION - CRITICAL]
+- Treat the input image as the locked source frame.
+- Preserve the exact subject identity, architecture, room layout, object placement, furniture, materials, colors, lighting direction, proportions, and camera framing.
+- Do not add objects, remove objects, redesign the scene, change product details, alter logos/text, change human identity, or invent new background elements.
 
-Scene preservation:
-- Preserve the exact architecture, room layout, camera height, object placement, furniture, materials, lighting design, and proportions from the input image.
-- Do not add objects, remove objects, remodel geometry, change colors, or alter the design intent.
-- Keep vertical lines stable, avoid warping, flicker, melting, object drift, and perspective jumps.
+[CAMERA AND MOTION]
+- Use professional stabilized camera movement appropriate to the selected template.
+- Keep movement smooth, physically plausible, and restrained unless the creative direction explicitly asks for stronger motion.
+- Add believable parallax, lens breathing, depth-of-field, exposure roll-off, and atmospheric motion only when they support the shot.
+- Keep vertical architectural lines stable and preserve scale relationships.
 
-Output style:
-- Photorealistic premium interior/architectural video.
-- Smooth exposure, clean details, no text, no logos, no artificial effects.`
+[VIDEO QUALITY]
+- Photorealistic premium commercial video quality.
+- Smooth temporal consistency, clean edges, stable textures, realistic reflections, no frame-to-frame flicker.
+- No melting, warping, object drift, geometry bending, extra limbs, duplicated objects, or perspective jumps.
+- No added captions, watermarks, subtitles, UI, logos, or graphic overlays.`
 }
 
 /** Grok Imagine으로 이미지 → 영상 생성. 완료된 영상 URL을 반환한다. */
