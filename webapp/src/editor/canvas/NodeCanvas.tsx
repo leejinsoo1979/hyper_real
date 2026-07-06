@@ -18,7 +18,6 @@ import {
   ReactFlowProvider,
   BaseEdge,
   getBezierPath,
-  SelectionMode,
   type EdgeProps,
   type EdgeTypes,
 } from '@xyflow/react'
@@ -736,7 +735,6 @@ function NodeCanvasInner() {
         // 이동 툴: 드래그 = 팬
         panOnDrag={canvasTool === 'pan' ? true : [1, 2]}
         selectionOnDrag={canvasTool === 'select'}
-        selectionMode={SelectionMode.Partial}
         multiSelectionKeyCode="Shift"
         selectNodesOnDrag={false}
       >
@@ -754,62 +752,78 @@ function NodeCanvasInner() {
         </span>
       </div>
 
-      {/* 좌하단 캔버스 툴바: 선택(마퀴) / 이동(팬) — VizMaker 동일 위치 */}
-      <div
-        className="absolute flex items-center gap-1"
-        style={{
-          left: 14, bottom: 14, zIndex: 20, padding: 4,
-          borderRadius: 10, background: '#16161e', border: '1px solid #26262f',
-          boxShadow: '0 6px 18px rgba(0,0,0,.35)',
-        }}
-      >
-        {([
-          { key: 'select', icon: <MousePointer2 size={16} />, title: '선택 — 드래그로 여러 노드를 박스 선택 (Shift 클릭 추가)' },
-          { key: 'pan', icon: <Hand size={16} />, title: '이동 — 드래그로 캔버스 이동' },
-        ] as const).map((t) => (
-          <button
-            key={t.key}
-            title={t.title}
-            onClick={() => setCanvasTool(t.key)}
-            className="flex items-center justify-center rounded-md"
+      {/* 캔버스 툴바: 선택(마퀴) / 이동(팬) — 실물 VizMaker처럼 캔버스 우상단 세로 스택 */}
+      {!isEmpty && (
+        <div className="absolute flex flex-col items-end gap-2" style={{ right: 14, top: 14, zIndex: 20 }}>
+          <div
+            className="flex flex-col gap-1"
             style={{
-              width: 34, height: 34,
-              background: canvasTool === t.key ? '#00c9a7' : 'transparent',
-              color: canvasTool === t.key ? '#06251f' : '#9a9aa6',
+              padding: 4, borderRadius: 10,
+              background: '#16161e', border: '1px solid #26262f',
+              boxShadow: '0 6px 18px rgba(0,0,0,.35)',
             }}
           >
-            {t.icon}
-          </button>
-        ))}
-        {selectedNodeIds.length > 1 && (
-          <span style={{ padding: '0 10px', fontSize: 11.5, color: '#35e5cf', whiteSpace: 'nowrap' }}>
-            {selectedNodeIds.length}개 선택됨
-          </span>
-        )}
-      </div>
+            {([
+              { key: 'select', icon: <MousePointer2 size={16} />, title: '선택 — 드래그로 여러 노드를 박스 선택 (Shift 클릭 추가)' },
+              { key: 'pan', icon: <Hand size={16} />, title: '이동 — 드래그로 캔버스 이동' },
+            ] as const).map((t) => (
+              <button
+                key={t.key}
+                title={t.title}
+                onClick={() => setCanvasTool(t.key)}
+                className="flex items-center justify-center rounded-md"
+                style={{
+                  width: 34, height: 34,
+                  background: canvasTool === t.key ? '#00c9a7' : 'transparent',
+                  color: canvasTool === t.key ? '#06251f' : '#9a9aa6',
+                }}
+              >
+                {t.icon}
+              </button>
+            ))}
+          </div>
+          {selectedNodeIds.length > 1 && (
+            <span
+              style={{
+                padding: '3px 10px', borderRadius: 999, fontSize: 11.5, whiteSpace: 'nowrap',
+                background: '#122a28', color: '#35e5cf', border: '1px solid #1f5952',
+              }}
+            >
+              {selectedNodeIds.length}개 선택됨
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Empty state overlay */}
       {isEmpty && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="pointer-events-auto flex flex-col items-center gap-3">
+          <div className="pointer-events-auto flex flex-col items-center" style={{ transform: 'translateY(-18px)' }}>
             <div
               className="flex items-center justify-center rounded-lg"
               style={{
-                width: 80,
-                height: 80,
-                border: '2px dashed #555555',
+                width: 104,
+                height: 104,
+                border: '3px dashed rgba(170,170,178,.46)',
+                borderRadius: 16,
+                color: '#6f6f78',
               }}
             >
-              <ImageIcon size={32} style={{ color: '#555555' }} />
+              <ImageIcon size={48} strokeWidth={1.7} />
             </div>
-            <p style={{ color: '#888888', fontSize: 14 }}>
+            <p className="mt-7" style={{ color: '#a1a1aa', fontSize: 28, lineHeight: 1.2, letterSpacing: 0 }}>
               Drag and drop an image to get started, or
             </p>
             <button
-              className="flex items-center gap-2 rounded-md px-5 py-2 text-sm font-medium transition-colors duration-150"
+              className="mt-8 flex items-center justify-center gap-3 rounded-xl transition-colors duration-150"
               style={{
+                minWidth: 222,
+                height: 72,
                 backgroundColor: '#00c9a7',
                 color: '#ffffff',
+                fontSize: 28,
+                fontWeight: 500,
+                boxShadow: '0 18px 38px rgba(0,201,167,.18)',
               }}
               onMouseEnter={(e) =>
                 (e.currentTarget.style.backgroundColor = '#00ddb8')
@@ -819,7 +833,7 @@ function NodeCanvasInner() {
               }
               onClick={handleBrowse}
             >
-              <FolderOpen size={14} />
+              <FolderOpen size={30} strokeWidth={1.8} />
               Browse
             </button>
           </div>

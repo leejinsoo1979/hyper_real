@@ -61,6 +61,10 @@ export default async function handler(req, res) {
           prompt: fieldString(fields, 'prompt'),
           thumbnail: fieldString(fields, 'thumbnail'),
           sourceThumbnail: fieldString(fields, 'sourceThumbnail'),
+          videoUrl: fieldString(fields, 'videoUrl'),
+          videoFirstFrame: fieldString(fields, 'videoFirstFrame'),
+          videoLastFrame: fieldString(fields, 'videoLastFrame'),
+          targetNodeId: fieldString(fields, 'targetNodeId'),
           createdAt: fieldTimestamp(fields, 'createdAt'),
         }
       })
@@ -70,10 +74,13 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { clientId = '', thumbnail, sourceThumbnail = '', prompt = '', engine = 'main', cost = 0, createdAt = null } = req.body ?? {}
+    const { clientId = '', thumbnail, sourceThumbnail = '', videoUrl = '', videoFirstFrame = '', videoLastFrame = '', targetNodeId = '', prompt = '', engine = 'main', cost = 0, createdAt = null } = req.body ?? {}
     if (!thumbnail || typeof thumbnail !== 'string') return res.status(400).json({ error: 'BAD_REQUEST' })
     if (thumbnail.length > 900_000) return res.status(413).json({ error: 'THUMBNAIL_TOO_LARGE' })
     if (sourceThumbnail && String(sourceThumbnail).length > 900_000) return res.status(413).json({ error: 'SOURCE_THUMBNAIL_TOO_LARGE' })
+    if (videoUrl && String(videoUrl).length > 4000) return res.status(413).json({ error: 'VIDEO_URL_TOO_LARGE' })
+    if (videoFirstFrame && String(videoFirstFrame).length > 900_000) return res.status(413).json({ error: 'VIDEO_FIRST_FRAME_TOO_LARGE' })
+    if (videoLastFrame && String(videoLastFrame).length > 900_000) return res.status(413).json({ error: 'VIDEO_LAST_FRAME_TOO_LARGE' })
 
     const docId = safeDocumentId(clientId)
     const path = docId ? `/users/${user.uid}/history/${docId}` : `/users/${user.uid}/history`
@@ -91,6 +98,10 @@ export default async function handler(req, res) {
           prompt: { stringValue: String(prompt).slice(0, 1500) },
           thumbnail: { stringValue: thumbnail },
           sourceThumbnail: { stringValue: String(sourceThumbnail) },
+          videoUrl: { stringValue: String(videoUrl) },
+          videoFirstFrame: { stringValue: String(videoFirstFrame) },
+          videoLastFrame: { stringValue: String(videoLastFrame) },
+          targetNodeId: { stringValue: String(targetNodeId).slice(0, 120) },
           createdAt: { timestampValue: createdAt ? String(createdAt) : new Date().toISOString() },
         },
       },

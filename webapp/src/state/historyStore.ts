@@ -9,7 +9,7 @@ import type { EdgeData } from '../types/graph'
 interface HistoryState {
   snapshots: GraphSnapshot[]
 
-  saveSnapshot: (nodes: NodeData[], edges: EdgeData[], creditUsed: number) => void
+  saveSnapshot: (nodes: NodeData[], edges: EdgeData[], creditUsed: number, targetNodeId?: string | null) => void
   loadSnapshots: () => Promise<void>
   restoreSnapshot: (snapshotId: string) => GraphSnapshot | undefined
   loadMore: () => void
@@ -130,7 +130,9 @@ function pickEngine(nodes: NodeData[]): string {
   return 'main'
 }
 
-function pickResultImage(nodes: NodeData[], thumbnails: string[] = []): string | null {
+function pickResultImage(nodes: NodeData[], thumbnails: string[] = [], targetNodeId?: string | null): string | null {
+  const target = targetNodeId ? nodes.find((node) => node.id === targetNodeId) : null
+  if (target?.result?.image) return target.result.image
   for (let i = nodes.length - 1; i >= 0; i--) {
     const node = nodes[i]
     if (node.type !== 'SOURCE' && node.result?.image) return node.result.image
@@ -147,6 +149,16 @@ function pickSourceImage(nodes: NodeData[], thumbnails: string[] = []): string |
     if (node.type === 'SOURCE' && node.result?.image) return node.result.image
   }
   return thumbnails[1] ?? null
+}
+
+function pickResultVideo(nodes: NodeData[], fallback?: string, targetNodeId?: string | null): string | null {
+  const target = targetNodeId ? nodes.find((node) => node.id === targetNodeId) : null
+  if (target?.result?.video && target.result.video !== 'mock-video-url') return target.result.video
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const video = nodes[i].result?.video
+    if (video && video !== 'mock-video-url') return video
+  }
+  return fallback && fallback !== 'mock-video-url' ? fallback : null
 }
 
 async function createHistoryPreviewImage(image: string): Promise<string> {
@@ -196,11 +208,57 @@ async function createHistoryPreviewImage(image: string): Promise<string> {
   })
 }
 
+function captureVideoFrame(videoUrl: string, position: 'first' | 'last'): Promise<string | null> {
+  if (typeof document === 'undefined') return Promise.resolve(null)
+  return new Promise((resolve) => {
+    const video = document.createElement('video')
+    const timeout = window.setTimeout(() => finish(null), 12_000)
+    let settled = false
+
+    const finish = (value: string | null) => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(timeout)
+      video.removeAttribute('src')
+      video.load()
+      resolve(value)
+    }
+
+    video.crossOrigin = 'anonymous'
+    video.muted = true
+    video.playsInline = true
+    video.preload = 'auto'
+    video.onloadedmetadata = () => {
+      const duration = Number.isFinite(video.duration) ? video.duration : 0
+      video.currentTime = position === 'last' && duration > 0.3 ? Math.max(0.05, duration - 0.12) : 0.05
+    }
+    video.onseeked = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = video.videoWidth || 1280
+        canvas.height = video.videoHeight || 720
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return finish(null)
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        finish(canvas.toDataURL('image/jpeg', 0.86))
+      } catch {
+        finish(null)
+      }
+    }
+    video.onerror = () => finish(null)
+    video.src = videoUrl
+  })
+}
+
 function snapshotFromServerItem(item: {
   id: string
   clientId?: string
   thumbnail: string
   sourceThumbnail?: string
+  videoUrl?: string
+  videoFirstFrame?: string
+  videoLastFrame?: string
+  targetNodeId?: string
   createdAt: string
   cost: number
   prompt?: string
@@ -224,6 +282,10 @@ function snapshotFromServerItem(item: {
     timestamp: item.createdAt,
     creditUsed: item.cost,
     thumbnails: item.sourceThumbnail ? [item.thumbnail, item.sourceThumbnail] : [item.thumbnail],
+    videoUrl: item.videoUrl ?? '',
+    videoFirstFrame: item.videoFirstFrame ?? '',
+    videoLastFrame: item.videoLastFrame ?? '',
+    targetNodeId: item.targetNodeId ?? null,
     prompt: item.prompt ?? '',
     engine: item.engine ?? 'main',
     sourceThumbnail: item.sourceThumbnail ?? '',
@@ -232,12 +294,15 @@ function snapshotFromServerItem(item: {
 
 async function persistSnapshotToServer(snapshot: GraphSnapshot) {
   if (!saasMode()) return
-  const thumbnail = pickResultImage(snapshot.graph.nodes, snapshot.thumbnails)
+  const thumbnail = snapshot.videoLastFrame || pickResultImage(snapshot.graph.nodes, snapshot.thumbnails, snapshot.targetNodeId)
   if (!thumbnail) return
   const sourceThumbnail = pickSourceImage(snapshot.graph.nodes, snapshot.thumbnails)
+  const videoUrl = pickResultVideo(snapshot.graph.nodes, snapshot.videoUrl, snapshot.targetNodeId)
   const nodes = snapshot.graph.nodes
   const compressed = await createHistoryPreviewImage(thumbnail)
   const compressedSource = sourceThumbnail ? await createHistoryPreviewImage(sourceThumbnail) : ''
+  const compressedVideoFirstFrame = snapshot.videoFirstFrame ? await createHistoryPreviewImage(snapshot.videoFirstFrame) : ''
+  const compressedVideoLastFrame = snapshot.videoLastFrame ? await createHistoryPreviewImage(snapshot.videoLastFrame) : ''
   try {
     await apiSaveHistory({
       clientId: snapshot.id,
@@ -245,6 +310,10 @@ async function persistSnapshotToServer(snapshot: GraphSnapshot) {
       sourceThumbnail: compressedSource,
       prompt: pickPrompt(nodes),
       engine: pickEngine(nodes),
+      videoUrl: videoUrl ?? undefined,
+      videoFirstFrame: compressedVideoFirstFrame || undefined,
+      videoLastFrame: compressedVideoLastFrame || undefined,
+      targetNodeId: snapshot.targetNodeId ?? undefined,
       cost: snapshot.creditUsed,
       createdAt: snapshot.timestamp,
     })
@@ -277,6 +346,10 @@ function mergeServerSnapshotsWithLocalOriginals(serverSnapshots: GraphSnapshot[]
       ...serverSnapshot,
       graph: localSnapshot.graph.nodes.length > 0 ? localSnapshot.graph : serverSnapshot.graph,
       thumbnails: localSnapshot.thumbnails.length > 0 ? localSnapshot.thumbnails : serverSnapshot.thumbnails,
+      videoUrl: localSnapshot.videoUrl || serverSnapshot.videoUrl || pickResultVideo(localSnapshot.graph.nodes) || undefined,
+      videoFirstFrame: localSnapshot.videoFirstFrame || serverSnapshot.videoFirstFrame || undefined,
+      videoLastFrame: localSnapshot.videoLastFrame || serverSnapshot.videoLastFrame || undefined,
+      targetNodeId: localSnapshot.targetNodeId ?? serverSnapshot.targetNodeId ?? null,
       sourceThumbnail: (localSnapshot as GraphSnapshot & { sourceThumbnail?: string }).sourceThumbnail
         || (serverSnapshot as GraphSnapshot & { sourceThumbnail?: string }).sourceThumbnail,
     } as GraphSnapshot
@@ -288,11 +361,46 @@ function mergeServerSnapshotsWithLocalOriginals(serverSnapshots: GraphSnapshot[]
   return mergeSnapshots(localOnly, merged)
 }
 
+async function enrichVideoFrames(snapshotId: string, videoUrl: string) {
+  const [firstFrame, lastFrame] = await Promise.all([
+    captureVideoFrame(videoUrl, 'first'),
+    captureVideoFrame(videoUrl, 'last'),
+  ])
+  if (!firstFrame && !lastFrame) return
+
+  const ownerKey = getHistoryStorageKey()
+  let updatedSnapshot: GraphSnapshot | null = null
+
+  useHistoryStore.setState((state) => {
+    const snapshots = state.snapshots.map((snapshot) => {
+      if (snapshot.id !== snapshotId) return snapshot
+      const next: GraphSnapshot = {
+        ...snapshot,
+        videoFirstFrame: firstFrame ?? snapshot.videoFirstFrame,
+        videoLastFrame: lastFrame ?? snapshot.videoLastFrame,
+        thumbnails: [
+          lastFrame ?? snapshot.videoLastFrame ?? snapshot.thumbnails[0],
+          ...(firstFrame ? [firstFrame] : []),
+          ...snapshot.thumbnails.slice(1),
+        ].filter(Boolean) as string[],
+      }
+      updatedSnapshot = next
+      return next
+    })
+    persistSnapshots(snapshots)
+    void persistSnapshotsToIndexedDb(snapshots, ownerKey)
+    return { snapshots }
+  })
+
+  if (updatedSnapshot) void persistSnapshotToServer(updatedSnapshot)
+}
+
 export const useHistoryStore = create<HistoryState>((set, get) => ({
   snapshots: [],
 
-  saveSnapshot: (nodes, edges, creditUsed) => {
-    const resultImage = pickResultImage(nodes)
+  saveSnapshot: (nodes, edges, creditUsed, targetNodeId = null) => {
+    const resultImage = pickResultImage(nodes, [], targetNodeId)
+    const videoUrl = pickResultVideo(nodes, undefined, targetNodeId)
     const otherImages = nodes
       .filter((n) => n.result?.image && n.result.image !== resultImage)
       .map((n) => n.result!.image!)
@@ -319,6 +427,8 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       timestamp,
       creditUsed,
       thumbnails,
+      videoUrl: videoUrl ?? undefined,
+      targetNodeId,
     }
 
     set((s) => {
@@ -327,6 +437,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       persistSnapshots(snapshots)
       void persistSnapshotsToIndexedDb(snapshots, ownerKey)
       void persistSnapshotToServer(snapshot)
+      if (snapshot.videoUrl) {
+        void enrichVideoFrames(snapshot.id, snapshot.videoUrl)
+      }
       return { snapshots }
     })
   },
@@ -337,6 +450,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     const currentKey = getHistoryStorageKey()
     const storedSnapshots = readSnapshotsByKey(currentKey)
     const storedIds = new Set(storedSnapshots.map((snapshot) => snapshot.id))
+    const indexedSnapshots = await readOwnedSnapshotsFromIndexedDb(currentKey, storedIds)
+    const cachedSnapshots = mergeSnapshots(indexedSnapshots, storedSnapshots)
+    set({ snapshots: cachedSnapshots })
 
     if (saasMode()) {
       try {
@@ -347,6 +463,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         const serverIds = new Set(serverSnapshots.map((snapshot) => snapshot.id))
         const claimableIds = new Set([...storedIds, ...serverIds])
         const localSnapshots = mergeSnapshots(
+          cachedSnapshots,
           await readOwnedSnapshotsFromIndexedDb(currentKey, claimableIds),
           storedSnapshots,
         )
@@ -361,11 +478,6 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         console.warn('[history] 서버 히스토리 조회 실패 — 로컬 캐시로 표시합니다:', err)
       }
     }
-    const localSnapshots = mergeSnapshots(
-      await readOwnedSnapshotsFromIndexedDb(currentKey, storedIds),
-      storedSnapshots,
-    )
-    set({ snapshots: localSnapshots })
   },
 
   restoreSnapshot: (snapshotId) => {

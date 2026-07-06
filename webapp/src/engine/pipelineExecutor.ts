@@ -341,7 +341,7 @@ export async function executePipeline(selectedNodeId: string): Promise<void> {
 
   // 8. Save history snapshot
   const finalState = useGraphStore.getState()
-  historyStore.saveSnapshot(finalState.nodes, finalState.edges, totalCost)
+  historyStore.saveSnapshot(finalState.nodes, finalState.edges, totalCost, selectedNodeId)
 }
 
 // ── Estimate cost for Make button display ──

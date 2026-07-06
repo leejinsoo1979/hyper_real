@@ -75,6 +75,10 @@ export interface HistoryItemDTO {
   prompt: string
   thumbnail: string
   sourceThumbnail: string
+  videoUrl?: string
+  videoFirstFrame?: string
+  videoLastFrame?: string
+  targetNodeId?: string
   createdAt: string
 }
 
@@ -87,6 +91,10 @@ export async function apiSaveHistory(opts: {
   clientId?: string
   thumbnail: string
   sourceThumbnail?: string
+  videoUrl?: string
+  videoFirstFrame?: string
+  videoLastFrame?: string
+  targetNodeId?: string
   prompt?: string
   engine?: string
   cost?: number

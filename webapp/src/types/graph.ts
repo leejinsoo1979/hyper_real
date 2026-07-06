@@ -34,4 +34,8 @@ export interface GraphSnapshot {
   timestamp: string
   creditUsed: number
   thumbnails: string[]
+  videoUrl?: string
+  videoFirstFrame?: string
+  videoLastFrame?: string
+  targetNodeId?: string | null
 }

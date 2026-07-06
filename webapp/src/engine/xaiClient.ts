@@ -62,6 +62,29 @@ export interface GrokVideoOptions {
   duration: number
 }
 
+function buildVideoPrompt(prompt: string): string {
+  const trimmed = prompt.trim()
+  const direction = trimmed.length > 0
+    ? trimmed
+    : 'Create a slow architectural walkthrough with natural stabilized camera movement.'
+
+  return `${direction}
+
+Motion direction:
+- Use refined architectural visualization pacing, not fast action movement.
+- Keep motion slow, stabilized, cinematic, and physically plausible.
+- Add subtle parallax and depth only where it naturally follows the camera move.
+
+Scene preservation:
+- Preserve the exact architecture, room layout, camera height, object placement, furniture, materials, lighting design, and proportions from the input image.
+- Do not add objects, remove objects, remodel geometry, change colors, or alter the design intent.
+- Keep vertical lines stable, avoid warping, flicker, melting, object drift, and perspective jumps.
+
+Output style:
+- Photorealistic premium interior/architectural video.
+- Smooth exposure, clean details, no text, no logos, no artificial effects.`
+}
+
 /** Grok Imagine으로 이미지 → 영상 생성. 완료된 영상 URL을 반환한다. */
 export async function generateGrokVideo(opts: GrokVideoOptions): Promise<string> {
   const key = getStoredXaiApiKey()
@@ -74,7 +97,7 @@ export async function generateGrokVideo(opts: GrokVideoOptions): Promise<string>
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify({
       model: XAI_VIDEO_MODEL,
-      prompt: opts.prompt || 'Animate this scene with a natural, subtle camera movement',
+      prompt: buildVideoPrompt(opts.prompt),
       image: { url: toImageUrl(opts.image) },
       duration: opts.duration,
     }),

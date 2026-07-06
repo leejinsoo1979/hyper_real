@@ -632,6 +632,7 @@ export function RenderClassicPage() {
             active
             image={sourceImage}
             emptyText={`${toolLabel} 연결 대기 중... (또는 이미지 버튼으로 불러오기)`}
+            emptyContent={<SourceDropZone onBrowse={() => fileRef.current?.click()} />}
             loading={s.sourceLoading && !liveStream}
             loadingText={`${toolLabel} 화면 불러오는 중...`}
             video={liveStream ? videoRef : null}
@@ -764,12 +765,53 @@ function PanelAction({ children, title, onClick, disabled, active }: {
   )
 }
 
-function Panel({ label, labelRight, active, image, emptyText, loading, loadingText, video, videoViewport, imageOverlay, viewTabs, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions, onView }: {
+function SourceDropZone({ onBrowse }: { onBrowse: () => void }) {
+  return (
+    <div className="flex flex-col items-center" style={{ transform: 'translateY(-4px)' }}>
+      <div
+        className="flex items-center justify-center"
+        style={{
+          width: 56,
+          height: 56,
+          border: '2px dashed rgba(170,170,178,.44)',
+          borderRadius: 11,
+          color: '#6f6f78',
+        }}
+      >
+        <ImagePlus size={26} strokeWidth={1.6} />
+      </div>
+      <div className="mt-3 text-center" style={{ color: '#a1a1aa', fontSize: 14, lineHeight: 1.25, letterSpacing: 0 }}>
+        Drag and drop an image to get started, or
+      </div>
+      <button
+        onClick={onBrowse}
+        className="mt-3 flex items-center justify-center gap-2 rounded-lg transition-colors duration-150"
+        style={{
+          minWidth: 124,
+          height: 40,
+          backgroundColor: C.accent,
+          color: '#ffffff',
+          fontSize: 15,
+          fontWeight: 600,
+          boxShadow: '0 12px 28px rgba(0,201,167,.16)',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#00ddb8')}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = C.accent)}
+      >
+        <ImagePlus size={18} strokeWidth={1.8} />
+        Browse
+      </button>
+    </div>
+  )
+}
+
+function Panel({ label, labelRight, active, image, emptyText, emptyContent, loading, loadingText, video, videoViewport, imageOverlay, viewTabs, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions, onView }: {
   label: string
   labelRight?: React.ReactNode
   active?: boolean
   image: string | null
   emptyText: string
+  emptyContent?: React.ReactNode
   loading?: boolean
   loadingText?: string
   video?: React.RefObject<HTMLVideoElement | null> | null
@@ -849,6 +891,8 @@ function Panel({ label, labelRight, active, image, emptyText, loading, loadingTe
               </button>
             )}
           </div>
+        ) : emptyContent ? (
+          emptyContent
         ) : (
           <span style={{ color: '#444', fontSize: 12 }}>{emptyText}</span>
         )}

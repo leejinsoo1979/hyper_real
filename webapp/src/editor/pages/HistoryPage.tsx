@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Clock, Download, RotateCcw, Search, ImageIcon, RefreshCw, Eye, ChevronsLeftRight, ArrowLeft, Copy } from 'lucide-react'
+import { Clock, Download, RotateCcw, Search, ImageIcon, RefreshCw, Eye, ChevronsLeftRight, ArrowLeft, Copy, Play } from 'lucide-react'
 import { useHistoryStore } from '../../state/historyStore'
 import { useGraphStore } from '../../state/graphStore'
 import { useUIStore } from '../../state/uiStore'
@@ -37,11 +37,33 @@ function downloadImage(dataUrl: string, filename: string) {
 }
 
 function getResultThumbnail(snapshot: GraphSnapshot): string | null {
+  if (snapshot.videoLastFrame) return snapshot.videoLastFrame
+  if (snapshot.targetNodeId) {
+    const target = snapshot.graph.nodes.find((node) => node.id === snapshot.targetNodeId)
+    if (target?.result?.image) return target.result.image
+  }
   for (let i = snapshot.graph.nodes.length - 1; i >= 0; i--) {
     const node = snapshot.graph.nodes[i]
     if (node.type !== 'SOURCE' && node.result?.image) return node.result.image
   }
   return snapshot.thumbnails[0] ?? null
+}
+
+function getVideoFirstFrame(snapshot: GraphSnapshot): string | null {
+  return snapshot.videoFirstFrame || null
+}
+
+function getSnapshotVideo(snapshot: GraphSnapshot): string | null {
+  if (snapshot.targetNodeId) {
+    const target = snapshot.graph.nodes.find((node) => node.id === snapshot.targetNodeId)
+    if (target?.result?.video && target.result.video !== 'mock-video-url') return target.result.video
+  }
+  if (snapshot.videoUrl) return snapshot.videoUrl
+  for (let i = snapshot.graph.nodes.length - 1; i >= 0; i--) {
+    const video = snapshot.graph.nodes[i].result?.video
+    if (video && video !== 'mock-video-url') return video
+  }
+  return null
 }
 
 function getSourceThumbnail(snapshot: GraphSnapshot): string | null {
@@ -296,8 +318,11 @@ function HistoryCard({ snapshot, onOpen }: { snapshot: GraphSnapshot; onOpen: (s
   const [hovered, setHovered] = useState(false)
 
   const thumbnail = getResultThumbnail(snapshot)
+  const video = getSnapshotVideo(snapshot)
+  const videoFirstFrame = getVideoFirstFrame(snapshot)
   const sourceThumbnail = getSourceThumbnail(snapshot)
-  const showSource = hovered && !!sourceThumbnail && sourceThumbnail !== thumbnail
+  const showSource = !video && hovered && !!sourceThumbnail && sourceThumbnail !== thumbnail
+  const showVideoFirstFrame = !!video && hovered && !!videoFirstFrame && videoFirstFrame !== thumbnail
 
   return (
     <div
@@ -337,12 +362,56 @@ function HistoryCard({ snapshot, onOpen }: { snapshot: GraphSnapshot; onOpen: (s
           />
         )}
 
+        {showVideoFirstFrame && (
+          <img
+            src={videoFirstFrame}
+            alt="Video first frame"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+            style={{ opacity: 1, transition: 'opacity .25s ease' }}
+            draggable={false}
+          />
+        )}
+
         <div
           className="pointer-events-none absolute inset-0"
           style={{
             background: 'linear-gradient(180deg, rgba(0,0,0,0) 52%, rgba(0,0,0,.42) 100%)',
           }}
         />
+
+        {video && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div
+              className="flex items-center justify-center rounded-full"
+              style={{
+                width: 42,
+                height: 42,
+                background: 'rgba(0,0,0,.62)',
+                border: '1px solid rgba(255,255,255,.20)',
+                boxShadow: '0 12px 26px rgba(0,0,0,.42)',
+                color: '#ffffff',
+              }}
+            >
+              <Play size={18} fill="currentColor" />
+            </div>
+          </div>
+        )}
+
+        {video && (
+          <span
+            className="pointer-events-none absolute right-2 top-2 rounded-full px-2 py-0.5"
+            style={{
+              background: 'rgba(0,201,167,.18)',
+              border: '1px solid rgba(0,201,167,.38)',
+              color: '#7df0dc',
+              fontSize: 9,
+              fontWeight: 850,
+              letterSpacing: 0.5,
+            }}
+          >
+            VIDEO
+          </span>
+        )}
 
         {showSource && (
           <span
@@ -400,6 +469,7 @@ function HistoryCard({ snapshot, onOpen }: { snapshot: GraphSnapshot; onOpen: (s
 
 function HistoryDetailView({ snapshot, onBack }: { snapshot: GraphSnapshot; onBack: () => void }) {
   const resultThumbnail = getResultThumbnail(snapshot)
+  const video = getSnapshotVideo(snapshot)
   const sourceThumbnail = getSourceThumbnail(snapshot)
   const prompt = getSnapshotPrompt(snapshot)
   const engine = getSnapshotEngine(snapshot)
@@ -414,6 +484,10 @@ function HistoryDetailView({ snapshot, onBack }: { snapshot: GraphSnapshot; onBa
   }
 
   const handleSave = () => {
+    if (video) {
+      window.open(video, '_blank', 'noopener,noreferrer')
+      return
+    }
     if (!resultThumbnail) return
     const ts = new Date(snapshot.timestamp).toISOString().slice(0, 19).replace(/:/g, '-')
     downloadImage(resultThumbnail, `lumanova-${ts}.png`)
@@ -474,7 +548,9 @@ function HistoryDetailView({ snapshot, onBack }: { snapshot: GraphSnapshot; onBa
             </div>
           </div>
 
-          {activeTab === 'compare' ? (
+          {video ? (
+            <DetailVideoPanel video={video} poster={resultThumbnail} />
+          ) : activeTab === 'compare' ? (
             <ImageComparisonSlider sourceImage={sourceThumbnail} resultImage={resultThumbnail} />
           ) : (
             <div className="grid min-w-0 gap-4" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
@@ -625,6 +701,29 @@ function DetailImagePanel({ title, image }: { title: string; image: string | nul
   )
 }
 
+function DetailVideoPanel({ video, poster }: { video: string; poster: string | null }) {
+  return (
+    <div className="min-w-0 overflow-hidden rounded-md" style={{ background: '#050509', border: '1px solid #292935' }}>
+      <div className="relative flex items-center justify-center" style={{ height: 'clamp(520px, calc(100vh - 190px), 820px)', minHeight: 420, background: '#050509' }}>
+        <video
+          src={video}
+          poster={poster ?? undefined}
+          controls
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          style={{ maxWidth: '100%', maxHeight: '100%', display: 'block', background: '#000' }}
+        />
+        <div className="absolute left-3 top-3 rounded-full px-3 py-1" style={{ background: 'rgba(10,10,14,.72)', border: '1px solid rgba(255,255,255,.10)', color: '#ffffff', fontSize: 11, fontWeight: 750 }}>
+          Generated video
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
@@ -654,6 +753,10 @@ export function HistoryPage() {
       cancelled = true
     }
   }, [loadSnapshots, user?.uid])
+
+  useEffect(() => {
+    if (loading && snapshots.length > 0) setLoading(false)
+  }, [loading, snapshots.length])
 
   const filteredSnapshots = useMemo(() => {
     const q = query.trim().toLowerCase()
