@@ -21,7 +21,7 @@ interface GraphState {
   selectNode: (nodeId: string | null) => void
   clearAll: () => void
 
-  createSourceNode: (image: string, origin: 'upload' | 'paste' | 'sketchup', position: { x: number; y: number }, meta?: { sceneMeta: SceneMeta; cameraLocked: boolean }) => string
+  createSourceNode: (image: string, origin: 'upload' | 'paste' | 'sketchup' | 'blender' | 'rhino', position: { x: number; y: number }, meta?: { sceneMeta: SceneMeta; cameraLocked: boolean }) => string
   createNode: (type: NodeType, position: { x: number; y: number }) => string
   duplicateNode: (nodeId: string) => string | null
   getNode: (nodeId: string) => NodeData | undefined

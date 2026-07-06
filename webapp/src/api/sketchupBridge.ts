@@ -1,6 +1,6 @@
 import { useGraphStore } from '../state/graphStore'
 import { getStoredApiKey, setStoredApiKey } from '../engine/geminiClient'
-import { useUIStore } from '../state/uiStore'
+import { useUIStore, type DccMaterialInfo } from '../state/uiStore'
 import type { SceneMeta } from '../types/node'
 
 // ---------------------------------------------------------------------------
@@ -74,6 +74,12 @@ interface ScenesResponse {
   timestamp: number
 }
 
+interface DccMaterialsResponse {
+  source?: string
+  materials?: DccMaterialInfo[]
+  timestamp: number
+}
+
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
@@ -96,8 +102,9 @@ function bridgeUrl(path: string): string {
 // ---------------------------------------------------------------------------
 
 function defaultSceneMeta(): SceneMeta {
+  const tool = useUIStore.getState().bridgeTool ?? 'sketchup'
   return {
-    modelName: 'SketchUp',
+    modelName: tool[0].toUpperCase() + tool.slice(1),
     sceneId: '',
     fov: 35,
     eye: [0, 0, 0],
@@ -159,18 +166,18 @@ async function ping(): Promise<boolean> {
     bridgeBaseUrl = null // 끊김 — 다음 스캔에서 다른 툴로 넘어갈 수 있게
   }
 
-  const results = await Promise.all(BRIDGE_PORTS.map((port) => pingPort(port)))
-  const idx = results.findIndex(Boolean)
-  if (idx < 0) {
-    ui.setBridgeTool(null)
-    return false
+  for (const port of BRIDGE_PORTS) {
+    const found = await pingPort(port)
+    if (!found) continue
+    bridgeBaseUrl = `http://localhost:${port}`
+    // 구버전 SketchUp 브릿지는 tool 필드가 없다 → sketchup으로 간주
+    ui.setBridgeTool(found.tool ?? 'sketchup')
+    lastSourceHash = null // 새 브릿지의 첫 캡처를 즉시 반영
+    return true
   }
-  const found = results[idx]!
-  bridgeBaseUrl = `http://localhost:${BRIDGE_PORTS[idx]}`
-  // 구버전 SketchUp 브릿지는 tool 필드가 없다 → sketchup으로 간주
-  ui.setBridgeTool(found.tool ?? 'sketchup')
-  lastSourceHash = null // 새 브릿지의 첫 캡처를 즉시 반영
-  return true
+
+  ui.setBridgeTool(null)
+  return false
 }
 
 /**
@@ -228,6 +235,79 @@ async function syncApiKeyFromBridge(): Promise<void> {
   }
 }
 
+// ── 모델 재질 가져오기 (Materials 페이지 소스 탭) ───────────────────────────
+// SketchUp 브릿지: { name, color:'#hex', texture: base64 }
+// Blender 브릿지:  DccMaterialInfo { name, baseColor:[r,g,b,a], textures: 경로 }
+// 두 형식을 표시용 공통 형식(SourceMaterial)으로 정규화한다.
+
+export interface SourceMaterial {
+  name: string
+  color: string           // '#rrggbb'
+  texture: string | null  // base64 (텍스처 없거나 용량 초과 시 null)
+}
+
+interface RawMaterialsResponse {
+  materials: Array<Record<string, unknown>>
+  timestamp: number
+}
+
+function floatToHex(v: unknown): string {
+  const n = Math.round(Math.min(1, Math.max(0, Number(v) || 0)) * 255)
+  return n.toString(16).padStart(2, '0')
+}
+
+function normalizeMaterial(raw: Record<string, unknown>): SourceMaterial | null {
+  const name = typeof raw.name === 'string' ? raw.name : null
+  if (!name) return null
+  if (typeof raw.color === 'string') {
+    return { name, color: raw.color, texture: typeof raw.texture === 'string' ? raw.texture : null }
+  }
+  if (Array.isArray(raw.baseColor)) {
+    const [r, g, b] = raw.baseColor
+    return { name, color: `#${floatToHex(r)}${floatToHex(g)}${floatToHex(b)}`, texture: null }
+  }
+  return { name, color: '#888888', texture: null }
+}
+
+async function fetchMaterialsOnce(): Promise<{ materials: SourceMaterial[]; timestamp: number } | null> {
+  try {
+    const res = await fetchWithTimeout(bridgeUrl('/api/materials'))
+    if (!res.ok) return null // 404 = 구버전 브릿지 (재질 기능 없음)
+    const data: RawMaterialsResponse = await res.json()
+    return {
+      materials: (data.materials ?? []).map(normalizeMaterial).filter((m): m is SourceMaterial => m !== null),
+      timestamp: data.timestamp ?? 0,
+    }
+  } catch {
+    return null
+  }
+}
+
+/** 데이터 URI로 변환된 텍스처 (표시용). */
+export function materialTextureUri(m: SourceMaterial): string | null {
+  return m.texture ? toDataUri(m.texture) : null
+}
+
+/**
+ * 연결된 3D 툴의 모델 재질을 추출해 온다. 브릿지에 load_materials 명령을 보내고
+ * 캐시 timestamp가 갱신될 때까지 폴링한다 (Blender는 주기 갱신이라 명령은 무시됨).
+ * null = 실패/미지원 브릿지.
+ */
+export async function loadSourceMaterials(): Promise<SourceMaterial[] | null> {
+  const before = await fetchMaterialsOnce()
+  if (!(await sendCommand({ type: 'load_materials' }))) return null
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 500))
+    const now = await fetchMaterialsOnce()
+    if (now && now.timestamp !== (before?.timestamp ?? 0) && now.materials.length > 0) {
+      return now.materials
+    }
+  }
+  // 갱신 감지 실패 시 마지막 캐시라도 반환 (구버전 브릿지는 null)
+  const last = await fetchMaterialsOnce()
+  return last?.materials?.length ? last.materials : null
+}
+
 /** SketchUp의 저장된 씬 목록 조회. null = 일시적 실패 (기존 목록 유지해야 함). */
 export async function getScenes(): Promise<SketchUpScene[] | null> {
   try {
@@ -235,6 +315,17 @@ export async function getScenes(): Promise<SketchUpScene[] | null> {
     if (!res.ok) return null
     const data: ScenesResponse = await res.json()
     return data.scenes ?? []
+  } catch {
+    return null
+  }
+}
+
+async function getMaterials(): Promise<DccMaterialInfo[] | null> {
+  try {
+    const res = await fetchWithTimeout(bridgeUrl('/api/materials'))
+    if (!res.ok) return null
+    const data: DccMaterialsResponse = await res.json()
+    return Array.isArray(data.materials) ? data.materials : []
   } catch {
     return null
   }
@@ -458,10 +549,11 @@ export async function pushResult(
 function injectCapture(imageBase64: string) {
   const imageDataUri = toDataUri(imageBase64)
   const store = useGraphStore.getState()
+  const origin = (useUIStore.getState().bridgeTool ?? 'sketchup') as 'sketchup' | 'blender' | 'rhino'
 
-  // Find existing sketchup source node
+  // Find existing live DCC source node
   const existing = store.nodes.find(
-    (n) => n.type === 'SOURCE' && 'origin' in n.params && n.params.origin === 'sketchup',
+    (n) => n.type === 'SOURCE' && 'origin' in n.params && n.params.origin === origin,
   )
 
   if (existing) {
@@ -475,7 +567,7 @@ function injectCapture(imageBase64: string) {
   } else {
     // Create new SOURCE node at center-left of canvas
     const position = { x: 100, y: 200 }
-    store.createSourceNode(imageDataUri, 'sketchup', position, {
+    store.createSourceNode(imageDataUri, origin, position, {
       sceneMeta: defaultSceneMeta(),
       cameraLocked: true,
     })
@@ -517,11 +609,22 @@ async function pollOnce() {
         ui.setSketchUpScenes(scenes)
       }
     }
+    const bridgeState = useUIStore.getState()
+    const bridgeTool = bridgeState.bridgeTool
+    if (bridgeTool === 'blender') {
+      const materials = await getMaterials()
+      if (materials !== null) {
+        ui.setBridgeMaterials(materials)
+      }
+    } else if (bridgeState.bridgeMaterials.length > 0) {
+      ui.setBridgeMaterials([])
+    }
   } else {
     // SketchUp이 캡처 등으로 바빠 응답이 늦은 것일 수 있으니 보수적으로 판정
     pingFailures += 1
     if (pingFailures >= 4) {
       ui.setSketchUpStatus('disconnected')
+      ui.setBridgeMaterials([])
     }
     if (pingFailures >= 6) {
       // 진짜 끊긴 경우에만 탭 제거 (일시 지연에 탭이 사라졌다 나타나는 문제 방지)

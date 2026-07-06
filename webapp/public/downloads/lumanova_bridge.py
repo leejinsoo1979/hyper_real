@@ -9,6 +9,7 @@
 #   GET  /api/ping     연결 확인 { status:'ok', app, tool:'blender', ... }
 #   GET  /api/data     { source: base64 JPEG, rendered, viewport:{w,h,sf,title}, timestamp }
 #   GET  /api/scenes   { scenes:[{name,active}], timestamp }  — Blender 카메라 = 씬
+#   GET  /api/materials { materials:[...], timestamp }         — Blender 재질 노드 요약
 #   GET  /api/mask     { mask, map, timestamp }               — Blender는 미지원(빈 값)
 #   GET  /api/apikey   { apiKey:'' }                          — Blender는 키 미보관
 #   POST /api/command  { type: select_scene|camera|capture|add_scene|capture_mask }
@@ -60,6 +61,7 @@ _state = {
     "rendered": None,              # 웹앱이 push한 렌더 결과
     "viewport": None,              # { w, h, sf, title }
     "scenes_body": {"scenes": [], "timestamp": 0},
+    "materials_body": {"materials": [], "timestamp": 0},
 }
 _commands = []
 _cmd_lock = threading.Lock()
@@ -129,6 +131,9 @@ class _BridgeHandler(BaseHTTPRequestHandler):
         elif path == "/api/scenes":
             with _state_lock:
                 self._respond(_state["scenes_body"])
+        elif path == "/api/materials":
+            with _state_lock:
+                self._respond(_state["materials_body"])
         elif path == "/api/mask":
             # Blender는 재질 ID 마스크 미지원 (웹앱은 mask 없음 = 기능 비활성 처리)
             self._respond({"mask": None, "map": [], "timestamp": 0})
@@ -251,6 +256,116 @@ def _update_scenes():
     scenes = [{"name": c.name, "active": c.name == active} for c in cams]
     with _state_lock:
         _state["scenes_body"] = {"scenes": scenes, "timestamp": int(time.time())}
+
+
+# ── 재질 노드 속성 요약 (메인 스레드) ───────────────────────────────────────
+def _socket_value(socket, fallback=None):
+    if not socket:
+        return fallback
+    try:
+        value = socket.default_value
+        if hasattr(value, "__len__") and not isinstance(value, str):
+            return [round(float(v), 5) for v in value]
+        return round(float(value), 5)
+    except Exception:  # noqa: BLE001
+        return fallback
+
+
+def _find_principled_node(mat):
+    if not mat or not mat.use_nodes or not mat.node_tree:
+        return None
+    for node in mat.node_tree.nodes:
+        if node.type == "BSDF_PRINCIPLED":
+            return node
+    return None
+
+
+def _linked_image_paths(socket, seen=None):
+    """입력 소켓으로 연결된 Image Texture 경로들을 얕게 추적한다."""
+    if not socket or not socket.is_linked:
+        return []
+    seen = seen or set()
+    paths = []
+    for link in socket.links:
+        node = link.from_node
+        if not node or node.name in seen:
+            continue
+        seen.add(node.name)
+        if node.type == "TEX_IMAGE" and getattr(node, "image", None):
+            try:
+                paths.append(bpy.path.abspath(node.image.filepath))
+            except Exception:  # noqa: BLE001
+                paths.append(node.image.filepath)
+        for input_socket in getattr(node, "inputs", []):
+            paths.extend(_linked_image_paths(input_socket, seen))
+    # preserve order while deduping
+    return list(dict.fromkeys([p for p in paths if p]))
+
+
+def _material_object_names(mat):
+    names = []
+    for obj in bpy.context.scene.objects:
+        slots = getattr(obj, "material_slots", [])
+        if any(slot.material == mat for slot in slots):
+            names.append(obj.name)
+    return names[:20]
+
+
+def _material_summary(mat):
+    principled = _find_principled_node(mat)
+    base_color = _socket_value(principled.inputs.get("Base Color") if principled else None, [1, 1, 1, 1])
+    metallic = _socket_value(principled.inputs.get("Metallic") if principled else None, 0)
+    roughness = _socket_value(principled.inputs.get("Roughness") if principled else None, 0.5)
+    alpha = _socket_value(principled.inputs.get("Alpha") if principled else None, 1)
+    emission_color = _socket_value(principled.inputs.get("Emission Color") if principled else None, [0, 0, 0, 1])
+    emission_strength = _socket_value(principled.inputs.get("Emission Strength") if principled else None, 0)
+
+    textures = {}
+    if principled:
+        for label, socket_name in (
+            ("baseColor", "Base Color"),
+            ("roughness", "Roughness"),
+            ("metallic", "Metallic"),
+            ("alpha", "Alpha"),
+            ("normal", "Normal"),
+            ("emission", "Emission Color"),
+        ):
+            found = _linked_image_paths(principled.inputs.get(socket_name))
+            if found:
+                textures[label] = found
+
+    return {
+        "name": mat.name,
+        "objectNames": _material_object_names(mat),
+        "useNodes": bool(mat.use_nodes),
+        "shader": "Principled BSDF" if principled else "Material",
+        "baseColor": base_color,
+        "metallic": metallic,
+        "roughness": roughness,
+        "alpha": alpha,
+        "emissionColor": emission_color,
+        "emissionStrength": emission_strength,
+        "textures": textures,
+    }
+
+
+def _update_materials():
+    materials = []
+    for mat in bpy.data.materials:
+        try:
+            # 앱에서 바로 쓸 수 있도록 실제 씬에 배치된 재질을 우선한다.
+            if not _material_object_names(mat):
+                continue
+            materials.append(_material_summary(mat))
+        except Exception as e:  # noqa: BLE001
+            print(f"[Lumanova] 재질 읽기 에러({mat.name}): {e}")
+    materials.sort(key=lambda m: m["name"].lower())
+    with _state_lock:
+        _state["materials_body"] = {
+            "source": "blender",
+            "materials": materials[:200],
+            "timestamp": int(time.time()),
+        }
 
 
 # ── 명령 처리 (메인 스레드) ─────────────────────────────────────────────────
@@ -430,6 +545,8 @@ def _tick():
                     _view_moved = False  # 멈춘 직후 1회만 캡처
                     _capture()
             _update_scenes()
+            if _tick_count % 10 == 0:
+                _update_materials()
     except Exception as e:  # noqa: BLE001
         print(f"[Lumanova] 타이머 에러: {e}")
 

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { v4 as uuid } from 'uuid'
-import { Search, X } from 'lucide-react'
+import { Loader2, RefreshCw, Search, X } from 'lucide-react'
 import { useGraphStore } from '../../state/graphStore'
 import { useUIStore } from '../../state/uiStore'
+import { loadSourceMaterials, materialTextureUri, type SourceMaterial } from '../../api/sketchupBridge'
 
 type MaterialCategory = {
   id: string
@@ -104,9 +105,14 @@ function swatchStyle(asset: MaterialAsset): React.CSSProperties {
 }
 
 export function MaterialsPage({ open }: { open: boolean }) {
+  const [activeTab, setActiveTab] = useState<'library' | 'source'>('library')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null)
+  const [sourceMaterials, setSourceMaterials] = useState<SourceMaterial[] | null>(null)
+  const [sourceLoading, setSourceLoading] = useState(false)
+  const [sourceError, setSourceError] = useState<string | null>(null)
+  const bridgeStatus = useUIStore((s) => s.sketchUpStatus)
   const nodes = useGraphStore((s) => s.nodes)
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId)
   const createNode = useGraphStore((s) => s.createNode)
@@ -114,6 +120,26 @@ export function MaterialsPage({ open }: { open: boolean }) {
   const addEdge = useGraphStore((s) => s.addEdge)
   const selectNode = useGraphStore((s) => s.selectNode)
   const setPromptText = useUIStore((s) => s.setPromptText)
+
+  const refreshSourceMaterials = async () => {
+    if (sourceLoading) return
+    setSourceLoading(true)
+    setSourceError(null)
+    const list = await loadSourceMaterials()
+    setSourceLoading(false)
+    if (list === null) {
+      setSourceError(bridgeStatus === 'connected'
+        ? '재질을 가져오지 못했습니다. 3D 툴의 플러그인이 최신인지 확인하세요.'
+        : '3D 툴이 연결돼 있지 않습니다.')
+      return
+    }
+    setSourceMaterials(list)
+  }
+
+  const openSourceTab = () => {
+    setActiveTab('source')
+    if (sourceMaterials === null) void refreshSourceMaterials()
+  }
 
   const visibleMaterials = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -125,17 +151,14 @@ export function MaterialsPage({ open }: { open: boolean }) {
   }, [query, selectedCategory])
   const searchActive = query.trim().length > 0
 
-  const applyMaterial = (asset: MaterialAsset) => {
-    setSelectedMaterialId(asset.id)
-    const prompt = `Replace the selected or masked surface material with ${asset.prompt}. Preserve the original geometry, camera, lighting, object positions, and all unmasked areas exactly.`
+  const createModifierWithPrompt = (prompt: string, presetId: string) => {
     setPromptText(prompt)
-
     const selected = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : null
     const modifierId = createNode('MODIFIER', {
       x: selected ? selected.position.x + 340 : 220,
       y: selected ? selected.position.y : 220,
     })
-    updateNodeParams(modifierId, { prompt, presetId: asset.id, mask: null, maskLayers: [] })
+    updateNodeParams(modifierId, { prompt, presetId, mask: null, maskLayers: [] })
     if (selected) {
       addEdge({
         id: uuid(),
@@ -146,6 +169,23 @@ export function MaterialsPage({ open }: { open: boolean }) {
       })
     }
     selectNode(modifierId)
+  }
+
+  const applyMaterial = (asset: MaterialAsset) => {
+    setSelectedMaterialId(asset.id)
+    createModifierWithPrompt(
+      `Replace the selected or masked surface material with ${asset.prompt}. Preserve the original geometry, camera, lighting, object positions, and all unmasked areas exactly.`,
+      asset.id,
+    )
+  }
+
+  const applySourceMaterial = (m: SourceMaterial) => {
+    const id = `source:${m.name}`
+    setSelectedMaterialId(id)
+    createModifierWithPrompt(
+      `Replace the selected or masked surface material to match the 3D model's original material "${m.name}" (base color ${m.color}), rendered photorealistically with natural texture detail. Preserve the original geometry, camera, lighting, object positions, and all unmasked areas exactly.`,
+      id,
+    )
   }
 
   return (
@@ -196,6 +236,101 @@ export function MaterialsPage({ open }: { open: boolean }) {
           className="material-library-scroll h-full overflow-y-auto"
           style={{ width: 258, minWidth: 258, overscrollBehavior: 'contain' }}
         >
+        {/* 상단 탭: 라이브러리 / 소스(3D 툴에서 불러온 재질) */}
+        <div className="grid grid-cols-2" style={{ borderBottom: '1px solid #2a2a31' }}>
+          {([['library', 'Library'], ['source', '소스']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={key === 'source' ? openSourceTab : () => setActiveTab('library')}
+              style={{
+                height: 38, fontSize: 12.5,
+                fontWeight: activeTab === key ? 700 : 500,
+                color: activeTab === key ? '#ffffff' : '#77777f',
+                background: activeTab === key ? '#26262c' : 'transparent',
+                borderBottom: activeTab === key ? '2px solid #00c9a7' : '2px solid transparent',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'source' ? (
+          <div style={{ padding: '12px 14px 24px' }}>
+            <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+              <span style={{ color: '#9b9ba1', fontSize: 12 }}>
+                {sourceMaterials ? `모델 재질 ${sourceMaterials.length}개` : '모델 재질'}
+              </span>
+              <button
+                onClick={() => void refreshSourceMaterials()}
+                disabled={sourceLoading}
+                className="flex items-center gap-1"
+                style={{ color: '#8a8a94', fontSize: 11.5 }}
+                title="3D 툴에서 재질 다시 불러오기"
+              >
+                <RefreshCw size={12} className={sourceLoading ? 'animate-spin' : ''} />
+                새로고침
+              </button>
+            </div>
+
+            {sourceLoading && (
+              <div className="flex flex-col items-center gap-2" style={{ padding: '40px 0', color: '#77777f', fontSize: 12 }}>
+                <Loader2 size={22} className="animate-spin" style={{ color: '#00c9a7' }} />
+                재질 불러오는 중...
+              </div>
+            )}
+
+            {!sourceLoading && sourceError && (
+              <div className="text-center" style={{ padding: '32px 8px', color: '#8a6a6a', fontSize: 12, lineHeight: 1.7 }}>
+                {sourceError}
+              </div>
+            )}
+
+            {!sourceLoading && !sourceError && sourceMaterials && sourceMaterials.length === 0 && (
+              <div className="text-center" style={{ padding: '32px 8px', color: '#77777f', fontSize: 12 }}>
+                모델에 재질이 없습니다
+              </div>
+            )}
+
+            {!sourceLoading && sourceMaterials && sourceMaterials.length > 0 && (
+              <div className="grid grid-cols-2" style={{ gap: '16px 16px' }}>
+                {sourceMaterials.map((m) => {
+                  const id = `source:${m.name}`
+                  const texUri = materialTextureUri(m)
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => applySourceMaterial(m)}
+                      className="relative flex flex-col items-center rounded"
+                      style={{
+                        minHeight: 104,
+                        padding: '7px 4px',
+                        color: selectedMaterialId === id ? '#ffffff' : '#9d9da3',
+                        border: selectedMaterialId === id ? '1px solid #8b8b94' : '1px solid transparent',
+                        background: selectedMaterialId === id ? '#242429' : 'transparent',
+                      }}
+                      title={`Apply ${m.name}`}
+                    >
+                      <span
+                        className="rounded-full"
+                        style={{
+                          width: 60,
+                          height: 60,
+                          boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.08), 0 8px 18px rgba(0,0,0,.34)',
+                          background: texUri ? `center / cover url(${texUri})` : m.color,
+                        }}
+                      />
+                      <span className="mt-2 w-full truncate text-center" style={{ fontSize: 12, fontWeight: 600 }}>
+                        {m.name}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+        <>
         <div
           className="flex items-center"
           style={{
@@ -310,6 +445,8 @@ export function MaterialsPage({ open }: { open: boolean }) {
               </button>
             ))}
           </div>
+        )}
+        </>
         )}
         </div>
       </aside>

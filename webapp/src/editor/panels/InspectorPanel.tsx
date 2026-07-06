@@ -8,6 +8,7 @@ import { CompareTab, getNodeInputImage } from './CompareTab'
 import { DrawTab } from './DrawTab'
 import { RenderSettings } from './RenderSettings'
 import { SketchUpScenesPanel } from './SketchUpScenesPanel'
+import { DccMaterialsPanel } from './DccMaterialsPanel'
 import { PromptPresets } from './PromptPresets'
 
 const tabs: { id: InspectorTab; label: string }[] = [
@@ -106,6 +107,7 @@ export function InspectorPanel() {
 
       {/* Render Settings Section */}
       <SketchUpScenesPanel selectedNode={selectedNode} />
+      <DccMaterialsPanel />
 
       <RenderSettings selectedNode={selectedNode} />
 

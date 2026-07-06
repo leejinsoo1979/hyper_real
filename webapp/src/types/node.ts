@@ -24,7 +24,7 @@ export interface SceneMeta {
 }
 
 export interface SourceParams {
-  origin: 'sketchup' | 'upload' | 'paste'
+  origin: 'sketchup' | 'blender' | 'rhino' | 'upload' | 'paste'
   image: string
   cameraLocked: boolean
   sceneMeta: SceneMeta | null

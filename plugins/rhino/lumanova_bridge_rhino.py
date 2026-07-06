@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Lumanova Bridge - Rhino 8 스크립트 (실험적)
 #
 # SketchUp 플러그인(web_sync.rb)과 동일한 로컬 브릿지 프로토콜을 구현한다.
@@ -13,6 +14,17 @@
 #
 # 스레딩 규칙: HTTP 스레드에서는 RhinoCommon을 호출하지 않는다.
 # 명령은 큐에 넣고 RhinoApp.Idle(메인 스레드)에서 처리한다.
+
+import sys
+
+# Rhino 7 이하 / _-RunPythonScript는 IronPython(Python 2)이라 이 스크립트를 실행할 수 없다.
+# 아래 py3 전용 import에 도달하기 전에 명확한 한국어 안내로 중단한다.
+if sys.version_info[0] < 3:
+    raise Exception(
+        u'Lumanova Bridge는 Rhino 8의 ScriptEditor(CPython 3)에서 실행해야 합니다. '
+        u'Rhino 8에서 명령줄에 ScriptEditor를 입력해 이 파일을 열고 실행하세요. '
+        u'(Rhino 7 및 _-RunPythonScript의 IronPython은 지원되지 않습니다)'
+    )
 
 import base64
 import json

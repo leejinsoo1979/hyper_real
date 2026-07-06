@@ -9,6 +9,20 @@ export interface SketchUpSceneInfo {
   active: boolean
 }
 
+export interface DccMaterialInfo {
+  name: string
+  objectNames: string[]
+  useNodes: boolean
+  shader: string
+  baseColor: number[]
+  metallic: number
+  roughness: number
+  alpha: number
+  emissionColor?: number[]
+  emissionStrength?: number
+  textures: Record<string, string[]>
+}
+
 interface UIState {
   activeSidebarItem: SidebarItem
   activeTab: InspectorTab
@@ -23,6 +37,7 @@ interface UIState {
   sketchUpViewport: { w: number; h: number; sf: number; title?: string | null } | null
   /** 연결된 브릿지의 툴 종류 (sketchup | blender | rhino). 미연결이면 null */
   bridgeTool: string | null
+  bridgeMaterials: DccMaterialInfo[]
 
   setActiveSidebarItem: (item: SidebarItem) => void
   setActiveTab: (tab: InspectorTab) => void
@@ -37,6 +52,7 @@ interface UIState {
   setSketchUpScenes: (scenes: SketchUpSceneInfo[]) => void
   setSketchUpViewport: (vp: { w: number; h: number; sf: number; title?: string | null } | null) => void
   setBridgeTool: (tool: string | null) => void
+  setBridgeMaterials: (materials: DccMaterialInfo[]) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -52,6 +68,7 @@ export const useUIStore = create<UIState>((set) => ({
   sketchUpScenes: [],
   sketchUpViewport: null,
   bridgeTool: null,
+  bridgeMaterials: [],
 
   setActiveSidebarItem: (item) => set({ activeSidebarItem: item, materialLibraryOpen: false }),
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -66,4 +83,5 @@ export const useUIStore = create<UIState>((set) => ({
   setSketchUpScenes: (scenes) => set({ sketchUpScenes: scenes }),
   setSketchUpViewport: (vp) => set({ sketchUpViewport: vp }),
   setBridgeTool: (tool) => set({ bridgeTool: tool }),
+  setBridgeMaterials: (materials) => set({ bridgeMaterials: materials }),
 }))

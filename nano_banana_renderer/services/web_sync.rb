@@ -62,6 +62,7 @@ module NanoBanana
       @bridge_commands = []
       @bridge_mutex = Mutex.new
       @bridge_scenes_body = { scenes: [], timestamp: 0 }.to_json
+      @bridge_materials_body = { materials: [], timestamp: 0 }.to_json
 
       cors = proc do |res|
         res['Access-Control-Allow-Origin'] = '*'
@@ -154,6 +155,12 @@ module NanoBanana
           @local_server.mount_proc '/api/scenes' do |_req, res|
             cors.call(res)
             res.body = @bridge_scenes_body
+          end
+
+          # 모델 재질 목록 (load_materials 명령으로 갱신된 캐시 반환)
+          @local_server.mount_proc '/api/materials' do |_req, res|
+            cors.call(res)
+            res.body = @bridge_materials_body
           end
 
           # 앱 → SketchUp 명령 (씬 전환, 카메라, 즉시 캡처)
@@ -286,6 +293,8 @@ module NanoBanana
             update_bridge_scenes
           when 'capture_mask'
             capture_id_mask
+          when 'load_materials'
+            update_bridge_materials
           end
         rescue StandardError => e
           puts "[NanoBanana] 브릿지 명령 에러(#{cmd['type']}): #{e.message}"
@@ -310,6 +319,46 @@ module NanoBanana
       @bridge_scenes_body = { scenes: scenes, timestamp: Time.now.to_i }.to_json
     rescue StandardError => e
       puts "[NanoBanana] 씬 캐시 에러: #{e.message}"
+    end
+
+    # 모델에 로드된 재질 추출 (메인 스레드 전용, load_materials 명령으로만 실행)
+    # 텍스처는 임시 파일로 내보내 base64로 싣는다. 대형 씬 대비 용량 상한을 둔다.
+    def update_bridge_materials
+      model = Sketchup.active_model
+      return unless model
+
+      total_bytes = 0
+      max_texture_bytes = 1_500_000   # 개별 텍스처 상한 (초과 시 색상만)
+      max_total_bytes = 24_000_000    # 전체 페이로드 상한
+
+      materials = model.materials.map do |m|
+        color = m.color
+        texture = nil
+        if m.texture && total_bytes < max_total_bytes
+          begin
+            ext = File.extname(m.texture.filename.to_s).downcase
+            ext = '.png' unless ['.png', '.jpg', '.jpeg'].include?(ext)
+            temp_path = File.join(Dir.tmpdir, "lumanova_material#{ext}")
+            File.delete(temp_path) if File.exist?(temp_path)
+            m.texture.write(temp_path)
+            if File.exist?(temp_path) && File.size(temp_path) <= max_texture_bytes
+              texture = Base64.strict_encode64(File.binread(temp_path))
+              total_bytes += texture.bytesize
+            end
+          rescue StandardError
+            texture = nil
+          end
+        end
+        name = m.display_name.to_s.empty? ? m.name : m.display_name
+        { name: name,
+          color: format('#%02x%02x%02x', color.red, color.green, color.blue),
+          texture: texture }
+      end
+
+      @bridge_materials_body = { materials: materials, timestamp: Time.now.to_i }.to_json
+      puts "[NanoBanana] 브릿지: 재질 #{materials.length}개 추출 (텍스처 #{materials.count { |m| m[:texture] }}개)"
+    rescue StandardError => e
+      puts "[NanoBanana] 재질 추출 에러: #{e.message}"
     end
 
     def stop_local_server
