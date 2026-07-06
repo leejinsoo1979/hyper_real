@@ -80,6 +80,9 @@ export async function generateGrokVideo(opts: GrokVideoOptions): Promise<string>
     }),
   })
   if (!startRes.ok) {
+    if (startRes.status === 401 || startRes.status === 403) {
+      throw new Error(`xAI 영상 생성 권한 오류 (${startRes.status}). Settings의 Grok(xAI) API Key, Billing 충전, 영상 생성 모델 권한을 확인하세요. ${await readError(startRes)}`)
+    }
     throw new Error(`xAI 영상 생성 요청 실패 (${startRes.status}): ${await readError(startRes)}`)
   }
   const started = (await startRes.json()) as { request_id?: string }

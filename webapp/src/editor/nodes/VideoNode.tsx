@@ -8,6 +8,7 @@ type VideoNodeData = {
   status: NodeStatus
   params: VideoParams
   resultImage: string | null
+  error: string | null
 }
 
 type VideoNodeType = Node<VideoNodeData, 'VIDEO'>
@@ -43,6 +44,7 @@ export const VideoNode = memo(function VideoNode({ data, selected }: NodeProps<V
       inputPortName="image"
       secondInputPortName="endFrame"
       overlay={playOverlay}
+      error={data.error}
     />
   )
 })

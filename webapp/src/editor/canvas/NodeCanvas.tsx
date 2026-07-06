@@ -273,6 +273,7 @@ function NodeCanvasInner() {
           status: n.status,
           params: n.params,
           resultImage: n.result?.image ?? null,
+          error: n.result?.error ?? null,
         },
       })),
     [nodes, selectedNodeId],
