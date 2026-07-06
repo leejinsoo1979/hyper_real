@@ -1,13 +1,30 @@
 import { useState } from 'react'
 import { SubPageShell, TEAL, goApp } from './shared'
 
-const SECTIONS = [
+interface DocItem {
+  h: string
+  p: string
+  download?: { href: string; label: string }
+}
+
+const SECTIONS: { id: string; label: string; body: DocItem[] }[] = [
   {
     id: 'install', label: '설치하기',
     body: [
-      { h: '1. Blender 플러그인 다운로드', p: '아래 버튼으로 Lumanova Blender 브릿지(.py)를 받습니다.', download: true },
-      { h: '2. Blender에 설치', p: 'Blender → Edit → Preferences → Add-ons → Install from Disk → 받은 py 선택 → 체크 활성화.' },
-      { h: '3. 연결 확인', p: '앱 상단의 상태 점이 초록색이면 연결 완료입니다. Blender를 실행한 상태에서 앱을 열면 자동으로 연결됩니다.' },
+      {
+        h: 'Blender 애드온 (4.2~4.5)',
+        p: 'Blender의 Edit → Preferences → Add-ons → Install from Disk → 받은 py 선택 → 목록에서 Lumanova Bridge 체크 활성화.',
+        download: { href: '/downloads/lumanova_bridge.py', label: 'Blender 애드온 다운로드 (.py)' },
+      },
+      {
+        h: 'Rhino 스크립트 (Rhino 8 · 실험적)',
+        p: 'Rhino 명령줄에 ScriptEditor 입력 → 받은 py 파일 열기 → 실행. Rhino를 닫을 때까지 브릿지가 유지됩니다.',
+        download: { href: '/downloads/lumanova_bridge_rhino.py', label: 'Rhino 스크립트 다운로드 (.py)' },
+      },
+      {
+        h: '연결 확인',
+        p: '플러그인이 설치된 3D 툴을 실행한 상태에서 앱을 열면 자동으로 연결됩니다. 앱 상단의 상태 점이 초록색이면 연결 완료입니다. 여러 툴이 동시에 켜져 있으면 SketchUp이 우선 연결됩니다.',
+      },
     ],
   },
   {
@@ -70,8 +87,8 @@ export function DocsPage() {
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e8e8ee' }}>{b.h}</h3>
                 <p style={{ marginTop: 7, fontSize: 14, lineHeight: 1.7, color: '#9a9aa6' }}>{b.p}</p>
                 {b.download && (
-                  <a href="/downloads/lumanova_bridge.py" download className="mt-3 inline-block" style={{ padding: '10px 18px', borderRadius: 9, background: TEAL, color: '#06251f', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
-                    Blender 플러그인 다운로드 (.py) ↓
+                  <a href={b.download.href} download className="mt-3 inline-block" style={{ padding: '10px 18px', borderRadius: 9, background: TEAL, color: '#06251f', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                    {b.download.label} ↓
                   </a>
                 )}
               </div>
