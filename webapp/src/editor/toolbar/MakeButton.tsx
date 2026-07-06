@@ -1,13 +1,12 @@
 import { Play, Loader2 } from 'lucide-react'
 
 interface MakeButtonProps {
-  credits: number
   disabled: boolean
   isRunning: boolean
   onClick: () => void
 }
 
-export function MakeButton({ credits, disabled, isRunning, onClick }: MakeButtonProps) {
+export function MakeButton({ disabled, isRunning, onClick }: MakeButtonProps) {
   return (
     <div className="flex shrink-0 items-center">
       <button
@@ -37,11 +36,9 @@ export function MakeButton({ credits, disabled, isRunning, onClick }: MakeButton
           if (!disabled) e.currentTarget.style.background = 'linear-gradient(180deg, #18e3c4, #00bfa2)'
         }}
       >
-        <span className="flex min-w-0 flex-col items-start leading-none">
+        {/* 크레딧 표기는 개인 키 정책 동안 숨김 — 서비스 운영 시 복원 */}
+        <span className="flex min-w-0 items-center leading-none">
           <span>{isRunning ? 'Running' : 'Make'}</span>
-          <span style={{ marginTop: 5, fontSize: 10.5, fontWeight: 700, opacity: disabled ? 0.55 : 0.72 }}>
-            {credits} credit{credits === 1 ? '' : 's'}
-          </span>
         </span>
         <span
           className="flex items-center justify-center rounded-full"

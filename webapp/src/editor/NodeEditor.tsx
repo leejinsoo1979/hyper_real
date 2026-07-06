@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect } from 'react'
 import { LeftSidebar } from './sidebar/LeftSidebar'
 import { NodeCanvas } from './canvas/NodeCanvas'
 import { InspectorPanel } from './panels/InspectorPanel'
@@ -12,15 +12,13 @@ import { RenderClassicPage } from './pages/RenderClassicPage'
 import { MaterialsPage } from './pages/MaterialsPage'
 import { useGraphStore } from '../state/graphStore'
 import { useExecutionStore } from '../state/executionStore'
-import { useCreditStore } from '../state/creditStore'
 import { useUIStore } from '../state/uiStore'
 import type { ConnectionStatus } from '../state/uiStore'
 import { useUndoStore } from '../state/undoStore'
-import { executePipeline, estimatePipelineCost } from '../engine'
+import { executePipeline } from '../engine'
 import { useMock } from '../engine/geminiClient'
 import { startBridge, stopBridge } from '../api/sketchupBridge'
 import { useAuthUser } from '../auth/firebase'
-import { apiMe } from '../api/lumanovaApi'
 
 function statusColor(s: ConnectionStatus): string {
   switch (s) {
@@ -34,14 +32,7 @@ function statusColor(s: ConnectionStatus): string {
 function AppHeader() {
   const sketchUpStatus = useUIStore((s) => s.sketchUpStatus)
   const setActiveSidebarItem = useUIStore((s) => s.setActiveSidebarItem)
-  const saas = saasMode()
   const user = useAuthUser()
-  const [balance, setBalance] = useState<number | null>(null)
-
-  useEffect(() => {
-    if (!saas || !user) return
-    apiMe().then((m) => setBalance(m.balance)).catch(() => {})
-  }, [saas, user])
 
   const initial = (user?.displayName || user?.email || '·')[0]?.toUpperCase() ?? '·'
 
@@ -61,18 +52,8 @@ function AppHeader() {
         />
       </div>
 
-      {/* 우: 크레딧 + 프로필 */}
+      {/* 우: 프로필 (크레딧 배지는 개인 키 정책 동안 숨김 — 서비스 운영 시 복원) */}
       <div className="flex items-center gap-3">
-        {saas && (
-          <button
-            onClick={() => setActiveSidebarItem('account')}
-            className="flex items-center gap-1.5"
-            style={{ height: 30, padding: '0 12px', borderRadius: 999, background: 'rgba(0,201,167,0.1)', border: '1px solid rgba(0,201,167,0.28)', color: '#37e7cb', fontSize: 12.5, fontWeight: 700 }}
-          >
-            <span style={{ fontSize: 13 }}>◈</span>
-            {balance === null ? '—' : balance.toLocaleString()}
-          </button>
-        )}
         <button
           onClick={() => setActiveSidebarItem('account')}
           className="flex items-center justify-center overflow-hidden rounded-full"
@@ -90,10 +71,8 @@ function AppHeader() {
 
 export function NodeEditor() {
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId)
-  const nodes = useGraphStore((s) => s.nodes)
   const isRunning = useExecutionStore((s) => s.isRunning)
   const executionError = useExecutionStore((s) => s.error)
-  const balance = useCreditStore((s) => s.balance)
   const activeSidebarItem = useUIStore((s) => s.activeSidebarItem)
   const materialsOpen = useUIStore((s) => s.materialLibraryOpen)
 
@@ -103,15 +82,9 @@ export function NodeEditor() {
     return () => stopBridge()
   }, [])
 
-  // Estimate cost for the selected node's pipeline
-  const estimatedCost = useMemo(() => {
-    if (!selectedNodeId) return 0
-    return estimatePipelineCost(selectedNodeId)
-  }, [selectedNodeId, nodes])
-
-  const insufficientCredits = estimatedCost > balance
+  // 개인 키 정책: 크레딧 잔액으로 실행을 막지 않는다 (비용은 본인 API 계정으로 청구)
   const noNodeSelected = !selectedNodeId
-  const makeDisabled = isRunning || noNodeSelected || insufficientCredits
+  const makeDisabled = isRunning || noNodeSelected
 
   const handleMake = useCallback(async () => {
     if (!selectedNodeId || isRunning) return
@@ -222,7 +195,6 @@ export function NodeEditor() {
                 >
                   <PromptBar />
                   <MakeButton
-                    credits={estimatedCost}
                     disabled={makeDisabled}
                     isRunning={isRunning}
                     onClick={handleMake}
