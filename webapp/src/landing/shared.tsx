@@ -74,7 +74,7 @@ export function Footer() {
           {[
             { h: 'Product', items: [['Features', '/features'], ['Gallery', '/gallery'], ['Pricing', '/pricing']] },
             { h: 'Resources', items: [['Docs', '/docs'], ['Blender 플러그인', '/downloads/lumanova_bridge.py'], ['Discord', '#']] },
-            { h: 'Company', items: [['About', '#'], ['Contact', 'mailto:sbbc212@gmail.com'], ['Privacy', '#']] },
+            { h: 'Company', items: [['U:ABLE', 'https://www.uable.co.kr'], ['Contact', 'mailto:sbbc212@gmail.com'], ['Privacy', '#']] },
           ].map((col) => (
             <div key={col.h}>
               <p style={{ color: '#e6e6ee', fontWeight: 700, marginBottom: 12 }}>{col.h}</p>
@@ -86,7 +86,9 @@ export function Footer() {
         </div>
       </div>
       <div className="mt-10 flex flex-wrap items-center justify-between gap-4" style={{ borderTop: '1px solid #16161d', paddingTop: 20, fontSize: 12, color: '#5d5d68' }}>
-        <span>© Lumanova 2026 — All Rights Reserved</span>
+        <span>
+          © 2026 <a href="https://www.uable.co.kr" target="_blank" rel="noreferrer" style={{ color: '#8a8a95', textDecoration: 'none' }}>U:ABLE</a> — Lumanova, All Rights Reserved
+        </span>
         <span className="flex gap-5"><a href="#" style={{ color: '#8a8a95' }}>Privacy Policy</a><a href="#" style={{ color: '#8a8a95' }}>Terms &amp; Conditions</a></span>
       </div>
     </footer>
