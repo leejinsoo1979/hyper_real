@@ -34,7 +34,7 @@ function PublicPage() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {isAdmin ? (
-      <AuthGate>
+      <AuthGate force>
         <AdminPage />
       </AuthGate>
     ) : isApp ? (

@@ -10,19 +10,19 @@ import { firebaseEnabled, getFirebaseAuth } from './firebase'
 // 인증 게이트 — SaaS 모드에서만 로그인 요구. 개발 모드(VITE_DEV_BYPASS_AUTH)는 통과.
 // ---------------------------------------------------------------------------
 
-export function AuthGate({ children }: { children: ReactNode }) {
-  const enabled = firebaseEnabled()
+export function AuthGate({ children, force = false }: { children: ReactNode; force?: boolean }) {
+  const enabled = firebaseEnabled(force)
   const [user, setUser] = useState<User | null>(null)
   const [ready, setReady] = useState(!enabled)
 
   useEffect(() => {
     if (!enabled) return
-    const auth = getFirebaseAuth()!
+    const auth = getFirebaseAuth(force)!
     return onAuthStateChanged(auth, (u) => {
       setUser(u)
       setReady(true)
     })
-  }, [enabled])
+  }, [enabled, force])
 
   if (!enabled) return <>{children}</>
   if (!ready) {
@@ -32,11 +32,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </div>
     )
   }
-  if (!user) return <LoginScreen />
+  if (!user) return <LoginScreen force={force} />
   return <>{children}</>
 }
 
-function LoginScreen() {
+function LoginScreen({ force = false }: { force?: boolean }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'login' | 'signup'>('login')
@@ -44,7 +44,7 @@ function LoginScreen() {
   const [error, setError] = useState<string | null>(null)
 
   const submit = async () => {
-    const auth = getFirebaseAuth()!
+    const auth = getFirebaseAuth(force)!
     setBusy(true)
     setError(null)
     try {
@@ -65,7 +65,7 @@ function LoginScreen() {
   }
 
   const google = async () => {
-    const auth = getFirebaseAuth()!
+    const auth = getFirebaseAuth(force)!
     setError(null)
     try {
       await signInWithPopup(auth, new GoogleAuthProvider())

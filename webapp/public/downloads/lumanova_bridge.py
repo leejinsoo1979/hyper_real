@@ -61,6 +61,8 @@ _state = {
     "rendered": None,              # 웹앱이 push한 렌더 결과
     "viewport": None,              # { w, h, sf, title }
     "scenes_body": {"scenes": [], "timestamp": 0},
+    "depth": None,                 # base64 (Mist 깊이맵 — 구조 고정 렌더용)
+    "depth_ts": 0,
     "materials_body": {"materials": [], "timestamp": 0},
 }
 _commands = []
@@ -126,6 +128,8 @@ class _BridgeHandler(BaseHTTPRequestHandler):
                     "source": _state["source"],
                     "rendered": _state["rendered"],
                     "viewport": _state["viewport"],
+                    "depth": _state["depth"],
+                    "depthTimestamp": _state["depth_ts"],
                     "timestamp": int(time.time()),
                 })
         elif path == "/api/scenes":
@@ -242,6 +246,88 @@ def _capture(size=None):
         r.image_settings.quality = saved[4]
         r.image_settings.color_mode = saved[5]
         r.filepath = saved[6]
+
+
+# ── 깊이맵 캡처 (Mist 패스) — 구조 고정 렌더용 ──────────────────────────────
+def _capture_depth():
+    window, area, region, space = _find_view3d()
+    if not window or not region or not space:
+        return
+
+    scene = window.scene
+    view_layer = window.view_layer
+    world = scene.world
+    r = scene.render
+
+    saved_render = (
+        r.resolution_x, r.resolution_y, r.resolution_percentage,
+        r.image_settings.file_format, r.image_settings.quality,
+        r.image_settings.color_mode, r.filepath,
+    )
+    saved_shading = (space.shading.type, getattr(space.shading, "render_pass", "COMBINED"))
+    saved_overlays = space.overlay.show_overlays
+    saved_mist_pass = view_layer.use_pass_mist
+    saved_mist = None
+    if world:
+        ms = world.mist_settings
+        saved_mist = (ms.start, ms.depth, ms.falloff)
+
+    try:
+        # 씬 규모에 맞는 mist 깊이 (뷰포트 시점에서 가장 먼 오브젝트까지)
+        eye = _viewport_eye(space.region_3d)
+        far = 30.0
+        for obj in scene.objects:
+            if obj.type not in {"MESH", "CURVE", "SURFACE", "META", "FONT"}:
+                continue
+            for corner in obj.bound_box:
+                p = obj.matrix_world @ Vector(corner)
+                far = max(far, (p - eye).length)
+        if world:
+            world.mist_settings.start = 0.0
+            world.mist_settings.depth = far * 1.05
+            world.mist_settings.falloff = "LINEAR"
+
+        view_layer.use_pass_mist = True
+        space.shading.type = "MATERIAL"
+        space.shading.render_pass = "MIST"
+        space.overlay.show_overlays = False
+
+        r.resolution_x, r.resolution_y, r.resolution_percentage = MIRROR_SIZE[0], MIRROR_SIZE[1], 100
+        r.image_settings.file_format = "JPEG"
+        r.image_settings.quality = 88
+        r.image_settings.color_mode = "BW"
+
+        with bpy.context.temp_override(window=window, area=area, region=region):
+            bpy.ops.render.opengl(view_context=True)
+
+        img = bpy.data.images.get("Render Result")
+        if not img:
+            return
+        temp_path = os.path.join(tempfile.gettempdir(), "lumanova_blender_depth.jpg")
+        img.save_render(filepath=temp_path, scene=scene)
+        with open(temp_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("ascii")
+        with _state_lock:
+            _state["depth"] = encoded
+            _state["depth_ts"] = int(time.time() * 1000)
+        print("[Lumanova] 깊이맵 캡처 완료 (Mist)")
+    except Exception as e:  # noqa: BLE001
+        print(f"[Lumanova] 깊이맵 캡처 에러: {e}")
+    finally:
+        space.overlay.show_overlays = saved_overlays
+        space.shading.type = saved_shading[0]
+        try:
+            space.shading.render_pass = saved_shading[1]
+        except Exception:  # noqa: BLE001
+            pass
+        view_layer.use_pass_mist = saved_mist_pass
+        if world and saved_mist:
+            world.mist_settings.start, world.mist_settings.depth, world.mist_settings.falloff = saved_mist
+        (r.resolution_x, r.resolution_y, r.resolution_percentage) = saved_render[0:3]
+        r.image_settings.file_format = saved_render[3]
+        r.image_settings.quality = saved_render[4]
+        r.image_settings.color_mode = saved_render[5]
+        r.filepath = saved_render[6]
 
 
 # ── 씬 목록 = 카메라 목록 (SketchUp의 Pages에 대응) ─────────────────────────
@@ -509,6 +595,8 @@ def _process_commands():
                 _cmd_camera(cmd.get("action"), cmd.get("value"))
             elif ctype == "capture":
                 _capture(cmd.get("size"))
+            elif ctype == "capture_depth":
+                _capture_depth()
             elif ctype == "add_scene":
                 _cmd_add_scene()
                 _update_scenes()

@@ -38,14 +38,14 @@ let app: FirebaseApp | null = null
  * - VITE_DEV_BYPASS_AUTH=false → 로컬 개발에서 SaaS 테스트용
  * - 기본값                   → 기존 개발자 모드 (로그인 없음)
  */
-export function firebaseEnabled(): boolean {
+export function firebaseEnabled(force = false): boolean {
   const saasOn = String(import.meta.env.VITE_SAAS ?? '') === 'true'
     || String(import.meta.env.VITE_DEV_BYPASS_AUTH ?? '') === 'false'
-  return saasOn && Boolean(cfg.apiKey && cfg.authDomain && cfg.projectId && cfg.appId)
+  return (force || saasOn) && Boolean(cfg.apiKey && cfg.authDomain && cfg.projectId && cfg.appId)
 }
 
-export function getFirebaseAuth(): Auth | null {
-  if (!firebaseEnabled()) return null
+export function getFirebaseAuth(force = false): Auth | null {
+  if (!firebaseEnabled(force)) return null
   if (!app) {
     app = initializeApp({
       apiKey: cfg.apiKey!,
@@ -58,8 +58,8 @@ export function getFirebaseAuth(): Auth | null {
 }
 
 /** 서버 API 호출용 Bearer 토큰 (SaaS 모드가 아니면 null) */
-export async function getIdToken(): Promise<string | null> {
-  const auth = getFirebaseAuth()
+export async function getIdToken(force = false): Promise<string | null> {
+  const auth = getFirebaseAuth(force)
   if (!auth?.currentUser) return null
   return auth.currentUser.getIdToken()
 }

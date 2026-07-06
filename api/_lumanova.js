@@ -4,12 +4,19 @@
 // - Firestore 접근: 사용자 본인 토큰으로 REST 호출 (보안 규칙이 감액-전용을 강제)
 // - Gemini 호출: 서버 보유 GEMINI_API_KEY (클라이언트에 절대 노출 금지)
 // ---------------------------------------------------------------------------
-import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { SignJWT, createRemoteJWKSet, importPKCS8, jwtVerify } from 'jose'
 
 const PROJECT_ID = 'lumanova-24e9b'
 const JWKS = createRemoteJWKSet(
   new URL('https://www.googleapis.com/robot/v1/metadata/jwk/securetoken@system.gserviceaccount.com'),
 )
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
+const SERVICE_SCOPE = [
+  'https://www.googleapis.com/auth/identitytoolkit',
+  'https://www.googleapis.com/auth/datastore',
+].join(' ')
+let serviceAccessToken = null
+let serviceAccessTokenExpiresAt = 0
 
 export const COSTS = { main: 1, pro: 4, auto_prompt: 1 }
 
@@ -39,6 +46,89 @@ export async function requireAdmin(req) {
   if (!user) return { user: null, error: 'UNAUTHORIZED', status: 401 }
   if (!isAdminUser(user)) return { user, error: 'FORBIDDEN', status: 403 }
   return { user, error: null, status: 200 }
+}
+
+function serviceAccountConfig() {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw)
+      return {
+        clientEmail: parsed.client_email,
+        privateKey: parsed.private_key,
+      }
+    } catch {
+      return null
+    }
+  }
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL ?? process.env.GOOGLE_CLIENT_EMAIL
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY ?? process.env.GOOGLE_PRIVATE_KEY
+  if (!clientEmail || !privateKey) return null
+  return {
+    clientEmail,
+    privateKey: privateKey.replace(/\\n/g, '\n'),
+  }
+}
+
+export async function getServiceAccessToken() {
+  if (serviceAccessToken && Date.now() < serviceAccessTokenExpiresAt - 60_000) {
+    return serviceAccessToken
+  }
+  const cfg = serviceAccountConfig()
+  if (!cfg?.clientEmail || !cfg.privateKey) {
+    throw new Error('SERVICE_ACCOUNT_NOT_CONFIGURED')
+  }
+  const key = await importPKCS8(cfg.privateKey, 'RS256')
+  const assertion = await new SignJWT({ scope: SERVICE_SCOPE })
+    .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
+    .setIssuer(cfg.clientEmail)
+    .setAudience(GOOGLE_TOKEN_URL)
+    .setIssuedAt()
+    .setExpirationTime('1h')
+    .sign(key)
+
+  const res = await fetch(GOOGLE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion,
+    }),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || !json.access_token) {
+    throw new Error(`SERVICE_TOKEN_FAILED:${json.error_description ?? json.error ?? res.status}`)
+  }
+  serviceAccessToken = json.access_token
+  serviceAccessTokenExpiresAt = Date.now() + Number(json.expires_in ?? 3600) * 1000
+  return serviceAccessToken
+}
+
+export async function listAuthUsers({ maxResults = 1000, pageToken = null } = {}) {
+  const token = await getServiceAccessToken()
+  const res = await fetch(
+    'https://www.googleapis.com/identitytoolkit/v3/relyingparty/downloadAccount',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        targetProjectId: PROJECT_ID,
+        maxResults,
+        ...(pageToken ? { nextPageToken: pageToken } : {}),
+      }),
+    },
+  )
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(`AUTH_USERS_READ_FAILED:${json.error?.message ?? res.status}`)
+  }
+  return {
+    users: json.users ?? [],
+    nextPageToken: json.nextPageToken ?? null,
+  }
 }
 
 /** Authorization 헤더의 Firebase ID 토큰 검증. 실패 시 null. */

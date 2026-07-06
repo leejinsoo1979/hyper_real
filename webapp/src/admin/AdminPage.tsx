@@ -97,6 +97,13 @@ const textareaStyle: React.CSSProperties = {
   lineHeight: 1.55,
 }
 
+type UserFilter = 'real' | 'all' | 'google' | 'test' | 'noCredits' | 'disabled'
+
+function sortUsers(a: AdminUser, b: AdminUser) {
+  if (Boolean(a.isTestUser) !== Boolean(b.isTestUser)) return a.isTestUser ? 1 : -1
+  return (b.createdAt ?? b.updatedAt ?? '').localeCompare(a.createdAt ?? a.updatedAt ?? '')
+}
+
 function MaterialPreview({ material }: { material: AdminMaterial }) {
   const preview = resolveMaterialAssetUrl(material.thumbnailPath || material.referencePath)
   return (
@@ -118,13 +125,18 @@ function MaterialPreview({ material }: { material: AdminMaterial }) {
 }
 
 function AccessDenied({ error }: { error: string }) {
+  const setupError = error.includes('서비스 계정') || error.includes('Auth 회원 목록')
   return (
     <div className="flex min-h-screen items-center justify-center" style={{ background: BG, color: TEXT }}>
       <div style={{ width: 460, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 28 }}>
         <Shield size={28} style={{ color: '#ff6b6b' }} />
-        <h1 style={{ fontSize: 24, fontWeight: 850, marginTop: 16 }}>Admin access required</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 850, marginTop: 16 }}>
+          {setupError ? 'Admin data unavailable' : 'Admin access required'}
+        </h1>
         <p style={{ color: DIM, fontSize: 13, lineHeight: 1.7, marginTop: 10 }}>
-          이 페이지는 관리자 이메일 allowlist에 포함된 계정만 접근할 수 있습니다.
+          {setupError
+            ? '관리자 화면은 열렸지만, 서버가 Firebase Auth 전체 회원을 읽을 권한 설정을 아직 받지 못했습니다.'
+            : '이 페이지는 관리자 이메일 allowlist에 포함된 계정만 접근할 수 있습니다.'}
         </p>
         <p style={{ color: '#ff9f9f', fontSize: 12, marginTop: 14 }}>{error}</p>
       </div>
@@ -139,6 +151,9 @@ export function AdminPage() {
   const [tab, setTab] = useState<'materials' | 'users'>('materials')
   const [materials, setMaterials] = useState<AdminMaterial[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
+  const [usersSource, setUsersSource] = useState('')
+  const [userQuery, setUserQuery] = useState('')
+  const [userFilter, setUserFilter] = useState<UserFilter>('real')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [form, setForm] = useState<AdminMaterial>(emptyMaterial)
   const [query, setQuery] = useState('')
@@ -151,7 +166,8 @@ export function AdminPage() {
     setAdminEmail(me.email)
     const [mats, userRows] = await Promise.all([apiAdminMaterials(), apiAdminUsers()])
     setMaterials(mats.items.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)))
-    setUsers(userRows.users.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')))
+    setUsers(userRows.users.sort(sortUsers))
+    setUsersSource(userRows.source ?? '')
     setReady(true)
   }
 
@@ -176,6 +192,24 @@ export function AdminPage() {
   const activeCount = materials.filter((m) => m.active).length
   const categoriesCount = new Set(materials.map((m) => m.category)).size
   const remoteReadyCount = materials.filter((m) => m.thumbnailPath && m.referencePath).length
+  const realUsers = users.filter((user) => !user.isTestUser)
+  const testUserCount = users.length - realUsers.length
+  const googleUserCount = users.filter((user) => user.providerType === 'google' || user.providers?.includes('google.com')).length
+  const verifiedUserCount = users.filter((user) => user.emailVerified).length
+  const creditUserCount = users.filter((user) => user.hasCreditDoc).length
+  const filteredUsers = useMemo(() => {
+    const q = userQuery.trim().toLowerCase()
+    return users.filter((user) => {
+      if (userFilter === 'real' && user.isTestUser) return false
+      if (userFilter === 'google' && !(user.providerType === 'google' || user.providers?.includes('google.com'))) return false
+      if (userFilter === 'test' && !user.isTestUser) return false
+      if (userFilter === 'noCredits' && user.hasCreditDoc) return false
+      if (userFilter === 'disabled' && !user.disabled) return false
+      if (!q) return true
+      const providerText = (user.providers ?? []).join(' ')
+      return `${user.email} ${user.uid} ${user.plan} ${providerText}`.toLowerCase().includes(q)
+    })
+  }, [userFilter, userQuery, users])
 
   const editMaterial = (material: AdminMaterial) => {
     setSelectedId(material.id)
@@ -229,9 +263,9 @@ export function AdminPage() {
     }
   }
 
-  const updateUserBalance = async (user: AdminUser, balance: number) => {
-    const saved = await apiSaveAdminUser({ ...user, balance })
-    setUsers((rows) => rows.map((row) => (row.uid === saved.user.uid ? saved.user : row)))
+  const updateUserBalance = async (user: AdminUser, balance: number, plan: string) => {
+    const saved = await apiSaveAdminUser({ ...user, balance, plan })
+    setUsers((rows) => rows.map((row) => (row.uid === saved.user.uid ? { ...row, ...saved.user, hasCreditDoc: true } : row)))
     setNotice(`${user.email || user.uid} 크레딧 업데이트 완료`)
   }
 
@@ -313,9 +347,19 @@ export function AdminPage() {
           )}
 
           <div className="mt-6 grid grid-cols-3 gap-3">
-            <Stat label="Active materials" value={activeCount} icon={Layers3} />
-            <Stat label="Categories" value={categoriesCount} icon={Database} />
-            <Stat label="CDN-ready materials" value={remoteReadyCount} icon={ImagePlus} />
+            {tab === 'materials' ? (
+              <>
+                <Stat label="Active materials" value={activeCount} icon={Layers3} />
+                <Stat label="Categories" value={categoriesCount} icon={Database} />
+                <Stat label="CDN-ready materials" value={remoteReadyCount} icon={ImagePlus} />
+              </>
+            ) : (
+              <>
+                <Stat label="Real users" value={realUsers.length} icon={Users} />
+                <Stat label="Google sign-ins" value={googleUserCount} icon={Shield} />
+                <Stat label="Test accounts" value={testUserCount} icon={Database} />
+              </>
+            )}
           </div>
 
           {tab === 'materials' ? (
@@ -473,30 +517,77 @@ export function AdminPage() {
                   <Users size={16} style={{ color: TEAL }} />
                   Users & Credits
                 </div>
-                <div style={{ color: DIM, fontSize: 12 }}>Firebase Auth 전체 사용자 목록은 Admin SDK 연동 후 확장됩니다.</div>
+                <div style={{ color: DIM, fontSize: 12 }}>
+                  {usersSource === 'firebase-auth'
+                    ? `Firebase Auth 기준 · verified ${verifiedUserCount} · credit docs ${creditUserCount} · total ${users.length}`
+                    : '사용자 데이터 로딩'}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2" style={{ padding: 14, borderBottom: `1px solid ${LINE}` }}>
+                <div className="flex min-w-[260px] flex-1 items-center gap-2 rounded-md" style={{ height: 38, padding: '0 12px', background: '#0d0e14', border: `1px solid ${LINE}` }}>
+                  <Search size={15} style={{ color: '#68707d' }} />
+                  <input
+                    value={userQuery}
+                    onChange={(e) => setUserQuery(e.target.value)}
+                    placeholder="Search email, uid, plan, provider"
+                    className="min-w-0 flex-1 bg-transparent outline-none"
+                    style={{ color: TEXT, fontSize: 13 }}
+                  />
+                </div>
+                {[
+                  { id: 'real' as const, label: `Real ${realUsers.length}` },
+                  { id: 'google' as const, label: `Google ${googleUserCount}` },
+                  { id: 'test' as const, label: `Test ${testUserCount}` },
+                  { id: 'noCredits' as const, label: `No credits ${users.length - creditUserCount}` },
+                  { id: 'disabled' as const, label: `Disabled ${users.filter((user) => user.disabled).length}` },
+                  { id: 'all' as const, label: `All ${users.length}` },
+                ].map((item) => {
+                  const active = userFilter === item.id
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setUserFilter(item.id)}
+                      className="rounded-md"
+                      style={{
+                        height: 34,
+                        padding: '0 11px',
+                        background: active ? 'rgba(0,201,167,.16)' : '#0d0e14',
+                        border: `1px solid ${active ? 'rgba(0,201,167,.36)' : LINE}`,
+                        color: active ? '#98fff0' : '#aeb3bf',
+                        fontSize: 12,
+                        fontWeight: 850,
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  )
+                })}
               </div>
               <div style={{ overflow: 'auto' }}>
-                <table className="w-full" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
+                <table className="w-full" style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 1180 }}>
                   <thead>
                     <tr style={{ color: '#9ca3af', background: '#101119' }}>
                       <th style={{ textAlign: 'left', padding: '12px 16px' }}>Email</th>
                       <th style={{ textAlign: 'left', padding: '12px 16px' }}>UID</th>
+                      <th style={{ textAlign: 'left', padding: '12px 16px' }}>Status</th>
+                      <th style={{ textAlign: 'left', padding: '12px 16px' }}>Joined</th>
+                      <th style={{ textAlign: 'left', padding: '12px 16px' }}>Last login</th>
                       <th style={{ textAlign: 'left', padding: '12px 16px' }}>Plan</th>
                       <th style={{ textAlign: 'right', padding: '12px 16px' }}>Credits</th>
                       <th style={{ width: 170, padding: '12px 16px' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map((user) => (
+                    {filteredUsers.map((user) => (
                       <UserRow key={user.uid} user={user} onSave={updateUserBalance} />
                     ))}
                   </tbody>
                 </table>
               </div>
-              {users.length === 0 && (
+              {filteredUsers.length === 0 && (
                 <div className="flex items-center gap-2" style={{ padding: 20, color: DIM, fontSize: 13 }}>
                   <AlertCircle size={15} />
-                  아직 크레딧 문서가 있는 사용자가 없습니다.
+                  조건에 맞는 사용자가 없습니다.
                 </div>
               )}
             </section>
@@ -507,17 +598,64 @@ export function AdminPage() {
   )
 }
 
-function UserRow({ user, onSave }: { user: AdminUser; onSave: (user: AdminUser, balance: number) => Promise<void> }) {
+function formatDate(value?: string) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  return date.toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })
+}
+
+function UserRow({ user, onSave }: { user: AdminUser; onSave: (user: AdminUser, balance: number, plan: string) => Promise<void> }) {
   const [balance, setBalance] = useState(String(user.balance))
+  const [plan, setPlan] = useState(user.plan || 'standard')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => setBalance(String(user.balance)), [user.balance])
+  useEffect(() => setPlan(user.plan || 'standard'), [user.plan])
 
   return (
     <tr style={{ borderTop: `1px solid ${LINE}` }}>
-      <td style={{ padding: '13px 16px', color: TEXT, fontWeight: 750 }}>{user.email || 'No email recorded'}</td>
+      <td style={{ padding: '13px 16px' }}>
+        <div style={{ color: TEXT, fontWeight: 750 }}>{user.email || 'No email recorded'}</div>
+        <div style={{ color: '#697080', fontSize: 11.5, marginTop: 4 }}>
+          {(user.providers?.length ? user.providers : ['password']).join(', ')}
+        </div>
+      </td>
       <td style={{ padding: '13px 16px', color: DIM, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 }}>{user.uid}</td>
-      <td style={{ padding: '13px 16px', color: '#b6bbc7' }}>{user.plan}</td>
+      <td style={{ padding: '13px 16px' }}>
+        <div className="flex flex-wrap gap-1.5">
+          <span style={{ color: user.disabled ? '#ff9ca8' : '#8ff5e6', background: user.disabled ? '#2a171a' : '#132522', borderRadius: 999, padding: '3px 7px', fontSize: 11, fontWeight: 800 }}>
+            {user.disabled ? 'Disabled' : 'Active'}
+          </span>
+          <span style={{ color: user.emailVerified ? '#dbeafe' : '#f8c471', background: user.emailVerified ? '#152033' : '#2a2111', borderRadius: 999, padding: '3px 7px', fontSize: 11, fontWeight: 800 }}>
+            {user.emailVerified ? 'Verified' : 'Unverified'}
+          </span>
+          {!user.hasCreditDoc && (
+            <span style={{ color: '#b7bcc7', background: '#20222b', borderRadius: 999, padding: '3px 7px', fontSize: 11, fontWeight: 800 }}>
+              No credit doc
+            </span>
+          )}
+          {user.isTestUser && (
+            <span style={{ color: '#d8b4fe', background: '#251632', borderRadius: 999, padding: '3px 7px', fontSize: 11, fontWeight: 800 }}>
+              Test
+            </span>
+          )}
+        </div>
+      </td>
+      <td style={{ padding: '13px 16px', color: '#b6bbc7' }}>{formatDate(user.createdAt)}</td>
+      <td style={{ padding: '13px 16px', color: '#b6bbc7' }}>{formatDate(user.lastLoginAt)}</td>
+      <td style={{ padding: '13px 16px' }}>
+        <select
+          value={plan}
+          onChange={(e) => setPlan(e.target.value)}
+          style={{ ...inputStyle, width: 118 }}
+        >
+          <option value="standard">standard</option>
+          <option value="pro">pro</option>
+          <option value="team">team</option>
+          <option value="suspended">suspended</option>
+        </select>
+      </td>
       <td style={{ padding: '13px 16px', textAlign: 'right' }}>
         <input
           value={balance}
@@ -529,7 +667,7 @@ function UserRow({ user, onSave }: { user: AdminUser; onSave: (user: AdminUser, 
         <button
           onClick={() => {
             setSaving(true)
-            void onSave(user, Number(balance)).finally(() => setSaving(false))
+            void onSave(user, Number(balance), plan).finally(() => setSaving(false))
           }}
           className="inline-flex items-center gap-1.5 rounded-md"
           style={{ height: 34, padding: '0 12px', background: '#1b2a29', color: '#8ff5e6', fontSize: 12, fontWeight: 850 }}
