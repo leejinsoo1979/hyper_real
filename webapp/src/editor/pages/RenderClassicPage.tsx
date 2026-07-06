@@ -804,7 +804,7 @@ export function RenderClassicPage() {
                 }}
               />
             }
-            imageOverlay={s.sourceTool === 'magic' && s.maskUri ? <MaskSelectOverlay /> : undefined}
+            imageOverlay={s.sourceTool === 'magic' && s.maskUri ? <MagicSelectOverlay /> : undefined}
             onImagePick={s.sourceTool === 'eyedropper' ? handleSourcePick : undefined}
             imageFooter={(s.materialSwaps.length > 0 || s.sourceSelectedColors.length > 0) ? (
               <div className="flex flex-wrap gap-1.5">
@@ -1499,6 +1499,197 @@ function AspectFitBox({ src, children }: { src: string; children: React.ReactNod
       {dims && <img src={src} alt="" className="absolute inset-0 h-full w-full" draggable={false} />}
       {dims && children}
     </div>
+  )
+}
+
+// ── 매직툴 오버레이: 호버 = 재질 영역 외곽선 글로우 미리보기 / 클릭 = 선택 토글 ──
+function MagicSelectOverlay() {
+  const maskUri = useClassicStore((st) => st.maskUri)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const maskDataRef = useRef<{ data: Uint8ClampedArray; w: number; h: number } | null>(null)
+  const edgeCacheRef = useRef<Map<string, { edge: HTMLCanvasElement; fill: HTMLCanvasElement }>>(new Map())
+  const hoverRef = useRef<string | null>(null)
+  const rafRef = useRef<number>(0)
+
+  // 마스크 픽셀 데이터 준비
+  useEffect(() => {
+    if (!maskUri) return
+    edgeCacheRef.current.clear()
+    const img = new Image()
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      c.width = img.naturalWidth
+      c.height = img.naturalHeight
+      const ctx = c.getContext('2d', { willReadFrequently: true })!
+      ctx.drawImage(img, 0, 0)
+      maskDataRef.current = {
+        data: ctx.getImageData(0, 0, c.width, c.height).data,
+        w: c.width,
+        h: c.height,
+      }
+    }
+    img.src = maskUri
+  }, [maskUri])
+
+  const colorAtEvent = (e: React.MouseEvent): string | null => {
+    const cv = canvasRef.current
+    const md = maskDataRef.current
+    if (!cv || !md) return null
+    const r = cv.getBoundingClientRect()
+    const x = Math.floor(((e.clientX - r.left) / r.width) * md.w)
+    const y = Math.floor(((e.clientY - r.top) / r.height) * md.h)
+    if (x < 0 || y < 0 || x >= md.w || y >= md.h) return null
+    const i = (y * md.w + x) * 4
+    // 검정(#000)은 배경 처리
+    if (md.data[i] < 8 && md.data[i + 1] < 8 && md.data[i + 2] < 8) return null
+    return `#${[md.data[i], md.data[i + 1], md.data[i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')}`
+  }
+
+  // 재질 색 → 외곽선/채움 비트맵 (색별 1회 계산 후 캐시)
+  const regionCanvases = (hex: string) => {
+    const cached = edgeCacheRef.current.get(hex)
+    if (cached) return cached
+    const md = maskDataRef.current
+    if (!md) return null
+    const { data, w, h } = md
+    const tr = parseInt(hex.slice(1, 3), 16)
+    const tg = parseInt(hex.slice(3, 5), 16)
+    const tb = parseInt(hex.slice(5, 7), 16)
+    const inR = new Uint8Array(w * h)
+    for (let p = 0; p < w * h; p++) {
+      const i = p * 4
+      if (Math.abs(data[i] - tr) <= 3 && Math.abs(data[i + 1] - tg) <= 3 && Math.abs(data[i + 2] - tb) <= 3) inR[p] = 1
+    }
+    const edgeImg = new ImageData(w, h)
+    const fillImg = new ImageData(w, h)
+    for (let p = 0; p < w * h; p++) {
+      if (!inR[p]) continue
+      const x = p % w
+      const y = (p / w) | 0
+      fillImg.data[p * 4 + 3] = 255
+      const isEdge =
+        x === 0 || x === w - 1 || y === 0 || y === h - 1 ||
+        !inR[p - 1] || !inR[p + 1] || !inR[p - w] || !inR[p + w]
+      if (isEdge) edgeImg.data[p * 4 + 3] = 255
+    }
+    const make = (imgData: ImageData) => {
+      const c = document.createElement('canvas')
+      c.width = w
+      c.height = h
+      const ctx = c.getContext('2d')!
+      ctx.putImageData(imgData, 0, 0)
+      ctx.globalCompositeOperation = 'source-in'
+      ctx.fillStyle = '#00f0c8'
+      ctx.fillRect(0, 0, w, h)
+      return c
+    }
+    const entry = { edge: make(edgeImg), fill: make(fillImg) }
+    edgeCacheRef.current.set(hex, entry)
+    return entry
+  }
+
+  // 렌더 루프: 글로우 + 흐르는 스트라이프(마칭 앤츠) 애니메이션
+  useEffect(() => {
+    const stripe = document.createElement('canvas')
+    stripe.width = 16
+    stripe.height = 16
+    {
+      const sctx = stripe.getContext('2d')!
+      sctx.strokeStyle = 'rgba(255,255,255,0.95)'
+      sctx.lineWidth = 4
+      for (let o = -16; o <= 32; o += 8) {
+        sctx.beginPath()
+        sctx.moveTo(o, 16)
+        sctx.lineTo(o + 16, 0)
+        sctx.stroke()
+      }
+    }
+
+    const draw = (t: number) => {
+      rafRef.current = requestAnimationFrame(draw)
+      const cv = canvasRef.current
+      const md = maskDataRef.current
+      if (!cv || !md) return
+      if (cv.width !== md.w) { cv.width = md.w; cv.height = md.h }
+      const ctx = cv.getContext('2d')!
+      ctx.clearRect(0, 0, md.w, md.h)
+
+      const sel = useClassicStore.getState().sourceSelectedColors
+      const pulse = 0.72 + 0.28 * Math.sin(t / 320)
+
+      // 선택 확정 영역: 은은한 채움 + 또렷한 외곽선
+      for (const hex of sel) {
+        const rc = regionCanvases(hex)
+        if (!rc) continue
+        ctx.globalAlpha = 0.16
+        ctx.drawImage(rc.fill, 0, 0)
+        ctx.globalAlpha = 0.95
+        ctx.drawImage(rc.edge, 0, 0)
+      }
+
+      // 호버 미리보기: 글로우 + 흐르는 라인
+      const hov = hoverRef.current
+      if (hov && !sel.includes(hov)) {
+        const rc = regionCanvases(hov)
+        if (rc) {
+          ctx.save()
+          ctx.filter = 'blur(7px)'
+          ctx.globalAlpha = 0.55 * pulse
+          ctx.drawImage(rc.edge, 0, 0)
+          ctx.filter = 'blur(2.5px)'
+          ctx.globalAlpha = 0.85 * pulse
+          ctx.drawImage(rc.edge, 0, 0)
+          ctx.restore()
+          ctx.globalAlpha = 1
+          ctx.drawImage(rc.edge, 0, 0)
+          const ants = document.createElement('canvas')
+          ants.width = md.w
+          ants.height = md.h
+          const actx = ants.getContext('2d')!
+          actx.drawImage(rc.edge, 0, 0)
+          actx.globalCompositeOperation = 'source-in'
+          const offset = (t / 40) % 16
+          actx.save()
+          actx.translate(-offset, offset)
+          actx.fillStyle = actx.createPattern(stripe, 'repeat')!
+          actx.fillRect(-16, -16, md.w + 32, md.h + 32)
+          actx.restore()
+          ctx.globalAlpha = 0.9
+          ctx.drawImage(ants, 0, 0)
+        }
+      }
+      ctx.globalAlpha = 1
+    }
+    rafRef.current = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [])
+
+  const onMove = (e: React.MouseEvent) => { hoverRef.current = colorAtEvent(e) }
+  const onLeave = () => { hoverRef.current = null }
+  const onClick = (e: React.MouseEvent) => {
+    const hex = colorAtEvent(e)
+    if (!hex) return
+    const st = useClassicStore.getState()
+    const next = st.sourceSelectedColors.includes(hex)
+      ? st.sourceSelectedColors.filter((c) => c !== hex)
+      : [...st.sourceSelectedColors, hex]
+    st.set({
+      sourceSelectedColors: next,
+      statusText: next.length > 0
+        ? `매직: ${next.length}개 영역 선택됨 — 프롬프트 입력 후 생성하면 선택 영역만 변경됩니다`
+        : '매직: 선택 해제됨',
+    })
+  }
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 h-full w-full"
+      style={{ cursor: 'crosshair' }}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      onClick={onClick}
+    />
   )
 }
 
