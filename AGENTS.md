@@ -1,5 +1,8 @@
 # Repository Guidelines
 
+> **필독**: 작업 방법론은 [AGENT_PLAYBOOK.md](AGENT_PLAYBOOK.md), 프로젝트 실전 지식(함정·검증 루틴·열린 이슈)은
+> [HANDOFF.md](HANDOFF.md)를 먼저 읽어라. 이 두 문서의 규칙이 아래 일반 가이드보다 우선한다.
+
 ## Project Structure & Module Organization
 
 This repository contains a SketchUp AI rendering plugin and a companion Vite editor. The SketchUp extension entry files are `nano_banana_renderer.rb` and `nano_banana_renderer/main.rb`. Ruby service code lives in `nano_banana_renderer/services/`, HTML dialogs in `nano_banana_renderer/ui/`, UI scripts in `nano_banana_renderer/ui/scripts/`, styles in `nano_banana_renderer/ui/styles/`, and icons or bundled assets in `nano_banana_renderer/assets/`. The React/TypeScript editor is under `webapp/src/`, organized by `app`, `editor`, `engine`, `drawing`, and `types`. Project notes and specs are in `docs/` and `skills/`.
