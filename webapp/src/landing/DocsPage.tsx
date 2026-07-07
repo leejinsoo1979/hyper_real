@@ -42,7 +42,7 @@ const SECTIONS: { id: string; label: string; body: DocItem[] }[] = [
       },
       {
         h: 'Gemini 키 발급 (이미지 렌더링 · 필수)',
-        p: '① Google AI Studio에 접속해 Google 계정으로 로그인 → ② "API 키 만들기(Create API key)" 클릭 (프로젝트가 없으면 자동 생성) → ③ AIza…로 시작하는 키 복사. 무료 등급으로도 렌더링을 시작할 수 있습니다.',
+        p: '① Google AI Studio에 접속해 Google 계정으로 로그인 → ② "API 키 만들기(Create API key)" 클릭 (프로젝트가 없으면 자동 생성) → ③ AIza…로 시작하는 키 복사. 무료 등급으로도 렌더링을 시작할 수 있습니다 (Nanobanana Flash 기준 · Pro 모델은 Billing 결제 등록 필요).',
         link: { href: 'https://aistudio.google.com/apikey', label: 'Google AI Studio 열기' },
       },
       {

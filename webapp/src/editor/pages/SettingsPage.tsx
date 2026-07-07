@@ -506,7 +506,7 @@ function ApiKeySection({ saas }: { saas: boolean }) {
           'Google AI Studio(aistudio.google.com/apikey)에 접속해 Google 계정으로 로그인',
           '"API 키 만들기(Create API key)" 버튼 클릭 — 프로젝트가 없으면 자동 생성됩니다',
           '생성된 AIza... 로 시작하는 키를 복사',
-          '위 입력란에 붙여넣고 저장 (무료 등급으로도 렌더링 가능)',
+          '위 입력란에 붙여넣고 저장 — 무료 등급은 Nanobanana(Flash) 모델 기준이며, Nanobanana Pro(Gemini 3)는 Billing 결제 등록이 필요합니다',
         ]}
       />
       <div style={{ borderTop: '1px solid #22222a', margin: '14px 0' }} />
