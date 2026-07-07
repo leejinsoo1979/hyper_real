@@ -19,6 +19,9 @@ function getRenderLabel(engine: RenderParams['engine']): string {
       return 'Nanobanana Pro'
     case 'experimental-interior':
       return 'Nanobanana Pro'
+    default:
+      // 제공사 모델 id 직접 지정 (예: gpt-image-1 → GPT Image)
+      return engine.startsWith('gpt-') ? 'GPT Image' : engine
   }
 }
 

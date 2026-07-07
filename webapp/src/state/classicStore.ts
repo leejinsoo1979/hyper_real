@@ -4,7 +4,7 @@ import { create } from 'zustand'
 // 클래식 렌더 화면 상태 (레거시 루비 창 UI의 상태 그대로)
 // ---------------------------------------------------------------------------
 
-export type ClassicModel = 'gemini-2.5-flash-image' | 'gemini-3-pro-image'
+export type ClassicModel = 'gemini-2.5-flash-image' | 'gemini-3-pro-image' | 'gpt-image-1'
 export type ClassicSize = '1024' | '1536' | '1920'
 
 /** 스포이드로 지정한 재질 교체: 어떤 재질을 → 무엇으로 바꿀지 */

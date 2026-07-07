@@ -8,6 +8,7 @@ import { useHistoryStore } from '../../state/historyStore'
 import { selectScene, requestCapture, addScene, sendCamera, fetchSourceOnce, captureMask, isBridgeOrigin, bridgeToolLabel, captureDepth, getCachedSourceMaterials, loadMaterialDetail, loadSourceMaterials, materialTextureUri } from '../../api/sketchupBridge'
 import { generateAutoPrompt, buildLightingDescription } from '../../engine/autoPrompt'
 import { renderMain } from '../../engine/adapters/mainRenderer'
+import { availableImageModels } from '../../engine/imageModels'
 import { maskToHighlightOverlay, segmentObjectAtPoint } from '../../engine/segmentPoint'
 import { EditOverlay } from '../panels/EditOverlay'
 import { ImageLightbox } from '../panels/ImageLightbox'
@@ -40,7 +41,7 @@ function saveClassicRenderHistory(opts: {
   resultImage: string
   prompt: string
   negativePrompt: string
-  engine: 'main' | 'experimental-interior'
+  engine: string // 'main' | 'experimental-interior' | 모델 id (예: gpt-image-1)
   resolution: string
   timePreset: 'day' | 'evening' | 'night'
   lightsOn: boolean
@@ -548,7 +549,8 @@ export function RenderClassicPage() {
         useClassicStore.getState().set({ maskUri: m?.uri ?? null, maskMap: m?.map ?? [] })
       })
     }
-    const engine = st.model === 'gemini-3-pro-image' ? 'experimental-interior' : 'main'
+    const engine = st.model.startsWith('gpt-') ? st.model
+      : st.model === 'gemini-3-pro-image' ? 'experimental-interior' : 'main'
 
     // ── 추가 입력 이미지 조립: [깊이맵] + [스타일 참조] + [재질 교체 참조] ──
     // 순서 고정: 프롬프트에서 "image N"으로 지칭하므로 배열 순서와 일치해야 한다
@@ -753,8 +755,9 @@ export function RenderClassicPage() {
                 border: `1px solid ${C.border}`, borderRadius: 6, color: '#ccc', fontSize: 11,
               }}
             >
-              <option value="gemini-2.5-flash-image">Nanobanana (Flash 2.5)</option>
-              <option value="gemini-3-pro-image">Nanobanana Pro (Gemini 3)</option>
+              {availableImageModels().map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
             </select>
           </div>
 

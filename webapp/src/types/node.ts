@@ -31,7 +31,8 @@ export interface SourceParams {
 }
 
 export interface RenderParams {
-  engine: 'main' | 'experimental-exterior' | 'experimental-interior'
+  // 기본 3종 + 제공사 모델 id 직접 지정(예: gpt-image-1) — (string & {})는 자동완성 유지용
+  engine: 'main' | 'experimental-exterior' | 'experimental-interior' | (string & {})
   prompt: string
   negativePrompt: string
   presetId: string | null

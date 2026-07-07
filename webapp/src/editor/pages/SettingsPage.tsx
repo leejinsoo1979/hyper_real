@@ -9,6 +9,7 @@ import logoUnreal from '../../assets/plugin-logos/unreal.png'
 import logoBlender from '../../assets/plugin-logos/blender.png'
 import { getStoredApiKey, setStoredApiKey } from '../../engine/geminiClient'
 import { getStoredXaiApiKey, setStoredXaiApiKey } from '../../engine/xaiClient'
+import { getStoredOpenAIApiKey, setStoredOpenAIApiKey } from '../../engine/openaiClient'
 import { saasMode } from '../../api/lumanovaApi'
 import { useUIStore } from '../../state/uiStore'
 import { APP_VERSION } from '../../app/version'
@@ -491,7 +492,7 @@ function ApiKeySection({ saas }: { saas: boolean }) {
     <Section title="API Keys">
       {saas && (
         <div className="mb-3" style={{ fontSize: 11.5, color: '#71717c' }}>
-          이미지 렌더링(Gemini)과 영상 생성(xAI Grok) 모두 본인 API 키가 필요합니다. 아래에서 발급받아 등록하세요.
+          이미지 렌더링(Gemini)과 영상 생성(xAI Grok)은 본인 API 키가 필요합니다. 선택 키(OpenAI 등)를 저장하면 렌더 화면 MODEL 목록에 해당 모델이 추가됩니다.
         </div>
       )}
       <ApiKeyRow
@@ -522,6 +523,22 @@ function ApiKeySection({ saas }: { saas: boolean }) {
           '생성된 xai-... 키를 복사 — 생성 직후 한 번만 표시되니 바로 복사하세요',
           'Billing 메뉴에서 결제 수단 등록 후 크레딧 충전 (영상 생성은 유료 — 해상도에 따라 약 초당 $0.05~0.07)',
           '위 입력란에 붙여넣고 저장',
+        ]}
+      />
+      <div style={{ borderTop: '1px solid #22222a', margin: '14px 0' }} />
+      <ApiKeyRow
+        label="OpenAI (이미지 렌더링 · 선택 — 저장하면 GPT Image 모델 사용 가능)"
+        placeholder="sk-..."
+        read={() => getStoredOpenAIApiKey() ?? ''}
+        write={setStoredOpenAIApiKey}
+        issueHref="https://platform.openai.com/api-keys"
+        issueLabel="OpenAI Platform에서 발급"
+        issueSteps={[
+          'OpenAI Platform(platform.openai.com/api-keys)에 접속해 로그인',
+          '"Create new secret key" 클릭 → 생성된 sk-... 키를 바로 복사 (한 번만 표시)',
+          'Billing에서 결제 수단 등록 (gpt-image-1은 유료 — 장당 약 $0.02~0.19)',
+          'gpt-image-1이 403을 반환하면 Settings → Organization에서 조직 인증(Verify) 필요',
+          '위 입력란에 붙여넣고 저장 → 렌더 화면 MODEL에 "GPT Image (OpenAI)"가 나타납니다',
         ]}
       />
       <div style={{ marginTop: 10, fontSize: 11.5, color: '#71717c' }}>

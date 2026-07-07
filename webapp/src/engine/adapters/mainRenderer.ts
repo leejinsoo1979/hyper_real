@@ -1,6 +1,7 @@
 import type { RenderInput } from '../../types/engine'
 import type { NodeResult } from '../../types/node'
 import { callGemini, useMock } from '../geminiClient'
+import { callOpenAIImage } from '../openaiClient'
 
 // ── Mock (development) ─────────────────────────────────────────────────────
 
@@ -57,11 +58,39 @@ async function renderMainGemini(input: RenderInput): Promise<NodeResult> {
   }
 }
 
+// ── OpenAI (gpt-image-1) ───────────────────────────────────────────────────
+
+async function renderMainOpenAI(input: RenderInput): Promise<NodeResult> {
+  let fullPrompt = input.negativePrompt
+    ? `${input.prompt}\n\n[NEGATIVE - MUST AVOID]\n${input.negativePrompt}`
+    : input.prompt
+  if (input.mask) fullPrompt += MASK_INSTRUCTION
+  if (input.extraImages?.length) fullPrompt += MULTI_INPUT_INSTRUCTION
+
+  // OpenAI는 마스크 전용 파라미터 형식(투명영역)이 달라서 참조 이미지로 전달하고
+  // 프롬프트 지시 + (클래식의) 픽셀 강제 합성으로 영역을 보장한다
+  const extras = [...(input.mask ? [input.mask] : []), ...(input.extraImages ?? [])]
+  const b64 = await callOpenAIImage({
+    image: input.image,
+    extraImages: extras.length > 0 ? extras : undefined,
+    prompt: fullPrompt,
+  })
+  return {
+    image: `data:image/png;base64,${b64}`,
+    resolution: input.resolution,
+    timestamp: new Date().toISOString(),
+    cacheKey: '',
+  }
+}
+
 // ── Exported switcher ──────────────────────────────────────────────────────
 
 // 정책(2026-07-06): 사용자 개별 API 키로만 렌더링한다.
 // 서버 프록시(운영자 키 + 크레딧) 경로는 사용하지 않는다 — 서비스 운영 시 재도입 예정.
 // 키가 없으면 geminiClient.getApiKey()가 Settings 등록 안내 에러를 던진다.
 export async function renderMain(input: RenderInput): Promise<NodeResult> {
-  return useMock() ? renderMainMock(input) : renderMainGemini(input)
+  if (useMock()) return renderMainMock(input)
+  // 제공사 디스패치: 모델 id 접두사로 판별 (등록: engine/imageModels.ts)
+  if (input.engine?.startsWith('gpt-')) return renderMainOpenAI(input)
+  return renderMainGemini(input)
 }
