@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { SubPageShell, TEAL, goApp } from './shared'
+import { GeminiKeySteps, XaiKeySteps, OpenAIKeySteps } from './KeyGuideVisuals'
 
 interface DocItem {
   h: string
   p: string
+  /** 단계별 일러스트 (발급 화면 HTML 재현) */
+  visual?: ReactNode
   download?: { href: string; label: string }
   link?: { href: string; label: string }
 }
@@ -42,13 +45,21 @@ const SECTIONS: { id: string; label: string; body: DocItem[] }[] = [
       },
       {
         h: 'Gemini 키 발급 (이미지 렌더링 · 필수)',
-        p: '① Google AI Studio에 접속해 Google 계정으로 로그인 → ② "API 키 만들기(Create API key)" 클릭 (프로젝트가 없으면 자동 생성) → ③ AIza…로 시작하는 키 복사. 무료 등급으로도 렌더링을 시작할 수 있습니다 (Nanobanana Flash 기준 · Pro 모델은 Billing 결제 등록 필요).',
+        p: '아래 순서대로 4단계면 끝납니다. 무료 등급으로도 렌더링을 시작할 수 있습니다 (Nanobanana Flash 기준 · Pro 모델은 Billing 결제 등록 필요).',
+        visual: <GeminiKeySteps />,
         link: { href: 'https://aistudio.google.com/apikey', label: 'Google AI Studio 열기' },
       },
       {
         h: 'xAI Grok 키 발급 (영상 생성 · 필수)',
-        p: '① xAI Console(console.x.ai)에 가입/로그인 → ② 좌측 API Keys 메뉴에서 "Create API key" 클릭 → ③ xai-…로 시작하는 키 복사 (생성 직후 한 번만 표시되니 바로 복사하세요) → ④ Billing 메뉴에서 결제 수단을 등록하고 크레딧을 충전합니다. 영상 생성 비용은 해상도에 따라 대략 초당 $0.05~0.07이며 본인 xAI 계정으로 청구됩니다.',
+        p: '영상 생성(Grok Imagine)에 필요합니다. 키 발급 후 Billing 크레딧 충전까지 해야 작동합니다 (비용은 해상도에 따라 약 초당 $0.05~0.07, 본인 계정 청구).',
+        visual: <XaiKeySteps />,
         link: { href: 'https://console.x.ai', label: 'xAI Console 열기' },
+      },
+      {
+        h: 'OpenAI 키 발급 (선택 — GPT Image 모델)',
+        p: 'OpenAI 키를 저장하면 렌더 화면 MODEL 목록에 GPT Image(gpt-image-1)가 추가됩니다. 유료 모델이며(장당 약 $0.02~0.19), 계정에 따라 조직 인증이 필요할 수 있습니다.',
+        visual: <OpenAIKeySteps />,
+        link: { href: 'https://platform.openai.com/api-keys', label: 'OpenAI Platform 열기' },
       },
       {
         h: '앱에 등록하기',
@@ -115,6 +126,7 @@ export function DocsPage() {
               <div key={i}>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e8e8ee' }}>{b.h}</h3>
                 <p style={{ marginTop: 7, fontSize: 14, lineHeight: 1.7, color: '#9a9aa6' }}>{b.p}</p>
+                {b.visual}
                 {b.download && (
                   <a href={b.download.href} download className="mt-3 inline-block" style={{ padding: '10px 18px', borderRadius: 9, background: TEAL, color: '#06251f', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
                     {b.download.label} ↓
