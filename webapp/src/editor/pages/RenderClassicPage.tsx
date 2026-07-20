@@ -720,7 +720,27 @@ export function RenderClassicPage() {
     const f = e.target.files?.[0]
     if (!f) return
     const reader = new FileReader()
-    reader.onload = () => useClassicStore.getState().set({ frozenSource: String(reader.result), frozenFromBridge: false, mirror: false, statusText: '이미지 로드됨' })
+    reader.onload = () => useClassicStore.getState().set({
+      frozenSource: String(reader.result),
+      frozenFromBridge: false,
+      mirror: false,
+      previewOverride: null,
+      resultImage: null,
+      renderSourceImage: null,
+      maskUri: null,
+      maskMap: [],
+      selectedColors: [],
+      sourceSelectedColors: [],
+      aiSelMask: null,
+      aiSelOverlay: null,
+      aiSelLabel: null,
+      materialSwaps: [],
+      regionMaterial: null,
+      resultMaskView: false,
+      sourceTool: 'none',
+      resultTool: 'none',
+      statusText: '이미지 로드됨 — 매직툴로 객체나 면을 선택할 수 있습니다',
+    })
     reader.readAsDataURL(f)
     e.target.value = ''
   }, [])
@@ -1044,13 +1064,20 @@ export function RenderClassicPage() {
                   })
                   if (t !== 'eyedropper') setPickedMaterial(null)
                   // 매직툴: 브릿지 뷰면 재질 ID 마스크 캡처, 업로드/미연결이면 AI 세그멘테이션 모드
-                  if (t === 'magic' && !useClassicStore.getState().maskUri) {
+                  if (t === 'magic') {
                     const cur = useClassicStore.getState()
                     const uploaded = Boolean(cur.frozenSource) && !cur.frozenFromBridge
                     if (uploaded || useUIStore.getState().sketchUpStatus !== 'connected') {
-                      s.set({ statusText: '매직: 변경할 객체를 클릭하세요 (AI가 영역을 인식합니다)' })
+                      // 업로드 소스는 이전 브릿지 마스크가 남아 있어도 절대 재사용하지 않는다.
+                      s.set({
+                        maskUri: null,
+                        maskMap: [],
+                        sourceSelectedColors: [],
+                        statusText: '매직: 변경할 객체를 클릭하세요 (AI가 영역을 인식합니다)',
+                      })
                       return
                     }
+                    if (cur.maskUri) return
                     s.set({ statusText: '매직: 재질 마스크 캡처 중...' })
                     void captureMask().then((m) => {
                       useClassicStore.getState().set(m
