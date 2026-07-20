@@ -12,6 +12,7 @@ import { availableImageModels } from '../../engine/imageModels'
 import { maskToHighlightOverlay, segmentObjectAtPoint } from '../../engine/segmentPoint'
 import { EditOverlay } from '../panels/EditOverlay'
 import { ImageLightbox } from '../panels/ImageLightbox'
+import { SamMagicOverlay } from '../panels/SamMagicOverlay'
 import type { NodeData } from '../../types/node'
 import type { EdgeData } from '../../types/graph'
 
@@ -1073,7 +1074,7 @@ export function RenderClassicPage() {
                         maskUri: null,
                         maskMap: [],
                         sourceSelectedColors: [],
-                        statusText: '매직: 변경할 객체를 클릭하세요 (AI가 영역을 인식합니다)',
+                        statusText: '매직: AI 실시간 인식 준비 중… (준비되면 마우스만 올려도 영역이 표시됩니다)',
                       })
                       return
                     }
@@ -1091,6 +1092,9 @@ export function RenderClassicPage() {
             imageOverlay={
               s.aiMagicBusy ? <AiScanOverlay />
               : s.sourceTool === 'magic' && s.maskUri ? <MagicSelectOverlay />
+              // 업로드/미연결 이미지: 브라우저 SAM 실시간 hover 인식 (실패 시 클릭=Gemini 폴백)
+              : s.sourceTool === 'magic' && (s.previewOverride ?? s.frozenSource) && (!s.frozenFromBridge || status !== 'connected')
+                ? <SamMagicOverlay image={(s.previewOverride ?? s.frozenSource)!} />
               : s.sourceTool === 'magic' && s.aiSelOverlay ? <img src={s.aiSelOverlay} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" draggable={false} />
               : undefined
             }

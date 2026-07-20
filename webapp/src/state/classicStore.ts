@@ -59,6 +59,8 @@ interface ClassicState {
   aiSelOverlay: string | null
   /** aiSelMask 객체 라벨 (표시용) */
   aiSelLabel: string | null
+  /** 업로드 이미지 매직툴: 브라우저 SAM(실시간 hover 인식) 준비 상태 */
+  samStatus: 'idle' | 'loading' | 'ready' | 'error'
 
   /** 구조 고정: 렌더 시 깊이맵을 함께 보내 형상·카메라를 강제 유지 */
   depthLock: boolean
@@ -113,6 +115,7 @@ export const useClassicStore = create<ClassicState>((set) => ({
   aiSelMask: null,
   aiSelOverlay: null,
   aiSelLabel: null,
+  samStatus: 'idle',
 
   depthLock: true,
   frozenFromBridge: false,
