@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Eye, ImagePlus, Zap, Loader2, SlidersHorizontal, Download, PenTool, Pipette, Wand2, X, Magnet, Eraser, Palette } from 'lucide-react'
+import { Eye, ImagePlus, Zap, Loader2, SlidersHorizontal, Download, PenTool, Pipette, Wand2, X, Magnet, Eraser, Palette, ZoomIn, ZoomOut, Maximize2, Minimize2 } from 'lucide-react'
 import { useClassicStore, type ClassicModel, type ClassicSize, type MaterialSwap } from '../../state/classicStore'
 import { materialReferenceUrl, materialThumbnailUrl, materials as libraryMaterials, type MaterialAsset } from '../../data/materialLibrary'
 import { useUIStore } from '../../state/uiStore'
@@ -1136,6 +1136,7 @@ export function RenderClassicPage() {
           <Panel
             label="SOURCE"
             active
+            zoomable
             image={sourceImage}
             emptyText={`${toolLabel} 연결 대기 중... (또는 이미지 버튼으로 불러오기)`}
             emptyContent={<SourceDropZone onBrowse={() => fileRef.current?.click()} />}
@@ -1820,7 +1821,7 @@ function MaterialSwapDialog({ material, regionCount, pointImage, onApply, onClos
   return (
     <div
       className="fixed inset-0 flex items-center justify-center"
-      style={{ zIndex: 120, background: 'rgba(5,5,10,0.6)', backdropFilter: 'blur(3px)' }}
+      style={{ zIndex: 300, background: 'rgba(5,5,10,0.6)', backdropFilter: 'blur(3px)' }}
       onClick={onClose}
     >
       <div
@@ -2008,7 +2009,7 @@ function SourceDropZone({ onBrowse }: { onBrowse: () => void }) {
   )
 }
 
-function Panel({ label, labelRight, active, image, emptyText, emptyContent, loading, loadingText, video, videoViewport, imageOverlay, viewTabs, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions, onView, imageToolbar, onImagePick, pickCursor, imageFooter }: {
+function Panel({ label, labelRight, active, image, emptyText, emptyContent, loading, loadingText, video, videoViewport, imageOverlay, viewTabs, tab, onTab, prompt, negative, onPrompt, onNegative, promptPlaceholder, headerRight, actions, onView, imageToolbar, onImagePick, pickCursor, imageFooter, zoomable }: {
   label: string
   labelRight?: React.ReactNode
   active?: boolean
@@ -2040,9 +2041,73 @@ function Panel({ label, labelRight, active, image, emptyText, emptyContent, load
   pickCursor?: string
   /** 이미지 영역 하단 오버레이 (재질 교체 칩 등) */
   imageFooter?: React.ReactNode
+  /** 포토샵식 줌/팬 + 전체화면 컨트롤 (휠=줌, Space+드래그=이동) */
+  zoomable?: boolean
 }) {
+  // ── 줌/팬/전체화면 (zoomable 전용) ─────────────────────────────────────────
+  const [zoom, setZoom] = useState(1)
+  const [zpan, setZpan] = useState({ x: 0, y: 0 })
+  const [full, setFull] = useState(false)
+  const [spaceDown, setSpaceDown] = useState(false)
+  const zoomAreaRef = useRef<HTMLDivElement>(null)
+  const panDragRef = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null)
+
+  const resetZoom = useCallback(() => {
+    setZoom(1)
+    setZpan({ x: 0, y: 0 })
+  }, [])
+
+  // 휠 = 커서 기준 줌 (포토샵과 동일). preventDefault 필요해서 native 리스너 사용
+  useEffect(() => {
+    if (!zoomable) return
+    const el = zoomAreaRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      const cx = e.clientX - rect.left - rect.width / 2
+      const cy = e.clientY - rect.top - rect.height / 2
+      setZoom((z) => {
+        const nz = Math.min(8, Math.max(0.2, z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)))
+        setZpan((p) => ({
+          x: cx - ((cx - p.x) * nz) / z,
+          y: cy - ((cy - p.y) * nz) / z,
+        }))
+        return nz
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [zoomable, full])
+
+  // Space = 손바닥 툴 (누르는 동안 드래그로 이동)
+  useEffect(() => {
+    if (!zoomable) return
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return
+      const t = e.target as HTMLElement
+      if (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT') return
+      e.preventDefault()
+      setSpaceDown(true)
+    }
+    const up = (e: KeyboardEvent) => {
+      if (e.code === 'Space') setSpaceDown(false)
+    }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+    }
+  }, [zoomable])
+
   return (
-    <div className="flex flex-1 flex-col overflow-hidden" style={{ background: '#111111' }}>
+    <div
+      className="flex flex-1 flex-col overflow-hidden"
+      style={full
+        ? { position: 'fixed', inset: 0, zIndex: 150, background: '#111111' }
+        : { background: '#111111' }}
+    >
       {/* 헤더 (SOURCE 활성 = 파랑) */}
       <div
         className="flex items-center justify-between"
@@ -2076,7 +2141,17 @@ function Panel({ label, labelRight, active, image, emptyText, emptyContent, load
       </div>
 
       {/* 이미지 영역: 남는 세로 공간을 모두 사용 */}
-      <div className="relative flex flex-1 items-center justify-center" style={{ width: '100%', background: C.panelBg, minHeight: 0 }}>
+      <div
+        ref={zoomAreaRef}
+        className="relative flex flex-1 items-center justify-center overflow-hidden"
+        style={{ width: '100%', background: C.panelBg, minHeight: 0 }}
+      >
+        <div
+          className="flex h-full w-full items-center justify-center"
+          style={zoomable && (zoom !== 1 || zpan.x !== 0 || zpan.y !== 0)
+            ? { transform: `translate(${zpan.x}px, ${zpan.y}px) scale(${zoom})` }
+            : undefined}
+        >
         {video ? (
           <CroppedVideo videoRef={video} viewport={videoViewport ?? null} />
         ) : image && imageOverlay ? (
@@ -2131,6 +2206,67 @@ function Panel({ label, labelRight, active, image, emptyText, emptyContent, load
           emptyContent
         ) : (
           <span style={{ color: '#444', fontSize: 12 }}>{emptyText}</span>
+        )}
+        </div>
+        {/* Space 손바닥 툴: 누르는 동안 최상위에서 드래그 = 팬 */}
+        {zoomable && spaceDown && (
+          <div
+            className="absolute inset-0"
+            style={{ zIndex: 20, cursor: panDragRef.current ? 'grabbing' : 'grab' }}
+            onMouseDown={(e) => {
+              panDragRef.current = { sx: e.clientX, sy: e.clientY, px: zpan.x, py: zpan.y }
+            }}
+            onMouseMove={(e) => {
+              const d = panDragRef.current
+              if (!d) return
+              setZpan({ x: d.px + (e.clientX - d.sx), y: d.py + (e.clientY - d.sy) })
+            }}
+            onMouseUp={() => { panDragRef.current = null }}
+            onMouseLeave={() => { panDragRef.current = null }}
+          />
+        )}
+        {/* 줌/전체화면 컨트롤 (포토샵식: 휠=줌, Space+드래그=이동) */}
+        {zoomable && (
+          <div
+            className="absolute flex items-center gap-0.5"
+            style={{
+              right: 12, top: 12, zIndex: 21, padding: 3, borderRadius: 8,
+              background: 'rgba(10,12,14,0.82)', border: '1px solid #2a2a32', backdropFilter: 'blur(4px)',
+            }}
+          >
+            <button
+              title="축소 (휠 아래)"
+              onClick={() => setZoom((z) => Math.max(0.2, z / 1.25))}
+              className="flex items-center justify-center rounded-md"
+              style={{ width: 26, height: 26, color: '#b9b9c2' }}
+            >
+              <ZoomOut size={14} />
+            </button>
+            <button
+              title="화면 맞춤 (100% 리셋)"
+              onClick={resetZoom}
+              className="rounded-md text-center"
+              style={{ minWidth: 42, height: 26, fontSize: 10.5, fontWeight: 700, color: zoom === 1 ? '#8a8a96' : C.accent }}
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              title="확대 (휠 위)"
+              onClick={() => setZoom((z) => Math.min(8, z * 1.25))}
+              className="flex items-center justify-center rounded-md"
+              style={{ width: 26, height: 26, color: '#b9b9c2' }}
+            >
+              <ZoomIn size={14} />
+            </button>
+            <button
+              title={full ? '전체화면 종료' : '전체화면'}
+              onClick={() => setFull((f) => !f)}
+              className="flex items-center justify-center rounded-md"
+              style={{ width: 26, height: 26, color: full ? C.accent : '#b9b9c2' }}
+            >
+              {full ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
+          </div>
         )}
         {imageToolbar && (
           <div className="absolute" style={{ left: 12, top: 12, zIndex: 12 }}>{imageToolbar}</div>
