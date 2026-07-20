@@ -189,6 +189,7 @@ export interface CallGeminiOptions {
   maskImage?: string // 선택 영역 마스크 (두 번째 이미지로 전달)
   prompt: string
   engine?: string // maps to model
+  modelOverride?: string // 특정 분석 기능에서 사용할 텍스트 모델
   systemInstruction?: string // override default
   responseModalities?: ('TEXT' | 'IMAGE')[]
   responseMimeType?: 'application/json'
@@ -205,15 +206,17 @@ export async function callGemini(
   const modalities = opts.responseModalities ?? ['TEXT', 'IMAGE']
   const textOnly = modalities.length === 1 && modalities[0] === 'TEXT'
   // 텍스트 분석은 이미지 모델이 아닌 텍스트 모델 사용
-  const model = textOnly ? TEXT_MODEL : resolveModel(opts.engine)
+  const model = opts.modelOverride ?? (textOnly ? TEXT_MODEL : resolveModel(opts.engine))
   const { base64, mimeType } = stripDataUri(opts.image)
 
   const generationConfig: Record<string, unknown> = {
     responseModalities: modalities,
   }
   if (textOnly) {
-    // gemini-2.5-flash는 thinking이 기본 ON — 분석 용도에는 불필요하고 매우 느려짐 (50초+ → 수초)
-    generationConfig['thinkingConfig'] = { thinkingBudget: 0 }
+    // 분석 용도에는 깊은 thinking이 불필요하다. 3.5는 level, 2.5는 budget 형식이다.
+    generationConfig['thinkingConfig'] = model.startsWith('gemini-3.5')
+      ? { thinkingLevel: 'minimal' }
+      : { thinkingBudget: 0 }
   }
   if (opts.responseMimeType) {
     generationConfig['responseMimeType'] = opts.responseMimeType

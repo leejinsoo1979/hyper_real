@@ -97,12 +97,13 @@ export async function segmentObjectAtPoint(
     'The returned mask MUST contain the clicked point. Do not choose a nearby object, shadow, edge, line, or highlight. ' +
     'Output ONLY a JSON array with exactly one entry: ' +
     '{"box_2d": [ymin, xmin, ymax, xmax] normalized to 0-1000, ' +
-    '"mask": segmentation mask for the object, ' +
+    '"mask": polygon as an array of [x, y] points normalized to 0-1000 within the bounding box, ' +
     '"label": short name}. No other text.'
 
   const result = await callGemini({
     image,
     prompt,
+    modelOverride: 'gemini-3.5-flash',
     responseModalities: ['TEXT'],
     responseMimeType: 'application/json',
     systemInstruction: 'You are a precise image segmentation engine. Always answer with valid JSON only.',
