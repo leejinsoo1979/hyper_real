@@ -14,6 +14,8 @@ export interface MaterialSwap {
   replacement:
     | { kind: 'library'; name: string; prompt: string; referenceImage?: string | null }
     | { kind: 'image'; name: string; image: string } // 로컬 업로드 (data URI)
+  /** 업로드 이미지 스포이드: 같은 재질 전체 영역 마스크 (흰색=교체 대상, SAM 추출) */
+  mask?: string | null
 }
 
 interface ClassicState {

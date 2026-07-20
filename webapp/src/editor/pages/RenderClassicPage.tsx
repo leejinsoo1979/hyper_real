@@ -10,6 +10,8 @@ import { generateAutoPrompt, buildLightingDescription } from '../../engine/autoP
 import { renderMain } from '../../engine/adapters/mainRenderer'
 import { availableImageModels } from '../../engine/imageModels'
 import { maskToHighlightOverlay, segmentObjectAtPoint } from '../../engine/segmentPoint'
+import { prepareSam, decodeSamPoint, samMaskToDataUrl } from '../../engine/sam/samSession'
+import { expandSameMaterial } from '../../engine/sam/materialGroup'
 import { EditOverlay } from '../panels/EditOverlay'
 import { ImageLightbox } from '../panels/ImageLightbox'
 import { SamMagicOverlay } from '../panels/SamMagicOverlay'
@@ -292,6 +294,9 @@ export function RenderClassicPage() {
   const [pickedMaterial, setPickedMaterial] = useState<string | null>(null)
   // 지점 선택(@point:)일 때 스와치 추출에 쓸 원본 이미지 (클릭된 패널의 이미지)
   const [pickedPointImage, setPickedPointImage] = useState<string | null>(null)
+  // 지점 선택 시 SAM으로 인식한 '같은 재질 전체' 마스크와 화면 하이라이트
+  const [pickedPointMask, setPickedPointMask] = useState<string | null>(null)
+  const [pickedPointOverlay, setPickedPointOverlay] = useState<string | null>(null)
   const [regionPickOpen, setRegionPickOpen] = useState(false)
 
   // 업로드 이미지 매직툴: 클릭 지점의 객체 영역을 Gemini 세그멘테이션으로 선택
@@ -336,9 +341,35 @@ export function RenderClassicPage() {
 
     const uploadedSource = Boolean(st.frozenSource) && !st.frozenFromBridge
     if (uploadedSource || useUIStore.getState().sketchUpStatus !== 'connected') {
-      setPickedPointImage(imageSrc ?? st.previewOverride ?? st.frozenSource)
+      const img = imageSrc ?? st.previewOverride ?? st.frozenSource
+      setPickedPointImage(img)
+      // 브릿지 스포이드와 같은 동작: 클릭한 재질과 같은 재질 전체를 SAM으로
+      // 인식해 마스크로 만든다 → 하이라이트 표시 + 생성 시 그 영역만 교체
+      let mask: string | null = null
+      let overlay: string | null = null
+      let regions = 1
+      if (img) {
+        st.set({ statusText: '스포이드: 같은 재질 영역을 인식하는 중…' })
+        try {
+          if (await prepareSam(img)) {
+            const seed = await decodeSamPoint(img, fx, fy)
+            if (seed) {
+              const expanded = await expandSameMaterial(img, seed)
+              mask = samMaskToDataUrl(expanded.mask)
+              regions = expanded.regions
+              if (mask) overlay = await maskToHighlightOverlay(mask)
+            }
+          }
+        } catch { /* SAM 실패 시 지점 좌표 방식으로 폴백 */ }
+      }
+      setPickedPointMask(mask)
+      setPickedPointOverlay(overlay)
       setPickedMaterial(`${POINT_MATERIAL_PREFIX}${fx.toFixed(4)},${fy.toFixed(4)}`)
-      st.set({ statusText: '지점 선택됨 — 교체할 재질을 고르세요 (생성 시 해당 표면에 적용)' })
+      st.set({
+        statusText: mask
+          ? `스포이드: 같은 재질 ${regions}개 영역 인식됨 — 교체할 재질을 고르세요`
+          : '지점 선택됨 — 교체할 재질을 고르세요 (생성 시 해당 표면에 적용)',
+      })
       return
     }
 
@@ -399,15 +430,17 @@ export function RenderClassicPage() {
     st.set({
       materialSwaps: [
         ...st.materialSwaps.filter((sw) => sw.material !== pickedMaterial),
-        { material: pickedMaterial, replacement },
+        { material: pickedMaterial, replacement, mask: pickedPointMask },
       ],
       sourceTool: 'none',
       resultTool: 'none',
-      statusText: `재질 교체 지정: ${pickedMaterial} → ${replacement.name} (생성 시 적용됩니다)`,
+      statusText: `재질 교체 지정: ${swapMaterialLabel(pickedMaterial)} → ${replacement.name} (생성 시 적용됩니다)`,
     })
     setPickedMaterial(null)
     setPickedPointImage(null)
-  }, [pickedMaterial])
+    setPickedPointMask(null)
+    setPickedPointOverlay(null)
+  }, [pickedMaterial, pickedPointMask])
 
 
   // ── 실시간 미러링 (Electron: SketchUp 창을 30fps 스트림으로) ──
@@ -679,7 +712,10 @@ export function RenderClassicPage() {
     }
 
     // 스포이드 재질 교체: 지정된 재질을 사용자가 고른 재질로 (1차·2차 공통)
-    // '@point:' 의사 재질(이미지 단독 모드)은 지점에 원을 그린 사본을 함께 보내 위치를 지시한다
+    // 업로드 이미지: SAM이 인식한 '같은 재질 전체' 마스크가 있으면 그 영역만
+    // 정확히 교체 (마스크 밖은 합성으로 원본 픽셀 보장). 마스크가 없으면
+    // 지점에 원을 그린 사본을 함께 보내 위치를 지시하는 구방식으로 폴백.
+    const swapMasks: string[] = []
     if (st.materialSwaps.length > 0) {
       const lines: string[] = []
       let hasPointMarker = false
@@ -687,13 +723,19 @@ export function RenderClassicPage() {
         const point = parsePointMaterial(sw.material)
         let target = `every surface using the material "${sw.material}"`
         if (point) {
-          const marked = await markPointOnImage(input, point.fx, point.fy)
-          if (marked) {
-            extraImages.push(marked)
-            hasPointMarker = true
-            target = `the entire continuous surface/object at the location circled in red in image ${extraImages.length + 1}`
+          if (sw.mask) {
+            extraImages.push(sw.mask)
+            swapMasks.push(sw.mask)
+            target = `every area shown in WHITE in the material mask image ${extraImages.length + 1} (all regions of the same material)`
           } else {
-            target = `the entire continuous surface located at about ${Math.round(point.fx * 100)}% from the left and ${Math.round(point.fy * 100)}% from the top of the image`
+            const marked = await markPointOnImage(input, point.fx, point.fy)
+            if (marked) {
+              extraImages.push(marked)
+              hasPointMarker = true
+              target = `the entire continuous surface/object at the location circled in red in image ${extraImages.length + 1}`
+            } else {
+              target = `the entire continuous surface located at about ${Math.round(point.fx * 100)}% from the left and ${Math.round(point.fy * 100)}% from the top of the image`
+            }
           }
         }
         if (sw.replacement.kind === 'library') {
@@ -704,6 +746,11 @@ export function RenderClassicPage() {
         }
       }
       promptSuffix += `\n\n[MATERIAL SWAP - APPLY EXACTLY]\n${lines.join('\n')}\nAll other materials must stay unchanged.${hasPointMarker ? ' Never draw the red circle marker in the output.' : ''}`
+    }
+    // 스왑 마스크가 있으면 편집 허용 영역에 합산 - 마스크 밖 변경을 원천 차단
+    if (swapMasks.length > 0) {
+      const union = await unionMaskUris(selMask ? [selMask, ...swapMasks] : swapMasks)
+      if (union) selMask = union
     }
 
     try {
@@ -1109,6 +1156,15 @@ export function RenderClassicPage() {
                       : 'Ready',
                   })
                   if (t !== 'eyedropper') setPickedMaterial(null)
+                  // 스포이드: 업로드/미연결이면 SAM을 미리 준비 (클릭 시 즉시 인식되게)
+                  if (t === 'eyedropper') {
+                    const cur = useClassicStore.getState()
+                    const img = cur.previewOverride ?? cur.frozenSource
+                    const uploadedNow = Boolean(cur.frozenSource) && !cur.frozenFromBridge
+                    if (img && (uploadedNow || useUIStore.getState().sketchUpStatus !== 'connected')) {
+                      void prepareSam(img)
+                    }
+                  }
                   // 매직툴: 브릿지 뷰면 재질 ID 마스크 캡처, 업로드/미연결이면 AI 세그멘테이션 모드
                   if (t === 'magic') {
                     const cur = useClassicStore.getState()
@@ -1136,6 +1192,8 @@ export function RenderClassicPage() {
             }
             imageOverlay={
               s.aiMagicBusy ? <AiScanOverlay />
+              // 스포이드 재질 인식 결과: 같은 재질 전체 하이라이트 (다이얼로그 뒤에 표시)
+              : pickedPointOverlay ? <img src={pickedPointOverlay} alt="" className="pointer-events-none absolute inset-0 h-full w-full" draggable={false} />
               : s.sourceTool === 'magic' && s.maskUri ? <MagicSelectOverlay />
               // 업로드/미연결 이미지: 브라우저 SAM 실시간 hover 인식 (실패 시 클릭=Gemini 폴백)
               : s.sourceTool === 'magic' && (s.previewOverride ?? s.frozenSource) && (!s.frozenFromBridge || status !== 'connected')
@@ -1342,7 +1400,12 @@ export function RenderClassicPage() {
           material={pickedMaterial}
           pointImage={pickedPointImage}
           onApply={addSwap}
-          onClose={() => { setPickedMaterial(null); setPickedPointImage(null) }}
+          onClose={() => {
+            setPickedMaterial(null)
+            setPickedPointImage(null)
+            setPickedPointMask(null)
+            setPickedPointOverlay(null)
+          }}
         />
       )}
 
@@ -2547,6 +2610,24 @@ function loadImageElement(src: string): Promise<HTMLImageElement | null> {
     img.onerror = () => resolve(null)
     img.src = src
   })
+}
+
+// 여러 이진 마스크(흰=편집 허용)의 합집합. 크기가 다르면 첫 마스크 크기로 정규화
+async function unionMaskUris(masks: string[]): Promise<string | null> {
+  const imgs = (await Promise.all(masks.map(loadImageElement))).filter(
+    (i): i is HTMLImageElement => i !== null,
+  )
+  if (imgs.length === 0) return null
+  const c = document.createElement('canvas')
+  c.width = imgs[0].naturalWidth
+  c.height = imgs[0].naturalHeight
+  const ctx = c.getContext('2d')
+  if (!ctx) return null
+  ctx.fillStyle = '#000000'
+  ctx.fillRect(0, 0, c.width, c.height)
+  ctx.globalCompositeOperation = 'lighten'
+  for (const img of imgs) ctx.drawImage(img, 0, 0, c.width, c.height)
+  return c.toDataURL('image/png')
 }
 
 async function compositeMasked(baseImage: string, editedImage: string, maskImage: string): Promise<string | null> {
