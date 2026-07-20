@@ -622,8 +622,8 @@ export function RenderClassicPage() {
     } else if (which === 'src' && st.maskUri && st.sourceSelectedColors.length > 0) {
       // 매직툴 선택: 1차 생성도 선택 영역만 편집 (영역 밖은 원본 픽셀 유지)
       selMask = await buildSelectionMask(st.maskUri, st.sourceSelectedColors)
-    } else if (which === 'src' && st.aiSelMask) {
-      // 업로드 이미지 매직툴: Gemini 세그멘테이션 마스크 (동일 파이프라인)
+    } else if (st.aiSelMask && which === (st.aiSelFor === 'res' ? 'res' : 'src')) {
+      // 펜/자석/매직(SAM) 선택 마스크: 선택을 만든 패널의 생성에만 적용
       selMask = st.aiSelMask
     }
     st.set({
@@ -832,11 +832,11 @@ export function RenderClassicPage() {
   const removeSelection = useCallback(() => {
     const st = useClassicStore.getState()
     if (!st.aiSelMask || st.rendering) return
-    st.set({
-      sourcePrompt:
-        'Remove the object(s) inside the selected region completely. Reconstruct the background behind them (wall, floor, and adjacent surfaces) naturally and seamlessly, as if the objects were never there. Keep everything outside the selection pixel-identical.',
-    })
-    void doRender('src')
+    const target = st.aiSelFor === 'res' ? 'res' : 'src'
+    const removePrompt =
+      'Remove the object(s) inside the selected region completely. Reconstruct the background behind them (wall, floor, and adjacent surfaces) naturally and seamlessly, as if the objects were never there. Keep everything outside the selection pixel-identical.'
+    st.set(target === 'res' ? { resultPrompt: removePrompt } : { sourcePrompt: removePrompt })
+    void doRender(target)
   }, [doRender])
 
   const onUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1233,8 +1233,8 @@ export function RenderClassicPage() {
               : (s.sourceTool === 'pencil' || s.sourceTool === 'magnet') && sourceImage
                 ? <PathSelectOverlay mode={s.sourceTool === 'magnet' ? 'magnet' : 'pen'} image={sourceImage} />
               : s.sourceTool === 'magic' && s.aiSelOverlay ? <img src={s.aiSelOverlay} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" draggable={false} />
-              // 툴 없이도 선택이 남아 있으면 표시 (펜/자석/매직 공통)
-              : s.aiSelOverlay ? <img src={s.aiSelOverlay} alt="" className="pointer-events-none absolute inset-0 h-full w-full" draggable={false} />
+              // 툴 없이도 선택이 남아 있으면 표시 (펜/자석/매직 공통, 소스 기준 선택만)
+              : s.aiSelOverlay && s.aiSelFor !== 'res' ? <img src={s.aiSelOverlay} alt="" className="pointer-events-none absolute inset-0 h-full w-full" draggable={false} />
               : undefined
             }
             onImagePick={
@@ -1243,7 +1243,7 @@ export function RenderClassicPage() {
               : undefined
             }
             pickCursor={s.sourceTool === 'magic' || s.sourceTool === 'pencil' || s.sourceTool === 'magnet' ? 'crosshair' : undefined}
-            imageFooter={(s.materialSwaps.length > 0 || s.sourceSelectedColors.length > 0 || s.aiSelMask || s.aiMagicBusy) ? (
+            imageFooter={(s.materialSwaps.length > 0 || s.sourceSelectedColors.length > 0 || (s.aiSelMask && s.aiSelFor !== 'res') || s.aiMagicBusy) ? (
               <div className="flex flex-wrap gap-1.5">
                 {s.aiMagicBusy && (
                   <span
@@ -1258,44 +1258,14 @@ export function RenderClassicPage() {
                     AI 영역 인식 중...
                   </span>
                 )}
-                {s.aiSelMask && (
-                  <span
-                    className="flex items-center gap-1.5"
-                    style={{
-                      padding: '4px 10px', borderRadius: 999, fontSize: 11,
-                      background: 'rgba(8,12,12,0.82)', color: '#7df0dd',
-                      border: '1px solid #1f5952', backdropFilter: 'blur(3px)',
-                    }}
-                  >
-                    <Wand2 size={11} />
-                    선택: {s.aiSelLabel ?? '영역'} — 생성 시 이 부분만 변경
-                    <button
-                      title="선택 영역에 재질 적용"
-                      onClick={() => setSelPickOpen(true)}
-                      className="flex items-center gap-1"
-                      style={{ color: '#35e5cf', fontWeight: 700 }}
-                    >
-                      <Palette size={11} />
-                      재질
-                    </button>
-                    <button
-                      title="선택 영역 객체 제거 (배경 자동 복원)"
-                      onClick={removeSelection}
-                      disabled={s.rendering}
-                      className="flex items-center gap-1"
-                      style={{ color: '#f0a35e', fontWeight: 700 }}
-                    >
-                      <Eraser size={11} />
-                      제거
-                    </button>
-                    <button
-                      title="선택 해제"
-                      onClick={() => s.set({ aiSelMask: null, aiSelOverlay: null, aiSelLabel: null })}
-                      style={{ color: '#7ba8a0', display: 'flex' }}
-                    >
-                      <X size={11} />
-                    </button>
-                  </span>
+                {s.aiSelMask && s.aiSelFor !== 'res' && (
+                  <SelectionActionChip
+                    label={s.aiSelLabel ?? '영역'}
+                    rendering={s.rendering}
+                    onApplyMaterial={() => setSelPickOpen(true)}
+                    onRemoveObject={removeSelection}
+                    onClear={() => s.set({ aiSelMask: null, aiSelOverlay: null, aiSelLabel: null })}
+                  />
                 )}
                 {s.sourceSelectedColors.length > 0 && (
                   <RegionLayerList
@@ -1342,9 +1312,16 @@ export function RenderClassicPage() {
               </>
             ) : undefined}
             image={s.resultMaskView && s.maskUri ? s.maskUri : s.resultImage}
+            zoomable
             imageOverlay={
               s.resultMaskView && s.maskUri && s.resultImage ? <MaskSelectOverlay />
               : s.resultTool === 'magic' && s.maskUri && s.resultImage ? <MagicSelectOverlay colorsKey="selectedColors" />
+              // 브릿지 마스크가 없으면 SAM 실시간 인식 (업로드/미연결과 동일 파이프라인)
+              : s.resultTool === 'magic' && s.resultImage ? <SamMagicOverlay image={s.resultImage} target="res" />
+              : (s.resultTool === 'pencil' || s.resultTool === 'magnet') && s.resultImage
+                ? <PathSelectOverlay mode={s.resultTool === 'magnet' ? 'magnet' : 'pen'} image={s.resultImage} target="res" />
+              : s.aiSelOverlay && s.aiSelFor === 'res' && s.resultImage
+                ? <img src={s.aiSelOverlay} alt="" className="pointer-events-none absolute inset-0 h-full w-full" draggable={false} />
               : null
             }
             imageToolbar={s.resultImage ? (
@@ -1360,6 +1337,11 @@ export function RenderClassicPage() {
                   })
                   if (t !== 'eyedropper') setPickedMaterial(null)
                   if (t === 'magic' && !useClassicStore.getState().maskUri) {
+                    // 미연결이면 SAM 오버레이가 담당 (브릿지 캡처 시도 안 함)
+                    if (useUIStore.getState().sketchUpStatus !== 'connected') {
+                      s.set({ statusText: '매직: AI 실시간 인식 준비 중… (준비되면 마우스만 올려도 영역이 표시됩니다)' })
+                      return
+                    }
                     s.set({ statusText: '매직: 재질 마스크 캡처 중...' })
                     void captureMask().then((m) => {
                       useClassicStore.getState().set(m
@@ -1371,8 +1353,18 @@ export function RenderClassicPage() {
               />
             ) : undefined}
             onImagePick={s.resultTool === 'eyedropper' && !s.resultMaskView ? handleSourcePick : undefined}
-            imageFooter={s.selectedColors.length > 0 && s.resultImage ? (
+            imageFooter={(s.selectedColors.length > 0 || (s.aiSelMask && s.aiSelFor === 'res')) && s.resultImage ? (
               <div className="flex flex-wrap gap-1.5">
+                {s.aiSelMask && s.aiSelFor === 'res' && (
+                  <SelectionActionChip
+                    label={s.aiSelLabel ?? '영역'}
+                    rendering={s.rendering}
+                    onApplyMaterial={() => setSelPickOpen(true)}
+                    onRemoveObject={removeSelection}
+                    onClear={() => s.set({ aiSelMask: null, aiSelOverlay: null, aiSelLabel: null })}
+                  />
+                )}
+                {s.selectedColors.length > 0 && (<>
                 <RegionLayerList
                   colors={s.selectedColors}
                   maskMap={s.maskMap}
@@ -1413,6 +1405,7 @@ export function RenderClassicPage() {
                     재질 적용
                   </button>
                 )}
+                </>)}
               </div>
             ) : undefined}
             viewTabs={s.resultImage && s.maskUri ? {
@@ -1660,6 +1653,51 @@ function AiScanOverlay() {
 }
 
 // ── 소스 툴바 (스포이드 · 연필 · 매직) ───────────────────────────────────────
+
+// 선택 영역(aiSelMask) 칩: 재질 적용 / 객체 제거 / 해제 액션
+function SelectionActionChip({ label, rendering, onApplyMaterial, onRemoveObject, onClear }: {
+  label: string
+  rendering: boolean
+  onApplyMaterial: () => void
+  onRemoveObject: () => void
+  onClear: () => void
+}) {
+  return (
+    <span
+      className="flex items-center gap-1.5"
+      style={{
+        padding: '4px 10px', borderRadius: 999, fontSize: 11,
+        background: 'rgba(8,12,12,0.82)', color: '#7df0dd',
+        border: '1px solid #1f5952', backdropFilter: 'blur(3px)',
+      }}
+    >
+      <Wand2 size={11} />
+      선택: {label} — 생성 시 이 부분만 변경
+      <button
+        title="선택 영역에 재질 적용"
+        onClick={onApplyMaterial}
+        className="flex items-center gap-1"
+        style={{ color: '#35e5cf', fontWeight: 700 }}
+      >
+        <Palette size={11} />
+        재질
+      </button>
+      <button
+        title="선택 영역 객체 제거 (배경 자동 복원)"
+        onClick={onRemoveObject}
+        disabled={rendering}
+        className="flex items-center gap-1"
+        style={{ color: '#f0a35e', fontWeight: 700 }}
+      >
+        <Eraser size={11} />
+        제거
+      </button>
+      <button title="선택 해제" onClick={onClear} style={{ color: '#7ba8a0', display: 'flex' }}>
+        <X size={11} />
+      </button>
+    </span>
+  )
+}
 
 function SourceToolbar({ tool, onTool }: {
   tool: 'none' | 'eyedropper' | 'pencil' | 'magic' | 'magnet'

@@ -42,7 +42,7 @@ async function unionMasks(existing: string, add: string, w: number, h: number): 
   }
 }
 
-export function SamMagicOverlay({ image }: { image: string }) {
+export function SamMagicOverlay({ image, target = 'src' }: { image: string; target?: 'src' | 'res' }) {
   const samStatus = useClassicStore((st) => st.samStatus)
   const aiSelOverlay = useClassicStore((st) => st.aiSelOverlay)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -170,6 +170,7 @@ export function SamMagicOverlay({ image }: { image: string }) {
       aiSelMask: maskUri,
       aiSelOverlay: overlay,
       aiSelLabel: '선택 영역',
+      aiSelFor: target,
       statusText: additive && st.aiSelMask
         ? '매직: 영역 추가됨 — 프롬프트 입력 후 생성하면 선택 영역만 변경됩니다'
         : regions > 1

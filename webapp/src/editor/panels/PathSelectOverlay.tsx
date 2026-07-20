@@ -62,7 +62,7 @@ async function polygonToMask(
   return c.toDataURL('image/png')
 }
 
-export function PathSelectOverlay({ image, mode }: { image: string; mode: 'pen' | 'magnet' }) {
+export function PathSelectOverlay({ image, mode, target = 'src' }: { image: string; mode: 'pen' | 'magnet'; target?: 'src' | 'res' }) {
   const aiSelOverlay = useClassicStore((st) => st.aiSelOverlay)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // 확정된 앵커와 앵커 사이 경로 (자석: livewire 폴리라인 / 펜: [시작,끝])
@@ -154,6 +154,7 @@ export function PathSelectOverlay({ image, mode }: { image: string; mode: 'pen' 
       aiSelMask: mask,
       aiSelOverlay: overlay,
       aiSelLabel: mode === 'pen' ? '펜 선택' : '자석 선택',
+      aiSelFor: target,
       statusText: combine === 'add'
         ? '선택 영역 추가됨 — 계속 그리거나 생성/재질 적용하세요'
         : combine === 'subtract'

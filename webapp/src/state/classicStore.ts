@@ -61,6 +61,8 @@ interface ClassicState {
   aiSelOverlay: string | null
   /** aiSelMask 객체 라벨 (표시용) */
   aiSelLabel: string | null
+  /** aiSelMask가 어느 패널 이미지 기준인지 (생성 시 해당 패널 렌더에만 적용) */
+  aiSelFor: 'src' | 'res'
   /** 업로드 이미지 매직툴: 브라우저 SAM(실시간 hover 인식) 준비 상태 */
   samStatus: 'idle' | 'loading' | 'ready' | 'error'
 
@@ -117,6 +119,7 @@ export const useClassicStore = create<ClassicState>((set) => ({
   aiSelMask: null,
   aiSelOverlay: null,
   aiSelLabel: null,
+  aiSelFor: 'src',
   samStatus: 'idle',
 
   depthLock: true,
