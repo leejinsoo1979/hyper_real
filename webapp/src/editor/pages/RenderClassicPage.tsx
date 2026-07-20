@@ -182,6 +182,46 @@ function swapMaterialLabel(material: string): string {
   return p ? `지점 (${Math.round(p.fx * 100)}%, ${Math.round(p.fy * 100)}%)` : material
 }
 
+// 업로드 이미지 스포이드: 클릭 지점 주변 패치를 잘라 재질 스와치로 추출
+// (브릿지 텍스처 추출을 대신하는 이미지 소스 전용 '재질 추출')
+async function extractPointSwatch(
+  image: string,
+  fx: number,
+  fy: number,
+): Promise<{ thumb: string | null; color: string | null }> {
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image()
+      i.onload = () => resolve(i)
+      i.onerror = () => reject(new Error('image load failed'))
+      i.src = image.startsWith('data:') || image.startsWith('http') ? image : `data:image/png;base64,${image}`
+    })
+    const W = img.naturalWidth
+    const H = img.naturalHeight
+    const S = Math.max(48, Math.round(Math.min(W, H) * 0.1))
+    const x0 = Math.min(Math.max(0, Math.round(fx * W) - (S >> 1)), Math.max(0, W - S))
+    const y0 = Math.min(Math.max(0, Math.round(fy * H) - (S >> 1)), Math.max(0, H - S))
+    const c = document.createElement('canvas')
+    c.width = 128
+    c.height = 128
+    const ctx = c.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return { thumb: null, color: null }
+    ctx.drawImage(img, x0, y0, S, S, 0, 0, 128, 128)
+    const d = ctx.getImageData(0, 0, 128, 128).data
+    let r = 0, g = 0, b = 0
+    const n = 128 * 128
+    for (let i = 0; i < n; i++) {
+      r += d[i * 4]
+      g += d[i * 4 + 1]
+      b += d[i * 4 + 2]
+    }
+    const hex = `#${[r, g, b].map((v) => Math.round(v / n).toString(16).padStart(2, '0')).join('')}`
+    return { thumb: c.toDataURL('image/png'), color: hex }
+  } catch {
+    return { thumb: null, color: null }
+  }
+}
+
 async function markPointOnImage(image: string, fx: number, fy: number): Promise<string | null> {
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -250,6 +290,8 @@ export function RenderClassicPage() {
 
   // ── 스포이드 재질 교체 ──────────────────────────────────────────────────
   const [pickedMaterial, setPickedMaterial] = useState<string | null>(null)
+  // 지점 선택(@point:)일 때 스와치 추출에 쓸 원본 이미지 (클릭된 패널의 이미지)
+  const [pickedPointImage, setPickedPointImage] = useState<string | null>(null)
   const [regionPickOpen, setRegionPickOpen] = useState(false)
 
   // 업로드 이미지 매직툴: 클릭 지점의 객체 영역을 Gemini 세그멘테이션으로 선택
@@ -288,12 +330,13 @@ export function RenderClassicPage() {
 
   // 소스 이미지 클릭(비율 좌표) → ID 마스크 픽셀 색 → 재질 이름
   // 업로드 이미지/브릿지 미연결이면 좌표 기반 지점 선택으로 폴백 (마스크 불필요)
-  const handleSourcePick = useCallback(async (fx: number, fy: number) => {
+  const handleSourcePick = useCallback(async (fx: number, fy: number, imageSrc?: string) => {
     const st = useClassicStore.getState()
     if (st.sourceTool !== 'eyedropper' && st.resultTool !== 'eyedropper') return
 
     const uploadedSource = Boolean(st.frozenSource) && !st.frozenFromBridge
     if (uploadedSource || useUIStore.getState().sketchUpStatus !== 'connected') {
+      setPickedPointImage(imageSrc ?? st.previewOverride ?? st.frozenSource)
       setPickedMaterial(`${POINT_MATERIAL_PREFIX}${fx.toFixed(4)},${fy.toFixed(4)}`)
       st.set({ statusText: '지점 선택됨 — 교체할 재질을 고르세요 (생성 시 해당 표면에 적용)' })
       return
@@ -306,6 +349,7 @@ export function RenderClassicPage() {
       const m = await captureMask()
       if (!m) {
         // 마스크 캡처 실패 시에도 지점 선택으로 폴백 (스포이드가 죽지 않게)
+        setPickedPointImage(imageSrc ?? st.previewOverride ?? st.frozenSource)
         setPickedMaterial(`${POINT_MATERIAL_PREFIX}${fx.toFixed(4)},${fy.toFixed(4)}`)
         useClassicStore.getState().set({ statusText: '지점 선택됨 — 교체할 재질을 고르세요' })
         return
@@ -362,6 +406,7 @@ export function RenderClassicPage() {
       statusText: `재질 교체 지정: ${pickedMaterial} → ${replacement.name} (생성 시 적용됩니다)`,
     })
     setPickedMaterial(null)
+    setPickedPointImage(null)
   }, [pickedMaterial])
 
 
@@ -1295,8 +1340,9 @@ export function RenderClassicPage() {
       {pickedMaterial && (
         <MaterialSwapDialog
           material={pickedMaterial}
+          pointImage={pickedPointImage}
           onApply={addSwap}
-          onClose={() => setPickedMaterial(null)}
+          onClose={() => { setPickedMaterial(null); setPickedPointImage(null) }}
         />
       )}
 
@@ -1562,10 +1608,12 @@ function SwapPreviewBox({ title, name, thumb, color, empty, loading }: {
   )
 }
 
-function MaterialSwapDialog({ material, regionCount, onApply, onClose }: {
+function MaterialSwapDialog({ material, regionCount, pointImage, onApply, onClose }: {
   /** 스포이드로 찍은 재질 이름. null이면 '선택 영역' 모드 (매직 선택에 재질 적용) */
   material: string | null
   regionCount?: number
+  /** 지점 선택(@point:)일 때 스와치를 추출할 원본 이미지 */
+  pointImage?: string | null
   onApply: (replacement: MaterialSwap['replacement']) => void
   onClose: () => void
 }) {
@@ -1581,7 +1629,19 @@ function MaterialSwapDialog({ material, regionCount, onApply, onClose }: {
   // 2) 없으면(용량 예산으로 생략된 경우) 그 재질 하나만 브릿지에서 상세 추출
   // "A 외 2" / "A / B" 병합 라벨은 첫 재질 이름으로 조회한다
   useEffect(() => {
-    if (material === null || material.startsWith(POINT_MATERIAL_PREFIX)) { setSourceLoading(false); return }
+    if (material === null) { setSourceLoading(false); return }
+    // 지점 선택(업로드/미연결): 클릭 지점 주변 패치를 이미지에서 직접 추출
+    const pt = parsePointMaterial(material)
+    if (pt) {
+      if (!pointImage) { setSourceLoading(false); return }
+      let cancelledPt = false
+      void extractPointSwatch(pointImage, pt.fx, pt.fy).then((sw) => {
+        if (cancelledPt) return
+        setSourceLoading(false)
+        setSourcePreview(sw)
+      })
+      return () => { cancelledPt = true }
+    }
     let cancelled = false
     const lookupName = material.includes(' 외 ') ? material.split(' 외 ')[0] : material.split(' / ')[0]
     void (async () => {
@@ -1601,7 +1661,7 @@ function MaterialSwapDialog({ material, regionCount, onApply, onClose }: {
       if (found) setSourcePreview({ thumb: materialTextureUri(found), color: found.color })
     })()
     return () => { cancelled = true }
-  }, [material])
+  }, [material, pointImage])
 
   const pickLibrary = (asset: MaterialAsset) => {
     const referenceImage = materialReferenceUrl(asset)
