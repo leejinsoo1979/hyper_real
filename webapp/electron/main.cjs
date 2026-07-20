@@ -16,6 +16,8 @@ const MIME = {
   html: 'text/html', js: 'text/javascript', css: 'text/css', png: 'image/png',
   jpg: 'image/jpeg', svg: 'image/svg+xml', json: 'application/json',
   ico: 'image/x-icon', woff2: 'font/woff2', woff: 'font/woff', map: 'application/json',
+  // SAM(onnxruntime-web) WASM 스트리밍 로드에 정확한 MIME 필요
+  wasm: 'application/wasm',
 }
 
 function startStaticServer() {
