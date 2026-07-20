@@ -258,22 +258,30 @@ export function RenderClassicPage() {
     const image = st.previewOverride ?? st.frozenSource
     if (!image) return
     st.set({ aiMagicBusy: true, statusText: '매직: AI가 클릭한 객체 영역을 인식하는 중...' })
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 45_000)
     try {
-      const seg = await segmentObjectAtPoint(image, fx, fy)
+      const seg = await segmentObjectAtPoint(image, fx, fy, controller.signal)
       if (!seg) {
-        useClassicStore.getState().set({ aiMagicBusy: false, statusText: '매직: 영역을 인식하지 못했습니다 — 객체 중앙을 다시 클릭해보세요' })
+        useClassicStore.getState().set({ statusText: '매직: 영역을 인식하지 못했습니다 — 객체 중앙을 다시 클릭해보세요' })
         return
       }
       const overlay = await maskToHighlightOverlay(seg.mask)
       useClassicStore.getState().set({
-        aiMagicBusy: false,
         aiSelMask: seg.mask,
         aiSelOverlay: overlay,
         aiSelLabel: seg.label,
         statusText: `매직: "${seg.label}" 영역 선택됨 — 프롬프트 입력 후 생성하면 이 영역만 변경됩니다`,
       })
     } catch (err) {
-      useClassicStore.getState().set({ aiMagicBusy: false, statusText: `매직 영역 인식 실패: ${err instanceof Error ? err.message : err}` })
+      useClassicStore.getState().set({
+        statusText: controller.signal.aborted
+          ? '매직 인식 시간이 초과되었습니다 — 네트워크와 API 키를 확인하세요'
+          : `매직 영역 인식 실패: ${err instanceof Error ? err.message : err}`,
+      })
+    } finally {
+      window.clearTimeout(timeout)
+      useClassicStore.getState().set({ aiMagicBusy: false })
     }
   }, [])
 

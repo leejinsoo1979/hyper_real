@@ -41,28 +41,30 @@ function markPoint(img: HTMLImageElement, fx: number, fy: number): string {
 
 interface SegEntry {
   box_2d?: number[]
-  mask?: string
+  // Gemini 세그멘테이션 응답은 모델/API 버전에 따라 base64 PNG 또는
+  // bounding box 내부 0-1000 좌표의 [x, y] 폴리곤으로 온다.
+  mask?: string | number[][]
   label?: string
 }
 
 function parseSegJson(text: string): SegEntry | null {
   const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim()
-  const start = cleaned.indexOf('[')
-  const end = cleaned.lastIndexOf(']')
-  const objStart = cleaned.indexOf('{')
   try {
-    if (start !== -1 && end > start) {
-      const arr = JSON.parse(cleaned.slice(start, end + 1)) as SegEntry[]
-      return arr.find((e) => e.mask && Array.isArray(e.box_2d)) ?? null
-    }
-    if (objStart !== -1) {
-      const obj = JSON.parse(cleaned.slice(objStart, cleaned.lastIndexOf('}') + 1)) as SegEntry
-      return obj.mask && Array.isArray(obj.box_2d) ? obj : null
-    }
+    const start = Math.min(
+      ...[cleaned.indexOf('['), cleaned.indexOf('{')].filter((i) => i >= 0),
+    )
+    if (!Number.isFinite(start)) return null
+    const parsed = JSON.parse(cleaned.slice(start)) as SegEntry | SegEntry[] | { boxes?: SegEntry[] }
+    const wrapper = parsed as { boxes?: unknown }
+    const entries: SegEntry[] = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(wrapper.boxes)
+        ? wrapper.boxes as SegEntry[]
+        : [parsed as SegEntry]
+    return entries.find((e) => e.mask && Array.isArray(e.box_2d)) ?? null
   } catch {
     return null
   }
-  return null
 }
 
 /**
@@ -73,6 +75,7 @@ export async function segmentObjectAtPoint(
   image: string,
   fx: number,
   fy: number,
+  signal?: AbortSignal,
 ): Promise<{ mask: string; label: string } | null> {
   const img = await loadImage(image)
   const marked = markPoint(img, fx, fy)
@@ -82,14 +85,16 @@ export async function segmentObjectAtPoint(
     '(e.g. a sofa, a wall, a floor, a table). ' +
     'Output ONLY a JSON array with exactly one entry: ' +
     '{"box_2d": [ymin, xmin, ymax, xmax] normalized to 0-1000, ' +
-    '"mask": segmentation mask as a base64 PNG (probability map inside the box), ' +
+    '"mask": segmentation mask for the object, ' +
     '"label": short name}. No other text.'
 
   const result = await callGemini({
     image: marked,
     prompt,
     responseModalities: ['TEXT'],
+    responseMimeType: 'application/json',
     systemInstruction: 'You are a precise image segmentation engine. Always answer with valid JSON only.',
+    signal,
   })
   if (!result.text) return null
   const entry = parseSegJson(result.text)
@@ -105,29 +110,6 @@ export async function segmentObjectAtPoint(
   const bh = Math.min(H, Math.round(((ymax - ymin) / 1000) * H))
   if (bw < 2 || bh < 2) return null
 
-  const maskSrc = entry.mask.startsWith('data:') ? entry.mask : `data:image/png;base64,${entry.mask}`
-  const maskImg = await loadImage(maskSrc)
-
-  // 박스 크기로 스케일한 확률맵 → 임계값(127)으로 이진화 → 전체 캔버스에 배치
-  const mc = document.createElement('canvas')
-  mc.width = bw
-  mc.height = bh
-  const mctx = mc.getContext('2d', { willReadFrequently: true })
-  if (!mctx) return null
-  mctx.drawImage(maskImg, 0, 0, bw, bh)
-  const md = mctx.getImageData(0, 0, bw, bh)
-  for (let i = 0; i < bw * bh; i++) {
-    // 흰 배경 PNG(알파 없음)와 알파맵 PNG 모두 대응: 알파 있으면 알파, 없으면 밝기
-    const a = md.data[i * 4 + 3]
-    const v = a < 255 ? a : md.data[i * 4]
-    const on = v > 127 ? 255 : 0
-    md.data[i * 4] = on
-    md.data[i * 4 + 1] = on
-    md.data[i * 4 + 2] = on
-    md.data[i * 4 + 3] = 255
-  }
-  mctx.putImageData(md, 0, 0)
-
   const out = document.createElement('canvas')
   out.width = W
   out.height = H
@@ -135,7 +117,48 @@ export async function segmentObjectAtPoint(
   if (!octx) return null
   octx.fillStyle = '#000000'
   octx.fillRect(0, 0, W, H)
-  octx.drawImage(mc, bx, by)
+
+  if (typeof entry.mask === 'string') {
+    const maskSrc = entry.mask.startsWith('data:') ? entry.mask : `data:image/png;base64,${entry.mask}`
+    const maskImg = await loadImage(maskSrc)
+
+    // 박스 크기로 스케일한 확률맵 → 임계값(127)으로 이진화 → 전체 캔버스에 배치
+    const mc = document.createElement('canvas')
+    mc.width = bw
+    mc.height = bh
+    const mctx = mc.getContext('2d', { willReadFrequently: true })
+    if (!mctx) return null
+    mctx.drawImage(maskImg, 0, 0, bw, bh)
+    const md = mctx.getImageData(0, 0, bw, bh)
+    for (let i = 0; i < bw * bh; i++) {
+      // 흰 배경 PNG(알파 없음)와 알파맵 PNG 모두 대응: 알파 있으면 알파, 없으면 밝기
+      const a = md.data[i * 4 + 3]
+      const v = a < 255 ? a : md.data[i * 4]
+      const on = v > 127 ? 255 : 0
+      md.data[i * 4] = on
+      md.data[i * 4 + 1] = on
+      md.data[i * 4 + 2] = on
+      md.data[i * 4 + 3] = 255
+    }
+    mctx.putImageData(md, 0, 0)
+    octx.drawImage(mc, bx, by)
+  } else {
+    const polygon = entry.mask.filter(
+      (point) => point.length >= 2 && point.every(Number.isFinite),
+    )
+    if (polygon.length < 3) return null
+    octx.fillStyle = '#ffffff'
+    octx.beginPath()
+    polygon.forEach(([x, y], index) => {
+      const px = bx + (x / 1000) * bw
+      const py = by + (y / 1000) * bh
+      if (index === 0) octx.moveTo(px, py)
+      else octx.lineTo(px, py)
+    })
+    octx.closePath()
+    octx.fill()
+  }
+
   return { mask: out.toDataURL('image/png'), label: entry.label ?? '객체' }
 }
 

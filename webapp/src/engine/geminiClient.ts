@@ -191,6 +191,7 @@ export interface CallGeminiOptions {
   engine?: string // maps to model
   systemInstruction?: string // override default
   responseModalities?: ('TEXT' | 'IMAGE')[]
+  responseMimeType?: 'application/json'
   /** 출력 해상도 (gemini-3-pro-image 전용): 1K/2K/4K — 업스케일러가 사용 */
   imageSize?: '1K' | '2K' | '4K'
   signal?: AbortSignal // caller-side cancellation (e.g. cancel button)
@@ -213,6 +214,9 @@ export async function callGemini(
   if (textOnly) {
     // gemini-2.5-flash는 thinking이 기본 ON — 분석 용도에는 불필요하고 매우 느려짐 (50초+ → 수초)
     generationConfig['thinkingConfig'] = { thinkingBudget: 0 }
+  }
+  if (opts.responseMimeType) {
+    generationConfig['responseMimeType'] = opts.responseMimeType
   }
   if (!textOnly && opts.imageSize) {
     // Nano Banana Pro(gemini-3-pro-image)의 고해상도 출력 (1K/2K/4K)
