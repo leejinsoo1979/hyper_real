@@ -13,9 +13,10 @@
 import { useEffect, useRef } from 'react'
 import { useClassicStore } from '../../state/classicStore'
 import { prepareSam, decodeSamPoint, samMaskToDataUrl, type SamMask } from '../../engine/sam/samSession'
+import { expandSameMaterial } from '../../engine/sam/materialGroup'
 import { maskToHighlightOverlay } from '../../engine/segmentPoint'
 
-const HOVER_READY_TEXT = '매직: 마우스를 올리면 영역이 실시간 인식됩니다 — 클릭하면 선택 (Shift+클릭: 영역 추가)'
+const HOVER_READY_TEXT = '매직: 마우스를 올리면 영역이 실시간 인식됩니다 — 클릭하면 같은 재질 전체 선택 (Shift: 추가, Alt: 단일 영역)'
 
 /** 기존 선택 마스크(dataURL)와 새 마스크의 합집합 dataURL */
 async function unionMasks(existing: string, add: string, w: number, h: number): Promise<string | null> {
@@ -143,12 +144,21 @@ export function SamMagicOverlay({ image }: { image: string }) {
     const pos = posFromEvent(e)
     if (!pos) return
     const additive = e.shiftKey
+    const singleRegion = e.altKey // Alt: 같은 재질 확장 없이 클릭한 영역 하나만
     // hover로 이미 받은 마스크가 그 지점 것이면 재사용, 아니면 즉시 디코딩
     const last = lastMaskRef.current
-    const mask = last && Math.abs(last.fx - pos.fx) < 0.01 && Math.abs(last.fy - pos.fy) < 0.01
+    let mask: SamMask | null = last && Math.abs(last.fx - pos.fx) < 0.01 && Math.abs(last.fy - pos.fy) < 0.01
       ? last
       : await decodeSamPoint(image, pos.fx, pos.fy)
     if (!mask) return
+    // 브릿지 재질 마스크와 같은 동작: 같은 재질(색이 같은)인 영역 전부 선택
+    let regions = 1
+    if (!singleRegion) {
+      useClassicStore.getState().set({ statusText: '매직: 같은 재질 영역을 찾는 중…' })
+      const expanded = await expandSameMaterial(image, mask)
+      mask = expanded.mask
+      regions = expanded.regions
+    }
     let maskUri = samMaskToDataUrl(mask)
     if (!maskUri) return
     const st = useClassicStore.getState()
@@ -162,7 +172,9 @@ export function SamMagicOverlay({ image }: { image: string }) {
       aiSelLabel: '선택 영역',
       statusText: additive && st.aiSelMask
         ? '매직: 영역 추가됨 — 프롬프트 입력 후 생성하면 선택 영역만 변경됩니다'
-        : '매직: 영역 선택됨 — 프롬프트 입력 후 생성하면 이 영역만 변경됩니다',
+        : regions > 1
+          ? `매직: 같은 재질 ${regions}개 영역 선택됨 — 프롬프트 입력 후 생성하면 선택 영역만 변경됩니다`
+          : '매직: 영역 선택됨 — 프롬프트 입력 후 생성하면 이 영역만 변경됩니다',
     })
   }
 
