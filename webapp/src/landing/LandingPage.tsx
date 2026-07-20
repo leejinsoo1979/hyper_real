@@ -11,6 +11,11 @@ const TEAL = '#00c9a7'
 const APP_URL = '/app'
 const goApp = () => { window.location.href = APP_URL }
 
+// 데스크톱 앱 설치 파일 (GitHub Releases 최신 버전 고정 URL — 릴리스마다 같은 파일명으로 업로드)
+const RELEASE_BASE = 'https://github.com/leejinsoo1979/hyper_real/releases/latest/download'
+const DOWNLOAD_MAC = `${RELEASE_BASE}/Lumanova-mac-arm64.dmg`
+const DOWNLOAD_WIN = `${RELEASE_BASE}/Lumanova-win-x64.exe`
+
 function useReveal<T extends HTMLElement>(threshold = 0.2) {
   const ref = useRef<T>(null)
   const [shown, setShown] = useState(false)
@@ -73,7 +78,27 @@ function Hero() {
             설치 가이드 <span style={{ fontSize: 14 }}>→</span>
           </a>
         </div>
-        <div className="flex items-center gap-2.5" style={{ marginTop: 56, color: '#7a7a86', fontSize: 13 }}>
+        {/* 데스크톱 앱 다운로드 */}
+        <div className="flex flex-wrap items-center gap-3" style={{ marginTop: 22 }}>
+          <span style={{ fontSize: 12, color: '#7a7a86', fontWeight: 600, letterSpacing: '0.04em' }}>데스크톱 앱</span>
+          <a
+            href={DOWNLOAD_MAC}
+            className="flex items-center gap-2"
+            style={{ padding: '10px 20px', borderRadius: 999, border: '1px solid #2c2c36', background: 'rgba(255,255,255,0.04)', color: '#e6e6ee', fontSize: 13.5, fontWeight: 700, textDecoration: 'none' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+            Mac (Apple Silicon)
+          </a>
+          <a
+            href={DOWNLOAD_WIN}
+            className="flex items-center gap-2"
+            style={{ padding: '10px 20px', borderRadius: 999, border: '1px solid #2c2c36', background: 'rgba(255,255,255,0.04)', color: '#e6e6ee', fontSize: 13.5, fontWeight: 700, textDecoration: 'none' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M3 5.55l7.4-1.02v7.14H3V5.55zm0 12.9l7.4 1.02v-7.05H3v6.03zm8.21 1.13L21 21V12.42h-9.79v7.16zm0-15.16v7.25H21V3l-9.79 1.42z"/></svg>
+            Windows
+          </a>
+        </div>
+        <div className="flex items-center gap-2.5" style={{ marginTop: 40, color: '#7a7a86', fontSize: 13 }}>
           <span style={{ display: 'inline-flex', width: 26, height: 26, borderRadius: 999, border: '1px solid #333', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>↓</span>
           Scroll to explore
         </div>
