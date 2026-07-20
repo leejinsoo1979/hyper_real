@@ -49,7 +49,7 @@ interface ClassicState {
   resultMaskView: boolean
 
   // 소스 툴바 + 재질 교체 (스포이드로 재질 지정 → 생성 시 적용)
-  sourceTool: 'none' | 'eyedropper' | 'pencil' | 'magic'
+  sourceTool: 'none' | 'eyedropper' | 'pencil' | 'magic' | 'magnet'
   materialSwaps: MaterialSwap[]
   /** 매직툴로 선택한 재질 영역(마스크 색). 있으면 1차 생성이 이 영역만 편집 */
   sourceSelectedColors: string[]
@@ -69,7 +69,7 @@ interface ClassicState {
   /** frozenSource가 브릿지 캡처(Convert)에서 왔는지 — 업로드면 깊이맵 캡처 불가 */
   frozenFromBridge: boolean
   /** RESULT 패널 툴 (스포이드/매직 — 2차 생성 대상 지정) */
-  resultTool: 'none' | 'eyedropper' | 'pencil' | 'magic'
+  resultTool: 'none' | 'eyedropper' | 'pencil' | 'magic' | 'magnet'
   /** 스타일 참조 이미지 (색·재질·조명 분위기만 참조, data URI) */
   styleRef: string | null
   /** RESULT 선택 영역에 적용할 재질 (매직 선택 + 라이브러리/로컬 이미지) */

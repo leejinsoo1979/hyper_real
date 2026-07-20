@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Eye, ImagePlus, Zap, Loader2, SlidersHorizontal, Download, Pencil, Pipette, Wand2, X } from 'lucide-react'
+import { Eye, ImagePlus, Zap, Loader2, SlidersHorizontal, Download, PenTool, Pipette, Wand2, X, Magnet, Eraser, Palette } from 'lucide-react'
 import { useClassicStore, type ClassicModel, type ClassicSize, type MaterialSwap } from '../../state/classicStore'
 import { materialReferenceUrl, materialThumbnailUrl, materials as libraryMaterials, type MaterialAsset } from '../../data/materialLibrary'
 import { useUIStore } from '../../state/uiStore'
@@ -15,6 +15,7 @@ import { expandSameMaterial } from '../../engine/sam/materialGroup'
 import { EditOverlay } from '../panels/EditOverlay'
 import { ImageLightbox } from '../panels/ImageLightbox'
 import { SamMagicOverlay } from '../panels/SamMagicOverlay'
+import { PathSelectOverlay } from '../panels/PathSelectOverlay'
 import type { NodeData } from '../../types/node'
 import type { EdgeData } from '../../types/graph'
 
@@ -298,6 +299,8 @@ export function RenderClassicPage() {
   const [pickedPointMask, setPickedPointMask] = useState<string | null>(null)
   const [pickedPointOverlay, setPickedPointOverlay] = useState<string | null>(null)
   const [regionPickOpen, setRegionPickOpen] = useState(false)
+  // 선택 영역(aiSelMask)에 재질 적용 다이얼로그
+  const [selPickOpen, setSelPickOpen] = useState(false)
 
   // 업로드 이미지 매직툴: 클릭 지점의 객체 영역을 Gemini 세그멘테이션으로 선택
   const handleAiMagicPick = useCallback(async (fx: number, fy: number) => {
@@ -722,20 +725,18 @@ export function RenderClassicPage() {
       for (const sw of st.materialSwaps) {
         const point = parsePointMaterial(sw.material)
         let target = `every surface using the material "${sw.material}"`
-        if (point) {
-          if (sw.mask) {
-            extraImages.push(sw.mask)
-            swapMasks.push(sw.mask)
-            target = `every area shown in WHITE in the material mask image ${extraImages.length + 1} (all regions of the same material)`
+        if (sw.mask) {
+          extraImages.push(sw.mask)
+          swapMasks.push(sw.mask)
+          target = `every area shown in WHITE in the material mask image ${extraImages.length + 1}`
+        } else if (point) {
+          const marked = await markPointOnImage(input, point.fx, point.fy)
+          if (marked) {
+            extraImages.push(marked)
+            hasPointMarker = true
+            target = `the entire continuous surface/object at the location circled in red in image ${extraImages.length + 1}`
           } else {
-            const marked = await markPointOnImage(input, point.fx, point.fy)
-            if (marked) {
-              extraImages.push(marked)
-              hasPointMarker = true
-              target = `the entire continuous surface/object at the location circled in red in image ${extraImages.length + 1}`
-            } else {
-              target = `the entire continuous surface located at about ${Math.round(point.fx * 100)}% from the left and ${Math.round(point.fy * 100)}% from the top of the image`
-            }
+            target = `the entire continuous surface located at about ${Math.round(point.fx * 100)}% from the left and ${Math.round(point.fy * 100)}% from the top of the image`
           }
         }
         if (sw.replacement.kind === 'library') {
@@ -808,6 +809,35 @@ export function RenderClassicPage() {
     a.download = `lumanova-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`
     a.click()
   }, [])
+
+  // 선택 영역(펜/자석/매직)에 재질 적용 — 마스크째 materialSwap으로 등록
+  const addSelectionSwap = useCallback((replacement: MaterialSwap['replacement']) => {
+    const st = useClassicStore.getState()
+    if (!st.aiSelMask) return
+    const count = st.materialSwaps.filter((sw) => sw.material.startsWith('선택 영역')).length
+    st.set({
+      materialSwaps: [
+        ...st.materialSwaps,
+        { material: `선택 영역 ${count + 1}`, replacement, mask: st.aiSelMask },
+      ],
+      aiSelMask: null,
+      aiSelOverlay: null,
+      aiSelLabel: null,
+      statusText: `선택 영역 → ${replacement.name} 재질 교체 지정 (생성 시 적용됩니다)`,
+    })
+    setSelPickOpen(false)
+  }, [])
+
+  // 선택 영역 객체 제거 — 배경 복원 프롬프트로 즉시 생성 (마스크 밖은 픽셀 보존)
+  const removeSelection = useCallback(() => {
+    const st = useClassicStore.getState()
+    if (!st.aiSelMask || st.rendering) return
+    st.set({
+      sourcePrompt:
+        'Remove the object(s) inside the selected region completely. Reconstruct the background behind them (wall, floor, and adjacent surfaces) naturally and seamlessly, as if the objects were never there. Keep everything outside the selection pixel-identical.',
+    })
+    void doRender('src')
+  }, [doRender])
 
   const onUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -1198,7 +1228,12 @@ export function RenderClassicPage() {
               // 업로드/미연결 이미지: 브라우저 SAM 실시간 hover 인식 (실패 시 클릭=Gemini 폴백)
               : s.sourceTool === 'magic' && (s.previewOverride ?? s.frozenSource) && (!s.frozenFromBridge || status !== 'connected')
                 ? <SamMagicOverlay image={(s.previewOverride ?? s.frozenSource)!} />
+              // 펜툴/자석툴: 포토샵식 수동 경로 선택 (모든 소스에서 사용 가능)
+              : (s.sourceTool === 'pencil' || s.sourceTool === 'magnet') && sourceImage
+                ? <PathSelectOverlay mode={s.sourceTool === 'magnet' ? 'magnet' : 'pen'} image={sourceImage} />
               : s.sourceTool === 'magic' && s.aiSelOverlay ? <img src={s.aiSelOverlay} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" draggable={false} />
+              // 툴 없이도 선택이 남아 있으면 표시 (펜/자석/매직 공통)
+              : s.aiSelOverlay ? <img src={s.aiSelOverlay} alt="" className="pointer-events-none absolute inset-0 h-full w-full" draggable={false} />
               : undefined
             }
             onImagePick={
@@ -1206,7 +1241,7 @@ export function RenderClassicPage() {
               : s.sourceTool === 'magic' && !s.maskUri && !s.aiMagicBusy ? handleAiMagicPick
               : undefined
             }
-            pickCursor={s.sourceTool === 'magic' ? 'crosshair' : undefined}
+            pickCursor={s.sourceTool === 'magic' || s.sourceTool === 'pencil' || s.sourceTool === 'magnet' ? 'crosshair' : undefined}
             imageFooter={(s.materialSwaps.length > 0 || s.sourceSelectedColors.length > 0 || s.aiSelMask || s.aiMagicBusy) ? (
               <div className="flex flex-wrap gap-1.5">
                 {s.aiMagicBusy && (
@@ -1232,7 +1267,26 @@ export function RenderClassicPage() {
                     }}
                   >
                     <Wand2 size={11} />
-                    AI 선택: {s.aiSelLabel ?? '영역'} — 생성 시 이 부분만 변경
+                    선택: {s.aiSelLabel ?? '영역'} — 생성 시 이 부분만 변경
+                    <button
+                      title="선택 영역에 재질 적용"
+                      onClick={() => setSelPickOpen(true)}
+                      className="flex items-center gap-1"
+                      style={{ color: '#35e5cf', fontWeight: 700 }}
+                    >
+                      <Palette size={11} />
+                      재질
+                    </button>
+                    <button
+                      title="선택 영역 객체 제거 (배경 자동 복원)"
+                      onClick={removeSelection}
+                      disabled={s.rendering}
+                      className="flex items-center gap-1"
+                      style={{ color: '#f0a35e', fontWeight: 700 }}
+                    >
+                      <Eraser size={11} />
+                      제거
+                    </button>
                     <button
                       title="선택 해제"
                       onClick={() => s.set({ aiSelMask: null, aiSelOverlay: null, aiSelLabel: null })}
@@ -1406,6 +1460,14 @@ export function RenderClassicPage() {
             setPickedPointMask(null)
             setPickedPointOverlay(null)
           }}
+        />
+      )}
+
+      {selPickOpen && (
+        <MaterialSwapDialog
+          material={null}
+          onApply={addSelectionSwap}
+          onClose={() => setSelPickOpen(false)}
         />
       )}
 
@@ -1599,10 +1661,10 @@ function AiScanOverlay() {
 // ── 소스 툴바 (스포이드 · 연필 · 매직) ───────────────────────────────────────
 
 function SourceToolbar({ tool, onTool }: {
-  tool: 'none' | 'eyedropper' | 'pencil' | 'magic'
-  onTool: (t: 'none' | 'eyedropper' | 'pencil' | 'magic') => void
+  tool: 'none' | 'eyedropper' | 'pencil' | 'magic' | 'magnet'
+  onTool: (t: 'none' | 'eyedropper' | 'pencil' | 'magic' | 'magnet') => void
 }) {
-  const btn = (key: 'eyedropper' | 'pencil' | 'magic', icon: React.ReactNode, title: string, ready: boolean) => (
+  const btn = (key: 'eyedropper' | 'pencil' | 'magic' | 'magnet', icon: React.ReactNode, title: string, ready: boolean) => (
     <button
       key={key}
       title={ready ? title : `${title} (준비 중)`}
@@ -1630,7 +1692,8 @@ function SourceToolbar({ tool, onTool }: {
       }}
     >
       {btn('eyedropper', <Pipette size={15} />, '스포이드 — 클릭한 표면의 재질을 찾아 교체 재질을 지정', true)}
-      {btn('pencil', <Pencil size={15} />, '연필 — 영역 마킹', false)}
+      {btn('pencil', <PenTool size={15} />, '펜툴 — 점을 찍어 다각형 영역 선택 (첫 점 클릭/Enter=완료, Esc=취소)', true)}
+      {btn('magnet', <Magnet size={15} />, '자석툴 — 경계에 달라붙는 선택 (첫 점 클릭/Enter=완료, Esc=취소)', true)}
       {btn('magic', <Wand2 size={15} />, '매직 — 호버로 재질 영역 미리보고 클릭으로 선택', true)}
     </div>
   )
