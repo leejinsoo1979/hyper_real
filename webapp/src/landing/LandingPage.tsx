@@ -98,6 +98,10 @@ function Hero() {
             Windows
           </a>
         </div>
+        <p style={{ marginTop: 10, fontSize: 11.5, color: '#63636e', lineHeight: 1.6 }}>
+          Mac에서 "손상됨" 경고가 뜨면 터미널에 <code style={{ color: '#8a8a96' }}>xattr -cr /Applications/Lumanova.app</code> 입력 후 다시 실행하세요.{' '}
+          <a href="/docs" style={{ color: '#7aa8a0', textDecoration: 'underline' }}>설치 가이드</a>
+        </p>
         <div className="flex items-center gap-2.5" style={{ marginTop: 40, color: '#7a7a86', fontSize: 13 }}>
           <span style={{ display: 'inline-flex', width: 26, height: 26, borderRadius: 999, border: '1px solid #333', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>↓</span>
           Scroll to explore

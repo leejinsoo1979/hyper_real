@@ -16,6 +16,12 @@ const SECTIONS: { id: string; label: string; body: DocItem[] }[] = [
     id: 'install', label: '설치하기',
     body: [
       {
+        h: '데스크톱 앱 (Mac / Windows)',
+        p: 'Mac: 받은 DMG를 열어 Lumanova를 Applications 폴더로 드래그하면 설치됩니다. 아직 코드 서명 인증서 적용 전이라 첫 실행 시 "손상되었기 때문에 열 수 없습니다" 경고가 뜹니다 — 파일이 손상된 것이 아니라 macOS 보안 정책 때문입니다. 터미널을 열고 xattr -cr /Applications/Lumanova.app 을 입력한 뒤 다시 실행하면 정상적으로 열립니다. Windows: 설치 파일 실행 시 SmartScreen 경고가 뜨면 [추가 정보] → [실행]을 누르면 됩니다.',
+        download: { href: 'https://github.com/leejinsoo1979/hyper_real/releases/latest/download/Lumanova-mac-arm64.dmg', label: 'Mac 다운로드 (.dmg)' },
+        link: { href: 'https://github.com/leejinsoo1979/hyper_real/releases/latest/download/Lumanova-win-x64.exe', label: 'Windows 다운로드 (.exe)' },
+      },
+      {
         h: 'SketchUp 플러그인 (2021~2025)',
         p: '아래 버튼으로 rbz 파일을 받은 뒤 — SketchUp의 창(Window) → Extension Manager → Install Extension → 받은 rbz 선택 → SketchUp 재시작. 재시작하면 툴바에 Lumanova 아이콘이 나타납니다.',
         download: { href: '/downloads/Lumanova_v1.0.7.rbz', label: 'SketchUp 플러그인 다운로드 (.rbz)' },
