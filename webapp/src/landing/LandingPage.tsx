@@ -99,7 +99,7 @@ function Hero() {
           </a>
         </div>
         <p style={{ marginTop: 10, fontSize: 11.5, color: '#63636e', lineHeight: 1.6 }}>
-          Mac에서 "손상됨" 경고가 뜨면 터미널에 <code style={{ color: '#8a8a96' }}>xattr -cr /Applications/Lumanova.app</code> 입력 후 다시 실행하세요.{' '}
+          Mac 첫 실행 시 경고가 뜨면: 시스템 설정 → 개인정보 보호 및 보안 → <b style={{ color: '#8a8a96' }}>그래도 열기</b>{' · '}
           <a href="/docs" style={{ color: '#7aa8a0', textDecoration: 'underline' }}>설치 가이드</a>
         </p>
         <div className="flex items-center gap-2.5" style={{ marginTop: 40, color: '#7a7a86', fontSize: 13 }}>

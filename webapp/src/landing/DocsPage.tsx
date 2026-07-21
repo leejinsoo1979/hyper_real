@@ -17,7 +17,7 @@ const SECTIONS: { id: string; label: string; body: DocItem[] }[] = [
     body: [
       {
         h: '데스크톱 앱 (Mac / Windows)',
-        p: 'Mac: 받은 DMG를 열어 Lumanova를 Applications 폴더로 드래그하면 설치됩니다. 아직 코드 서명 인증서 적용 전이라 첫 실행 시 "손상되었기 때문에 열 수 없습니다" 경고가 뜹니다 — 파일이 손상된 것이 아니라 macOS 보안 정책 때문입니다. 터미널을 열고 xattr -cr /Applications/Lumanova.app 을 입력한 뒤 다시 실행하면 정상적으로 열립니다. Windows: 설치 파일 실행 시 SmartScreen 경고가 뜨면 [추가 정보] → [실행]을 누르면 됩니다.',
+        p: 'Mac: 받은 DMG를 열어 Lumanova를 Applications 폴더로 드래그하면 설치됩니다. 첫 실행 시 "확인할 수 없는 앱" 경고가 뜨면 — 시스템 설정 → 개인정보 보호 및 보안으로 가서 [그래도 열기]를 누르면 됩니다 (최초 1회만). 만약 "손상되었기 때문에 열 수 없습니다"라고 뜬다면 구버전 파일이니 위 버튼으로 다시 받거나, 터미널에 xattr -cr /Applications/Lumanova.app 을 입력하세요. Windows: 설치 파일 실행 시 SmartScreen 경고가 뜨면 [추가 정보] → [실행]을 누르면 됩니다.',
         download: { href: 'https://github.com/leejinsoo1979/hyper_real/releases/latest/download/Lumanova-mac-arm64.dmg', label: 'Mac 다운로드 (.dmg)' },
         link: { href: 'https://github.com/leejinsoo1979/hyper_real/releases/latest/download/Lumanova-win-x64.exe', label: 'Windows 다운로드 (.exe)' },
       },

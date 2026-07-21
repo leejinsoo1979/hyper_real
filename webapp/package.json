@@ -48,6 +48,7 @@
   "build": {
     "appId": "com.lumanova.app",
     "productName": "Lumanova",
+    "afterSign": "electron/adhoc-sign.cjs",
     "directories": {
       "output": "release"
     },
